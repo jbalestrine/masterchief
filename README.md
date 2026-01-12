@@ -8,7 +8,10 @@ MasterChief provides a unified framework for managing infrastructure and configu
 
 - **Modular Architecture**: Dynamic module loading and discovery system
 - **Multi-IaC Support**: Terraform, Ansible, and PowerShell DSC
+- **DevOps Script Library**: 18+ production-ready automation scripts
+- **Script Wizard**: AI-assisted script generation with templates
 - **Configuration Management**: Environment-based configuration with inheritance
+- **Enhanced CLI**: Comprehensive command-line interface with script execution
 - **Azure Focus**: Comprehensive modules for Azure services
 - **CI/CD Ready**: GitHub Actions workflows for validation and deployment
 - **Extensible**: Plugin architecture for custom module types
@@ -21,16 +24,45 @@ git clone https://github.com/jbalestrine/masterchief.git
 cd masterchief
 
 # Install dependencies
-pip install pyyaml
+pip install -r requirements.txt
+
+# Run health check
+python -m core.cli.main health check
+
+# List available DevOps scripts
+python -m core.cli.main script list
+
+# Execute a deployment script (dry-run)
+python -m core.cli.main script run deploy-app.sh -- --app myapp --env dev --dry-run
+
+# Generate custom script
+python -m core.cli.main script generate --template deployment --output my-deploy.sh
 
 # List available modules
-python scripts/python/masterchief.py list
+python -m core.cli.main module list
+```
 
-# Show configuration
-python scripts/python/masterchief.py config dev
+### Using the Platform
 
-# Initialize a new module
-python scripts/python/masterchief.py init terraform my-module
+```bash
+# Health checks
+python -m core.cli.main health check        # Quick health check
+python -m core.cli.main health report       # Detailed report
+
+# Script management
+python -m core.cli.main script list         # List all scripts
+python -m core.cli.main script run SCRIPT   # Execute a script
+
+# Dashboard (if Flask is installed)
+python -m core.cli.main dashboard start --dev  # Start Mission Control
+
+# Module management
+python -m core.cli.main module list         # List modules
+python -m core.cli.main module add PATH     # Add module
+
+# Status and monitoring
+python -m core.cli.main status              # Platform status
+python -m core.cli.main logs                # View logs
 ```
 
 ## Available Modules
@@ -49,29 +81,89 @@ python scripts/python/masterchief.py init terraform my-module
 - **CommonServer**: Base Windows server configuration
 - **WebServer**: IIS web server setup
 
+## Features in Detail
+
+### 🚀 DevOps Script Library
+
+18+ production-ready automation scripts organized by category:
+
+- **Deployment**: Application deployment, Docker, Kubernetes, blue/green strategies
+- **Infrastructure**: VM provisioning, AKS clusters, network setup
+- **CI/CD**: Docker builds, test runners, security scanning
+- **Monitoring**: Health checks, metrics collection, alerting
+- **Security**: Vulnerability scanning, secret rotation, compliance
+- **Database**: Backups, migrations, replication
+- **Utilities**: Cost analysis, resource cleanup, tagging
+
+See [SCRIPTS.md](SCRIPTS.md) for complete documentation.
+
+### 🧙 Script Wizard
+
+AI-assisted script generation with customizable templates:
+
+```bash
+# Generate via CLI
+python -m core.cli.main script generate --template deployment
+
+# Via REST API
+curl -X POST http://localhost:5000/api/script-wizard/generate \
+  -d '{"template_id":"deployment","parameters":{"app_name":"myapp"}}'
+```
+
+### 📊 Mission Control Dashboard
+
+Web-based management interface (backend ready):
+
+- Real-time deployment status
+- Script execution with output streaming
+- Log viewer and analytics
+- Module and plugin management
+
+Start with: `python -m core.cli.main dashboard start`
+
 ## Documentation
 
+- [Scripts Documentation](SCRIPTS.md) - Complete script library reference
 - [Getting Started Guide](docs/GETTING_STARTED.md) - Step-by-step setup and usage
 - [Complete Documentation](docs/README.md) - Full platform documentation
 - [Module Development Guide](docs/MODULE_DEVELOPMENT.md) - Create custom modules
 - [Architecture Overview](docs/ARCHITECTURE.md) - Platform architecture and design
+- [Quick Start Guide](QUICKSTART.md) - Fast track to using MasterChief
 
 ## Platform Architecture
 
 ```
-core/                   # Core platform engine
-  ├── module-loader/    # Dynamic module discovery
-  ├── config/          # Configuration management
-  ├── logging/         # Centralized logging
-  └── api/             # Module communication
+core/                      # Core platform engine
+  ├── cli/                 # Enhanced CLI with commands
+  │   └── commands/        # Script, dashboard, health commands
+  ├── module-loader/       # Dynamic module discovery
+  ├── config/             # Configuration management
+  ├── logging/            # Centralized logging
+  └── api/                # Module communication
 
-modules/                # Plug-and-play modules
-  ├── terraform/       # Terraform IaC modules
-  ├── ansible/         # Ansible roles & playbooks
-  └── powershell-dsc/  # PowerShell DSC configs
+platform/                  # Platform services
+  ├── script_wizard/      # AI-assisted script generation
+  ├── app.py             # Flask web application
+  └── api.py             # REST API endpoints
 
-scripts/                # Automation scripts
-  └── python/          # CLI and utilities
+scripts/                   # Automation scripts
+  ├── devops/            # DevOps automation library
+  │   ├── deployment/    # Deployment scripts
+  │   ├── infrastructure/# Infrastructure scripts
+  │   ├── cicd/          # CI/CD scripts
+  │   ├── monitoring/    # Monitoring scripts
+  │   ├── security/      # Security scripts
+  │   ├── database/      # Database scripts
+  │   └── utils/         # Utility scripts
+  └── python/            # Python utilities
+
+modules/                   # Plug-and-play modules
+  ├── terraform/          # Terraform IaC modules
+  ├── ansible/           # Ansible roles & playbooks
+  └── powershell-dsc/    # PowerShell DSC configs
+
+config/                    # Configuration
+  └── environments/       # Environment-specific configs
 ```
 
 ## Contributing

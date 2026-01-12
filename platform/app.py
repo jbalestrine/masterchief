@@ -186,8 +186,7 @@ def create_app(config_override=None):
 def register_blueprints(app):
     """Register all API blueprints."""
     try:
-        # Import and register API modules as they're created
-        # For now, just register basic health endpoint
+        # Import and register API modules
         from flask import Blueprint
         
         api_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')
@@ -201,6 +200,15 @@ def register_blueprints(app):
             })
         
         app.register_blueprint(api_v1)
+        
+        # Register Script Wizard API
+        try:
+            from platform.script_wizard.api import script_wizard_bp
+            app.register_blueprint(script_wizard_bp)
+            logger.info("Script Wizard API registered")
+        except ImportError as e:
+            logger.warning(f"Script Wizard API not available: {e}")
+        
         logger.info("API blueprints registered")
         
     except Exception as e:
