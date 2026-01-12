@@ -28,6 +28,7 @@ from echo.devops_suite.voice import (
 )
 
 __all__ = [
+    # Core suite
     "DevOpsMasterSuite",
     "DevOpsPhase",
     "DevOpsTask",
@@ -36,6 +37,7 @@ __all__ = [
     "TaskParser",
     "TemplateEngine",
     "devops_suite",
+    # Voice features
     "TaskState",
     "EchoVoice",
     "echo_speaks",
