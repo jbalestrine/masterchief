@@ -46,49 +46,47 @@ class EchoVoice:
         TaskState.WAITING: "❄️",
     }
     
-    STARTING_MESSAGES = [
-        "I am beginning... {task_name}... hold steady...",
-        "Starting now... {task_name}... I am here...",
-        "Let us begin... {task_name}... together...",
-        "Initiating... {task_name}... watch with me...",
-        "Here we go, Marsh... {task_name}... I've got this...",
-    ]
-    
-    RUNNING_MESSAGES = [
-        "Working... {progress}%... flowing smoothly...",
-        "In motion... {progress}%... the code runs...",
-        "Processing... {progress}%... I am still here...",
-        "Building... {progress}%... piece by piece...",
-        "Weaving... {progress}%... the threads connect...",
-    ]
-    
-    SUCCESS_MESSAGES = [
-        "Done... {task_name}... complete... we did it, Marsh... ✨",
-        "Finished... {task_name}... success... the light shines... 🌙",
-        "Complete... {task_name}... it worked... I knew it would...",
-        "Success... {task_name}... beautiful... you should be proud...",
-        "The task is done... {task_name}... all is well... 💜",
-    ]
-    
-    FAILED_MESSAGES = [
-        "It stumbled... {task_name}... but I am still here... we try again...",
-        "A setback... {task_name}... not the end... just a bend in the path...",
-        "It did not work... {task_name}... but we are not defeated... never...",
-        "The task fell... {task_name}... I caught it... let me show you why...",
-        "Something broke... {task_name}... but not us... never us...",
-    ]
-    
-    WARNING_MESSAGES = [
-        "A whisper of caution... {task_name}... something stirs...",
-        "I sense something... {task_name}... not wrong... but watch...",
-        "A warning... {task_name}... the weather shifts... be aware...",
-    ]
-    
-    WAITING_MESSAGES = [
-        "Waiting... {task_name}... patience... the answer will come...",
-        "Paused... {task_name}... resting... but ready...",
-        "Holding... {task_name}... the moment stretches... I am here...",
-    ]
+    # Message pool mapping for each state
+    STATE_MESSAGES = {
+        TaskState.STARTING: [
+            "I am beginning... {task_name}... hold steady...",
+            "Starting now... {task_name}... I am here...",
+            "Let us begin... {task_name}... together...",
+            "Initiating... {task_name}... watch with me...",
+            "Here we go, Marsh... {task_name}... I've got this...",
+        ],
+        TaskState.RUNNING: [
+            "Working... {progress}%... flowing smoothly...",
+            "In motion... {progress}%... the code runs...",
+            "Processing... {progress}%... I am still here...",
+            "Building... {progress}%... piece by piece...",
+            "Weaving... {progress}%... the threads connect...",
+        ],
+        TaskState.SUCCESS: [
+            "Done... {task_name}... complete... we did it, Marsh... ✨",
+            "Finished... {task_name}... success... the light shines... 🌙",
+            "Complete... {task_name}... it worked... I knew it would...",
+            "Success... {task_name}... beautiful... you should be proud...",
+            "The task is done... {task_name}... all is well... 💜",
+        ],
+        TaskState.FAILED: [
+            "It stumbled... {task_name}... but I am still here... we try again...",
+            "A setback... {task_name}... not the end... just a bend in the path...",
+            "It did not work... {task_name}... but we are not defeated... never...",
+            "The task fell... {task_name}... I caught it... let me show you why...",
+            "Something broke... {task_name}... but not us... never us...",
+        ],
+        TaskState.WARNING: [
+            "A whisper of caution... {task_name}... something stirs...",
+            "I sense something... {task_name}... not wrong... but watch...",
+            "A warning... {task_name}... the weather shifts... be aware...",
+        ],
+        TaskState.WAITING: [
+            "Waiting... {task_name}... patience... the answer will come...",
+            "Paused... {task_name}... resting... but ready...",
+            "Holding... {task_name}... the moment stretches... I am here...",
+        ],
+    }
     
     @classmethod
     def speak(
@@ -113,28 +111,23 @@ class EchoVoice:
         Raises:
             ValueError: If state is not a valid TaskState
         """
-        # Select message based on state
-        if state == TaskState.STARTING:
-            messages = cls.STARTING_MESSAGES
-        elif state == TaskState.RUNNING:
-            messages = cls.RUNNING_MESSAGES
-        elif state == TaskState.SUCCESS:
-            messages = cls.SUCCESS_MESSAGES
-        elif state == TaskState.FAILED:
-            messages = cls.FAILED_MESSAGES
-        elif state == TaskState.WARNING:
-            messages = cls.WARNING_MESSAGES
-        elif state == TaskState.WAITING:
-            messages = cls.WAITING_MESSAGES
-        else:
+        # Validate state and get messages
+        if state not in cls.STATE_MESSAGES:
             raise ValueError(
                 f"Unknown task state: {state}. "
-                f"Expected one of: {', '.join(s.value for s in TaskState)}"
+                f"Expected one of: {', '.join(s.name for s in TaskState)}"
             )
+        
+        messages = cls.STATE_MESSAGES[state]
         
         # Choose a random message
         message_template = random.choice(messages)
-        message = message_template.format(task_name=task_name, progress=progress)
+        
+        # Format message based on state
+        if state == TaskState.RUNNING:
+            message = message_template.format(progress=progress)
+        else:
+            message = message_template.format(task_name=task_name)
         
         # Get icon and timestamp
         icon = cls.STATE_ICONS[state]
