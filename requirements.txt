@@ -48,7 +48,7 @@ httpx>=0.25.0
 watchdog>=3.0.0
 
 # Streaming platforms
-kafka-python>=2.0.2
+aiokafka>=0.10.0  # Async Kafka client (preferred over kafka-python)
 pika>=1.3.0
 redis>=5.0.0
 
