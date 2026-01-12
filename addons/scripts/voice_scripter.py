@@ -9,6 +9,9 @@ from .ai_generator import AIScriptGenerator, GeneratedScript
 
 logger = logging.getLogger(__name__)
 
+# Constants
+SCRIPT_PREVIEW_LENGTH = 500  # Maximum characters to read back in voice preview
+
 
 class VoiceToScript:
     """Generate scripts from voice commands."""
@@ -80,11 +83,11 @@ class VoiceToScript:
             response = self.voice.listen(duration=10)
             
             if response and ("yes" in response.lower() or "yeah" in response.lower()):
-                # Read back the script (first 500 chars to avoid very long reads)
-                preview = script.content[:500]
+                # Read back the script (first SCRIPT_PREVIEW_LENGTH chars to avoid very long reads)
+                preview = script.content[:SCRIPT_PREVIEW_LENGTH]
                 self.voice.speak(f"Here's the script: {preview}")
                 
-                if len(script.content) > 500:
+                if len(script.content) > SCRIPT_PREVIEW_LENGTH:
                     self.voice.speak("The script continues beyond this preview.")
             
             # Ask for confirmation to save
