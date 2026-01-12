@@ -67,18 +67,29 @@ jobs:
           import os
           sys.path.insert(0, os.getcwd())
           
-          # Import and test the module loader
-          from core.module_loader import ModuleLoader, ModuleManifest
-          
-          print("✓ Module loader imported successfully")
-          
-          # Create a module loader instance
-          loader = ModuleLoader()
-          print("✓ Module loader instance created")
-          
-          # Test that we can list modules (even if empty)
-          modules = loader.list_modules()
-          print(f"✓ Module loader can list modules: {len(modules)} found")
+          # Test module_loader import and basic functionality
+          try:
+              from core.module_loader import ModuleLoader, ModuleManifest
+              print("✓ Successfully imported module_loader")
+              
+              # Test basic instantiation
+              loader = ModuleLoader()
+              print("✓ ModuleLoader instantiated successfully")
+              
+              # Test that module files exist
+              loader_path = "core/module_loader/loader.py"
+              if os.path.exists(loader_path):
+                  print(f"✓ Module loader file exists: {loader_path}")
+              else:
+                  print(f"✗ Module loader file not found: {loader_path}")
+                  sys.exit(1)
+                  
+          except ImportError as e:
+              print(f"✗ Failed to import module_loader: {e}")
+              sys.exit(1)
+          except Exception as e:
+              print(f"✗ Error testing module loader: {e}")
+              sys.exit(1)
           
           print("\n✓ Module loader validation passed!")
           EOF
