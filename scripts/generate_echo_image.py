@@ -163,7 +163,7 @@ def create_echo_image(output_path="assets/images/echo.png", size=(800, 800)):
         try:
             font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
             small_font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
-        except:
+        except (OSError, IOError):
             font = ImageFont.load_default()
             small_font = ImageFont.load_default()
         
@@ -180,7 +180,7 @@ def create_echo_image(output_path="assets/images/echo.png", size=(800, 800)):
         text_width = bbox[2] - bbox[0]
         text_x = (width - text_width) // 2
         draw.text((text_x, height - 80), subtitle, fill=(200, 180, 230, 255), font=small_font)
-    except Exception as e:
+    except (OSError, IOError, RuntimeError) as e:
         print(f"Could not add text: {e}")
     
     # Save the image

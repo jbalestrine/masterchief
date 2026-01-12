@@ -26,6 +26,7 @@ def open_image(image_path):
     """Try to open the image in the default viewer."""
     import platform
     import subprocess
+    import logging
     
     try:
         system = platform.system()
@@ -44,8 +45,8 @@ def open_image(image_path):
                     continue
             return False
         return True
-    except Exception as e:
-        print(f"Could not open image viewer: {e}")
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
+        logging.debug(f"Could not open image viewer: {e}")
         return False
 
 
