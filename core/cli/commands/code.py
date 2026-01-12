@@ -120,6 +120,7 @@ def generate(ctx, description, language, output, model):
         click.echo("=" * 70)
 
         # Handle output
+        save_path = None
         if output:
             save_path = Path(output)
         else:
@@ -131,7 +132,7 @@ def generate(ctx, description, language, output, model):
                 click.echo("\n✓ Done! Copy the code above to use it.")
                 return
 
-        # Save the file
+        # Save the file (save_path is guaranteed to be set here)
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(save_path, 'w') as f:
