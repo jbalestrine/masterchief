@@ -7,10 +7,9 @@ This example shows how to create an IRC bot with Echo Starlite commands.
 import sys
 from pathlib import Path
 
-# Add paths for imports
+# Add paths for imports - go up 2 levels from docs/examples/irc-bot-echo-example.py
 base_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(base_dir))
-sys.path.insert(0, str(base_dir / 'chatops' / 'irc'))
 
 from chatops.irc.bot_engine.bot import create_bot
 from chatops.irc.bot_engine.echo_commands import register_echo_commands
