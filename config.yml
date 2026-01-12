@@ -38,3 +38,31 @@ addons:
   scripts:
     enabled: true
     max_execution_time: 300
+    
+scripts:
+  ai_generation:
+    enabled: true
+    ollama_url: "http://localhost:11434"
+    model: "codellama"
+    
+  voice:
+    enabled: true
+    confirm_before_save: true
+    read_back_script: true
+    
+  templates:
+    directory: "./addons/scripts/templates/"
+    custom_directory: "/var/lib/masterchief/custom_templates/"
+    
+  validation:
+    enabled: true
+    shellcheck: true
+    block_dangerous: true
+    require_validation: false
+    
+  scheduling:
+    enabled: true
+    database: "/var/lib/masterchief/schedules.db"
+    default_timezone: "UTC"
+    max_concurrent: 5
+    notification_channel: "#devops"
