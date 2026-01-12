@@ -3,29 +3,36 @@ import sys
 import argparse
 import logging
 from pathlib import Path
-
-import sys
-from pathlib import Path
+import os
 
 # Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent.parent))
+parent_dir = Path(__file__).parent.parent.parent.parent.parent.parent
+sys.path.insert(0, str(parent_dir))
 
-try:
-    from chatops.irc import bot_engine
-    # Module path uses hyphens - import differently
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "voice.base",
-        Path(__file__).parent.parent / "base.py"
-    )
-    base_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(base_module)
-    VoiceCloningConfig = base_module.VoiceCloningConfig
-except:
-    # Fallback to relative imports
-    from ..base import VoiceCloningConfig
+# Import modules directly from file paths due to hyphenated directory names
+import importlib.util
 
-from . import VoiceCloner
+def load_module(name, path):
+    """Load a module from a file path."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+# Load required modules
+bot_engine_path = parent_dir / "chatops" / "irc" / "bot-engine"
+voice_base = load_module("voice.base", bot_engine_path / "voice" / "base.py")
+voice_profile_module = load_module("voice.cloning.voice_profile", bot_engine_path / "voice" / "cloning" / "voice_profile.py")
+cloning_base = load_module("voice.cloning.base", bot_engine_path / "voice" / "cloning" / "base.py")
+xtts = load_module("voice.cloning.xtts_cloner", bot_engine_path / "voice" / "cloning" / "xtts_cloner.py")
+tortoise = load_module("voice.cloning.tortoise_cloner", bot_engine_path / "voice" / "cloning" / "tortoise_cloner.py")
+openvoice = load_module("voice.cloning.openvoice_cloner", bot_engine_path / "voice" / "cloning" / "openvoice_cloner.py")
+trainer = load_module("voice.cloning.trainer", bot_engine_path / "voice" / "cloning" / "trainer.py")
+voice_cloner_module = load_module("voice.cloning.voice_cloner", bot_engine_path / "voice" / "cloning" / "voice_cloner.py")
+
+VoiceCloningConfig = voice_base.VoiceCloningConfig
+VoiceCloner = voice_cloner_module.VoiceCloner
 
 # Setup logging
 logging.basicConfig(
