@@ -3,7 +3,7 @@
 This module provides functionality for loading and managing system configuration.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import yaml
 
 
@@ -31,7 +31,7 @@ class ConfigEngine:
         except Exception:
             return False
     
-    def get_config(self, path: str, key: str = None) -> Dict[str, Any]:
+    def get_config(self, path: str, key: Optional[str] = None) -> Dict[str, Any]:
         """Get configuration by path and optional key.
         
         Args:
@@ -62,8 +62,8 @@ class ConfigEngine:
         Returns:
             True if the value was set successfully
         """
-        # Line 75 - Type error: incompatible type assignment  
-        config: dict[str, Any] = None  # Wrong - should be Optional[dict[str, Any]] or {}
+        # Line 75 - Fixed: Using Optional[dict[str, Any]] for None assignment
+        config: Optional[dict[str, Any]] = None
         
         if path not in self.configs:
             self.configs[path] = {}

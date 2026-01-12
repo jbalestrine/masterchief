@@ -3,14 +3,14 @@
 This module provides functionality for event-driven communication between components.
 """
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 import uuid
 
 
 class Event:
     """Represents an event in the system."""
     
-    def __init__(self, event_type: str, data: Dict[str, Any] = None):
+    def __init__(self, event_type: str, data: Optional[Dict[str, Any]] = None):
         self.event_id = str(uuid.uuid4())
         self.event_type = event_type
         self.data = data or {}
@@ -33,9 +33,8 @@ class EventBus:
         Returns:
             True if subscription was successful
         """
-        # Lines 32-33 - Type errors: incompatible type assignments
-        event_id: str = None  # Wrong - should be Optional[str] or ""
-        event_type: str = None  # Wrong - should be Optional[str] or ""
+        # Lines 32-33 - Fixed: Removed unused variables (event_type parameter already exists)
+        # The subscribe method uses the event_type parameter directly
         
         if event_type not in self.handlers:
             self.handlers[event_type] = []
@@ -84,7 +83,7 @@ class EventBus:
         
         return True
     
-    def get_event_history(self, event_type: str = None) -> List[Event]:
+    def get_event_history(self, event_type: Optional[str] = None) -> List[Event]:
         """Get the event history, optionally filtered by type.
         
         Args:
