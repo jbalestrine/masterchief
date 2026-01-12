@@ -17,16 +17,16 @@ def create_app(config):
     CORS(app)
     
     # Register blueprints
-    from services.api import services_bp
-    from bare_metal.api import bare_metal_bp
-    from processes.api import processes_bp
-    from packages.api import packages_bp
-    from users.api import users_bp
-    from cmdb.api import cmdb_bp
-    from backup.api import backup_bp
-    from monitoring.api import monitoring_bp
-    from plugins.api import plugins_bp
-    from deployments.api import deployments_bp
+    from .services.api import services_bp
+    from .bare_metal.api import bare_metal_bp
+    from .processes.api import processes_bp
+    from .packages.api import packages_bp
+    from .users.api import users_bp
+    from .cmdb.api import cmdb_bp
+    from .backup.api import backup_bp
+    from .monitoring.api import monitoring_bp
+    from .plugins.api import plugins_bp
+    from .deployments.api import deployments_bp
     
     app.register_blueprint(services_bp, url_prefix='/api/services')
     app.register_blueprint(bare_metal_bp, url_prefix='/api/bare-metal')
