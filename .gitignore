@@ -1,3 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
 # Build artifacts
 *.pyc
 __pycache__/
@@ -23,6 +51,22 @@ build/
 *~
 .DS_Store
 
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+secrets.yaml
+credentials.json
+.env
+.env.local
 # Logs
 logs/
 *.log
@@ -45,6 +89,38 @@ vendor/
 # Terraform
 .terraform/
 *.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.lock.hcl
+
+# Ansible
+*.retry
+.vault_pass
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build artifacts
+node_modules/
+package-lock.json
+yarn.lock
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 *.tfstate.backup
 *.tfvars
 
@@ -63,6 +139,15 @@ Desktop.ini
 # Archives
 *.zip
 *.tar.gz
+*.tar
+
+# MasterChief specific
+config/secrets/
+platform/data/
+sessions/
+
+# Zip files from legacy system
+*.zip
 *.rar
 
 # Testing
