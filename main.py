@@ -930,9 +930,16 @@ def addons_delete(filename):
 		flash('File not found','error')
 	return redirect(url_for('addons_list'))
 if __name__=='__main__':
+	import argparse
+	parser=argparse.ArgumentParser(description='MasterChief DevOps Platform')
+	parser.add_argument('--debug',action='store_true',help='Run in debug mode')
+	parser.add_argument('--port',type=int,default=8080,help='Port to run on (default: 8080)')
+	args=parser.parse_args()
 	print('='*70)
 	print('MasterChief DevOps Platform')
 	print('='*70)
-	print('Dashboard: http://localhost:8080')
+	print(f'Dashboard: http://localhost:{args.port}')
+	if args.debug:
+		print('⚠️  Running in DEBUG mode - Not for production!')
 	print('='*70)
-	app.run(host='0.0.0.0',port=8080,debug=True)
+	app.run(host='0.0.0.0',port=args.port,debug=args.debug)
