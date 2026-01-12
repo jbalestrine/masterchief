@@ -2,9 +2,12 @@
 API Endpoints for Script Wizard
 """
 
+import logging
 from flask import Blueprint, jsonify, request
 from .wizard import ScriptWizard
 from .generators import ScriptGenerator
+
+logger = logging.getLogger(__name__)
 
 # Create blueprint
 script_wizard_bp = Blueprint('script_wizard', __name__, url_prefix='/api/script-wizard')

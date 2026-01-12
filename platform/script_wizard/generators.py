@@ -46,15 +46,24 @@ class ScriptGenerator:
         if output_path:
             try:
                 # Validate output path
-                output_file = Path(output_path)
+                output_file = Path(output_path).resolve()
+                
+                # Security: Prevent path traversal
+                if '..' in str(output_path):
+                    raise ValueError("Path traversal not allowed")
+                
+                # Create parent directory if needed
                 output_file.parent.mkdir(parents=True, exist_ok=True)
                 
-                with open(output_path, 'w') as f:
+                with open(output_file, 'w') as f:
                     f.write(script_content)
-                logger.info(f"Script saved to: {output_path}")
+                logger.info(f"Script saved to: {output_file}")
             except (IOError, OSError) as e:
                 logger.error(f"Failed to save script: {e}")
                 raise IOError(f"Cannot write to {output_path}: {e}")
+            except ValueError as e:
+                logger.error(f"Invalid output path: {e}")
+                raise
         
         # Track generated script
         self.generated_scripts.append({
