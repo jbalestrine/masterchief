@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -53,7 +54,7 @@ class Module:
     def __init__(self, manifest: ModuleManifest, path: Path):
         self.manifest = manifest
         self.path = path
-        self.instance = None
+        self.instance: Optional[ModuleType] = None
         self.loaded = False
 
     def load(self) -> bool:
