@@ -1,7 +1,25 @@
 """Test intent parser."""
 
-import pytest
-from chatops.irc.bot_engine.voice.automation.intent_parser import IntentParser, Intent
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
+
+import importlib.util
+
+def load_module_from_path(module_name, file_path):
+    """Load a module from a file path."""
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+# Load intent_parser module
+base_path = os.path.join(os.path.dirname(__file__), '../../../chatops/irc/bot-engine/voice/automation')
+intent_parser_path = os.path.join(base_path, 'intent_parser.py')
+intent_parser_module = load_module_from_path('intent_parser', intent_parser_path)
+IntentParser = intent_parser_module.IntentParser
+Intent = intent_parser_module.Intent
 
 
 class TestIntentParser:
@@ -89,3 +107,27 @@ class TestIntentParser:
         )
         
         assert "test script" in intent.description
+
+
+if __name__ == '__main__':
+    # Run tests
+    test = TestIntentParser()
+    test.test_parse_create_script()
+    print("✓ test_parse_create_script passed")
+    test.test_parse_run_script()
+    print("✓ test_parse_run_script passed")
+    test.test_parse_list_scripts()
+    print("✓ test_parse_list_scripts passed")
+    test.test_parse_system_status()
+    print("✓ test_parse_system_status passed")
+    test.test_parse_deploy()
+    print("✓ test_parse_deploy passed")
+    test.test_parse_stop_listening()
+    print("✓ test_parse_stop_listening passed")
+    test.test_parse_help()
+    print("✓ test_parse_help passed")
+    test.test_parse_unknown()
+    print("✓ test_parse_unknown passed")
+    test.test_intent_description()
+    print("✓ test_intent_description passed")
+    print("\n✅ All tests passed!")

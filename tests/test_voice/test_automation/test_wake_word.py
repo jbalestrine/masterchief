@@ -1,7 +1,25 @@
 """Test wake word detection."""
 
-import pytest
-from chatops.irc.bot_engine.voice.automation.wake_word import WakeWordDetector
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
+
+# Direct imports from file path since bot-engine has dashes
+import importlib.util
+
+def load_module_from_path(module_name, file_path):
+    """Load a module from a file path."""
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+# Load wake_word module
+base_path = os.path.join(os.path.dirname(__file__), '../../../chatops/irc/bot-engine/voice/automation')
+wake_word_path = os.path.join(base_path, 'wake_word.py')
+wake_word_module = load_module_from_path('wake_word', wake_word_path)
+WakeWordDetector = wake_word_module.WakeWordDetector
 
 
 class TestWakeWordDetector:
@@ -69,3 +87,19 @@ class TestWakeWordDetector:
         assert detector.detect_in_text("hey masterchief")
         assert detector.detect_in_text("HEY MASTERCHIEF")
         assert detector.detect_in_text("Hey Masterchief")
+
+
+if __name__ == '__main__':
+    # Run tests
+    test = TestWakeWordDetector()
+    test.test_initialization()
+    print("✓ test_initialization passed")
+    test.test_detect_in_text()
+    print("✓ test_detect_in_text passed")
+    test.test_add_wake_word()
+    print("✓ test_add_wake_word passed")
+    test.test_remove_wake_word()
+    print("✓ test_remove_wake_word passed")
+    test.test_case_insensitive()
+    print("✓ test_case_insensitive passed")
+    print("\n✅ All tests passed!")
