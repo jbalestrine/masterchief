@@ -29,12 +29,22 @@ class ModuleManifest:
     @classmethod
     def from_file(cls, manifest_path: Path) -> "ModuleManifest":
         """Load manifest from YAML or JSON file."""
-        with open(manifest_path, "r") as f:
-            if manifest_path.suffix in [".yaml", ".yml"]:
-                data = yaml.safe_load(f)
-            else:
-                data = json.load(f)
-        return cls(data)
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                if manifest_path.suffix in [".yaml", ".yml"]:
+                    data = yaml.safe_load(f)
+                else:
+                    data = json.load(f)
+            return cls(data)
+        except FileNotFoundError:
+            logger.error(f"Manifest file not found: {manifest_path}")
+            raise
+        except (yaml.YAMLError, json.JSONDecodeError) as e:
+            logger.error(f"Failed to parse manifest file {manifest_path}: {e}")
+            raise
+        except PermissionError:
+            logger.error(f"Permission denied reading manifest file: {manifest_path}")
+            raise
 
 
 class Module:

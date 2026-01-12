@@ -1,6 +1,3 @@
-# Grafana Dashboard for MasterChief Platform
-# Import this JSON into Grafana for monitoring
-
 {
   "dashboard": {
     "title": "MasterChief Platform Overview",

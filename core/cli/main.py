@@ -13,9 +13,7 @@ try:
     from core.config_engine import ConfigEngine
     from core.event_bus import get_event_bus, Event, EventType
 except ImportError:
-    # Fallback for when running from source
-    import sys
-    from pathlib import Path
+    # Fallback for when running from source without installation
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     from core.module_loader import ModuleLoader
     from core.config_engine import ConfigEngine
