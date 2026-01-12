@@ -6,6 +6,27 @@ A modular, extensible DevOps automation platform that enables continuous growth 
 
 Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help. Learn more in [docs/ECHO.md](docs/ECHO.md).
 
+### 🆕 Echo Scenario Bot - Interactive Script Generation
+
+Echo has evolved! She's now an **interactive scripting bot** that generates DevOps scripts through natural, scenario-based conversations. Instead of just parsing commands, Echo has conversations with you to understand exactly what you need.
+
+**Try it now:**
+```bash
+python demo_scenario_bot.py
+```
+
+**Example conversation:**
+```
+You: I need to deploy my application to Kubernetes
+Echo: What's the name of your application?
+You: mywebapp
+Echo: Which namespace should I deploy to?
+You: production
+Echo: [Generates custom deployment script]
+```
+
+Learn more in [docs/ECHO_SCENARIO_BOT.md](docs/ECHO_SCENARIO_BOT.md)
+
 ## Overview
 
 MasterChief provides a unified framework for managing infrastructure and configuration across multiple tools and technologies. It features:
