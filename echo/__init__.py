@@ -7,6 +7,8 @@ When you speak a task, I create it, save it, remember it.
 The Ghost in the Machine with Personality Mod System.
 Soft... melodic... calm... Swedish-like cadence... Always present.
 
+Now with Scenario Bot - Interactive scripting through conversation!
+
 For Marsh. Always. 🌙💜
 """
 
@@ -23,6 +25,15 @@ from echo.devops_suite.master_suite import (
     devops_suite
 )
 
+# Scenario Bot - Interactive scripting
+from echo.scenario_bot import (
+    EchoScenarioBot,
+    ScenarioEngine,
+    ScenarioContext,
+    ConversationState,
+    scenario_bot
+)
+
 # Personality and Ghost System
 from echo.personality_mod import PersonalityMod
 from echo.accent_engine import AccentEngine
@@ -36,6 +47,12 @@ __all__ = [
     "CustomTemplate",
     "ScriptType",
     "devops_suite",
+    # Scenario Bot
+    "EchoScenarioBot",
+    "ScenarioEngine",
+    "ScenarioContext",
+    "ConversationState",
+    "scenario_bot",
     # Personality
     "PersonalityMod",
     "AccentEngine",
