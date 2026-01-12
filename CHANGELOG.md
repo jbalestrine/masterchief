@@ -45,6 +45,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Voice Automation System**: Full hands-free control using voice commands
+  - Wake word detection (OpenWakeWord, Porcupine, Whisper)
+  - Speech-to-text using OpenAI Whisper
+  - Text-to-speech using pyttsx3
+  - Natural language command processing with Ollama LLM or pattern matching
+  - Multi-turn conversation management with context awareness
+  - Voice control for scripts, deployments, monitoring, and system management
+  - Audio feedback system with chimes and confirmations
+  - IRC integration for voice commands
+  - Comprehensive voice automation documentation
+  - Voice cloning module (placeholder for future implementation)
+  - Voice announcements for IRC events
+
 ### Planned
 - PowerShell DSC configurations
 - Kubernetes Helm charts and Kustomize overlays
