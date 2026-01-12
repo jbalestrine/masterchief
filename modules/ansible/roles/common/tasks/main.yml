@@ -1,52 +1,58 @@
 ---
-# Common role for baseline server configuration
-# Part of MasterChief Enterprise DevOps Platform
+# Common role - Base configuration for all Linux servers
 
-- name: Update system packages
-  ansible.builtin.apt:
+- name: Update package cache
+  apt:
     update_cache: yes
     cache_valid_time: 3600
-    upgrade: safe
   when: ansible_os_family == "Debian"
 
-- name: Update system packages (RedHat)
-  ansible.builtin.yum:
-    name: "*"
-    state: latest
+- name: Update package cache (RedHat)
+  yum:
     update_cache: yes
   when: ansible_os_family == "RedHat"
 
 - name: Install common packages
-  ansible.builtin.package:
-    name:
-      - curl
-      - wget
-      - git
-      - vim
-      - htop
-      - net-tools
-      - telnet
-      - unzip
-      - tar
-      - jq
+  package:
+    name: "{{ common_packages }}"
     state: present
-
-- name: Configure timezone
-  community.general.timezone:
-    name: "{{ timezone | default('UTC') }}"
 
 - name: Create admin users
-  ansible.builtin.user:
+  user:
     name: "{{ item.name }}"
-    groups: "{{ item.groups | default(['wheel' if ansible_os_family == 'RedHat' else 'sudo']) }}"
-    shell: /bin/bash
-    create_home: yes
-  loop: "{{ admin_users | default([]) }}"
-
-- name: Configure SSH authorized keys
-  ansible.posix.authorized_key:
-    user: "{{ item.name }}"
+    groups: "{{ item.groups | default(['sudo']) }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
     state: present
+  loop: "{{ admin_users }}"
+  when: admin_users is defined
+
+- name: Set up SSH keys for admin users
+  authorized_key:
+    user: "{{ item.name }}"
     key: "{{ item.ssh_key }}"
-  loop: "{{ admin_users | default([]) }}"
-  when: item.ssh_key is defined
+    state: present
+  loop: "{{ admin_users }}"
+  when: admin_users is defined and item.ssh_key is defined
+
+- name: Configure timezone
+  timezone:
+    name: "{{ system_timezone }}"
+  when: system_timezone is defined
+
+- name: Configure NTP
+  include_tasks: ntp.yml
+  when: configure_ntp | default(true)
+
+- name: Configure firewall
+  include_tasks: firewall.yml
+  when: configure_firewall | default(true)
+
+- name: Set up log rotation
+  template:
+    src: logrotate.conf.j2
+    dest: /etc/logrotate.d/masterchief
+    mode: '0644'
+
+- name: Install monitoring agent
+  include_tasks: monitoring.yml
+  when: enable_monitoring | default(false)

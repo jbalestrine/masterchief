@@ -4,6 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
+venv/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -19,13 +22,31 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
-venv/
-env/
-ENV/
-.venv
 
-# IDEs
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ansible
+*.retry
+.ansible/
+
+# PowerShell
+*.ps1xml
+
+# Logs
+logs/
+*.log
+
+# IDE
 # Build artifacts
 *.pyc
 __pycache__/
@@ -51,22 +72,16 @@ build/
 *~
 .DS_Store
 
-# Testing
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-.tox/
-.nox/
-
-# Secrets and credentials
-*.pem
-*.key
-*.crt
-secrets.yaml
-credentials.json
+# Environment
 .env
 .env.local
+*.local
+
+# Build artifacts
+node_modules/
+dist/
+*.zip
+*.tar.gz
 # Logs
 logs/
 *.log
@@ -129,28 +144,10 @@ secrets/
 *.key
 *.pem
 *.crt
-id_rsa*
+*.p12
+*.pfx
 
-# OS specific
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Archives
-*.zip
-*.tar.gz
-*.tar
-
-# MasterChief specific
-config/secrets/
-platform/data/
-sessions/
-
-# Zip files from legacy system
-*.zip
-*.rar
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
+# Temporary files
+tmp/
+temp/
+*.tmp
