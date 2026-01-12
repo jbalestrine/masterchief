@@ -53,7 +53,7 @@ The module loader provides dynamic plugin discovery and loading with hot-reload 
 - SDK for module development
 
 **Key Files:**
-- `core/module-loader/loader.py`
+- `core/module_loader/loader.py`
 
 ### 2. Configuration Engine
 
