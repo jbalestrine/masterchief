@@ -284,7 +284,7 @@ class ConfigManager:
         env = self.environments[env_name]
         config_file = self.config_dir / f"{env_name}.yaml"
         
-        data = {
+        data: Dict[str, Any] = {
             'config': env.config,
             'secrets': env.secrets
         }

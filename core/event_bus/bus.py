@@ -29,8 +29,8 @@ class Event:
     type: str
     source: str
     data: Dict[str, Any]
-    timestamp: str = None
-    id: str = None
+    timestamp: Optional[str] = None
+    id: Optional[str] = None
 
     def __post_init__(self):
         if self.timestamp is None:
