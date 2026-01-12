@@ -41,7 +41,7 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        mypy core/
+        mypy core/ --check-untyped-defs
     
     - name: Test with pytest
       run: |

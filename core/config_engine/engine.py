@@ -67,7 +67,7 @@ class ConfigEngine:
         value = self.global_config
 
         # Try to find in environment config first
-        env_value = self.env_config
+        env_value: Any = self.env_config
         for key in keys:
             if isinstance(env_value, dict) and key in env_value:
                 env_value = env_value[key]
