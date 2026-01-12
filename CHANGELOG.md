@@ -45,6 +45,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Local voice/audio system for IRC bot with offline processing
+- Text-to-Speech (TTS) engine using pyttsx3
+- Speech-to-Text (STT) engine using OpenAI Whisper (local)
+- Audio recording with sounddevice and voice activity detection (VAD)
+- Audio playback for WAV, MP3, OGG formats using pygame
+- Event-based audio announcements for deployments and alerts
+- Voice command bindings (VOICE, TTS, AUDIO) in IRC bot
+- VoiceEngine class for coordinating all voice components
+- Configurable voice settings (voice, rate, volume, model size)
+- Queue-based speech synthesis for multiple TTS requests
+- Real-time voice transcription with multiple Whisper model sizes
+- Example voice bot implementation in docs/examples/voice-bot-example.py
+- Unit tests for voice system components
+
 ### Planned
 - PowerShell DSC configurations
 - Kubernetes Helm charts and Kustomize overlays
