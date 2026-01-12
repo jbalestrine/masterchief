@@ -22,6 +22,17 @@ def main():
         dir_path = base_dir / dir_name
         dir_path.mkdir(parents=True, exist_ok=True)
     
+    # Add core to path for Echo import
+    sys.path.insert(0, str(base_dir))
+    
+    # Display Echo's greeting
+    try:
+        from core.echo import echo_startup_display
+        print(echo_startup_display())
+        print()  # Add spacing
+    except ImportError:
+        pass  # If Echo module isn't available, continue without it
+    
     # Print banner
     print("""
     ╔═══════════════════════════════════════════════════════════════════╗
