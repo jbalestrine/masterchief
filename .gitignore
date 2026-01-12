@@ -26,6 +26,24 @@ ENV/
 .venv
 
 # IDEs
+# Build artifacts
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.iso
+*.img
+*.vhd
+*.vmdk
+*.ova
+
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
@@ -49,6 +67,24 @@ secrets.yaml
 credentials.json
 .env
 .env.local
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.venv
+venv/
+ENV/
+
+# Output directories
+os/iso-builder/output/
+platform/backup/backups/
+/tmp/
+
+# Dependencies
+node_modules/
+vendor/
 
 # Terraform
 .terraform/
@@ -85,6 +121,20 @@ yarn.lock
 *.db
 *.sqlite
 *.sqlite3
+*.tfstate.backup
+*.tfvars
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.crt
+id_rsa*
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
 # Archives
 *.zip
@@ -98,3 +148,9 @@ sessions/
 
 # Zip files from legacy system
 *.zip
+*.rar
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
