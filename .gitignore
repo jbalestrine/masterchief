@@ -159,3 +159,7 @@ secrets/
 tmp/
 temp/
 *.tmp
+
+# Uploaded data files
+data/uploads/
+data/training/
