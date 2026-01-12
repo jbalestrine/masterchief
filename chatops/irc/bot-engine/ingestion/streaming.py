@@ -47,12 +47,12 @@ class StreamingIngestion(BaseIngestion):
     async def _setup_kafka(self):
         """Setup Kafka consumer."""
         try:
-            from kafka import KafkaConsumer
+            from aiokafka import AIOKafkaConsumer
             import json
             
             brokers = self.connection.get('brokers', ['localhost:9092'])
             
-            self._consumer = KafkaConsumer(
+            self._consumer = AIOKafkaConsumer(
                 self.topic,
                 bootstrap_servers=brokers,
                 group_id=self.consumer_group,
@@ -60,9 +60,12 @@ class StreamingIngestion(BaseIngestion):
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')) if m else None
             )
             
+            # Start the consumer
+            await self._consumer.start()
+            
             logger.info(f"Kafka consumer setup for topic: {self.topic}")
         except ImportError:
-            logger.error("kafka-python not installed. Install with: pip install kafka-python")
+            logger.error("aiokafka not installed. Install with: pip install aiokafka")
             raise
     
     async def _setup_rabbitmq(self):
@@ -117,74 +120,6 @@ class StreamingIngestion(BaseIngestion):
             logger.error("redis not installed. Install with: pip install redis")
             raise
     
-    async def _consume_kafka(self):
-        """Consume messages from Kafka."""
-        try:
-            for message in self._consumer:
-                if self.status != IngestionStatus.RUNNING:
-                    break
-                
-                event = IngestionEvent(
-                    source_type="stream",
-                    source_id=self.source_id,
-                    data=message.value,
-                    metadata={
-                        'stream_type': 'kafka',
-                        'topic': message.topic,
-                        'partition': message.partition,
-                        'offset': message.offset,
-                        'key': message.key.decode('utf-8') if message.key else None
-                    },
-                    timestamp=time.time()
-                )
-                
-                await self._dispatch_event(event)
-                
-                # Manual commit if not auto-commit
-                if not self.auto_commit:
-                    self._consumer.commit()
-        except Exception as e:
-            logger.error(f"Error consuming from Kafka: {e}")
-    
-    async def _consume_rabbitmq(self):
-        """Consume messages from RabbitMQ."""
-        try:
-            def callback(ch, method, properties, body):
-                try:
-                    data = json.loads(body.decode('utf-8'))
-                except json.JSONDecodeError:
-                    data = {'raw': body.decode('utf-8')}
-                
-                event = IngestionEvent(
-                    source_type="stream",
-                    source_id=self.source_id,
-                    data=data,
-                    metadata={
-                        'stream_type': 'rabbitmq',
-                        'queue': self.queue,
-                        'delivery_tag': method.delivery_tag,
-                        'routing_key': method.routing_key
-                    },
-                    timestamp=time.time()
-                )
-                
-                # Dispatch event synchronously (RabbitMQ callback is sync)
-                asyncio.create_task(self._dispatch_event(event))
-                
-                # Acknowledge message
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-            
-            self._consumer.basic_consume(
-                queue=self.queue,
-                on_message_callback=callback,
-                auto_ack=False
-            )
-            
-            # Start consuming (blocking)
-            self._consumer.start_consuming()
-        except Exception as e:
-            logger.error(f"Error consuming from RabbitMQ: {e}")
-    
     async def _consume_redis(self):
         """Consume messages from Redis Pub/Sub."""
         try:
@@ -218,13 +153,12 @@ class StreamingIngestion(BaseIngestion):
         """Main consumption loop."""
         try:
             if self.stream_type == StreamType.KAFKA:
-                # Kafka consumer is blocking, run in executor
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, self._consume_kafka)
+                # Kafka consumer is now async with aiokafka
+                await self._consume_kafka_async()
             elif self.stream_type == StreamType.RABBITMQ:
                 # RabbitMQ consumer is blocking, run in executor
                 loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, self._consume_rabbitmq)
+                await loop.run_in_executor(None, self._consume_rabbitmq_sync)
             elif self.stream_type == StreamType.REDIS:
                 # Redis consumer is async
                 await self._consume_redis()
@@ -232,6 +166,84 @@ class StreamingIngestion(BaseIngestion):
             pass
         except Exception as e:
             logger.error(f"Error in consume loop: {e}")
+    
+    async def _consume_kafka_async(self):
+        """Async Kafka consumer using aiokafka."""
+        try:
+            async for message in self._consumer:
+                if self.status != IngestionStatus.RUNNING:
+                    break
+                
+                event = IngestionEvent(
+                    source_type="stream",
+                    source_id=self.source_id,
+                    data=message.value,
+                    metadata={
+                        'stream_type': 'kafka',
+                        'topic': message.topic,
+                        'partition': message.partition,
+                        'offset': message.offset,
+                        'key': message.key.decode('utf-8') if message.key else None
+                    },
+                    timestamp=time.time()
+                )
+                
+                # Dispatch event
+                await self._dispatch_event(event)
+                
+                # Manual commit if not auto-commit
+                if not self.auto_commit:
+                    await self._consumer.commit()
+        except Exception as e:
+            logger.error(f"Error consuming from Kafka: {e}")
+    
+    def _consume_kafka_sync(self):
+        """Deprecated: Synchronous Kafka consumer - use _consume_kafka_async instead."""
+        logger.warning("Synchronous Kafka consumer is deprecated, using async version")
+    
+    def _consume_rabbitmq_sync(self):
+        """Synchronous RabbitMQ consumer for executor."""
+        try:
+            loop = asyncio.get_event_loop()
+            
+            def callback(ch, method, properties, body):
+                try:
+                    data = json.loads(body.decode('utf-8'))
+                except json.JSONDecodeError:
+                    data = {'raw': body.decode('utf-8')}
+                
+                event = IngestionEvent(
+                    source_type="stream",
+                    source_id=self.source_id,
+                    data=data,
+                    metadata={
+                        'stream_type': 'rabbitmq',
+                        'queue': self.queue,
+                        'delivery_tag': method.delivery_tag,
+                        'routing_key': method.routing_key
+                    },
+                    timestamp=time.time()
+                )
+                
+                # Schedule dispatch in event loop
+                asyncio.run_coroutine_threadsafe(
+                    self._dispatch_event(event), 
+                    loop
+                )
+                
+                # Acknowledge message
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+            
+            self._consumer.basic_consume(
+                queue=self.queue,
+                on_message_callback=callback,
+                auto_ack=False
+            )
+            
+            # Start consuming (blocking)
+            self._consumer.start_consuming()
+        except Exception as e:
+            logger.error(f"Error consuming from RabbitMQ: {e}")
     
     async def start(self):
         """Start streaming ingestion."""
@@ -266,7 +278,7 @@ class StreamingIngestion(BaseIngestion):
         
         # Close connections
         if self.stream_type == StreamType.KAFKA and self._consumer:
-            self._consumer.close()
+            await self._consumer.stop()  # aiokafka uses async stop
         elif self.stream_type == StreamType.RABBITMQ:
             if self._consumer:
                 self._consumer.stop_consuming()

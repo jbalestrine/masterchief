@@ -1,5 +1,8 @@
 """Tests for IRC bot with ingestion integration."""
 import pytest
+import sys
+sys.path.insert(0, '/home/runner/work/masterchief/masterchief')
+
 from chatops.irc.bot_engine.bot import IRCBot, BindType
 from chatops.irc.bot_engine.ingestion.base import IngestionEvent
 

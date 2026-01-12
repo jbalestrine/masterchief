@@ -4,10 +4,30 @@ import pytest
 import tempfile
 import os
 from pathlib import Path
+import sys
+import importlib.util
 
-from chatops.irc.bot_engine.ingestion.base import (
-    BaseIngestion, IngestionEvent, IngestionManager, IngestionStatus
+# Load modules using importlib to handle dashes in directory names
+def load_module_from_path(module_name, path):
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+# Get the repo root
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+
+# Load ingestion modules
+base_module = load_module_from_path(
+    'ingestion_base',
+    os.path.join(repo_root, 'chatops/irc/bot-engine/ingestion/base.py')
 )
+
+BaseIngestion = base_module.BaseIngestion
+IngestionEvent = base_module.IngestionEvent
+IngestionManager = base_module.IngestionManager
+IngestionStatus = base_module.IngestionStatus
 
 
 class MockIngestion(BaseIngestion):
@@ -106,7 +126,17 @@ async def test_ingestion_status():
 @pytest.mark.asyncio
 async def test_file_ingestion_json():
     """Test file ingestion with JSON files."""
-    from chatops.irc.bot_engine.ingestion.files import FileIngestion
+    # Load file ingestion module
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+    spec = importlib.util.spec_from_file_location(
+        'ingestion_files',
+        os.path.join(repo_root, 'chatops/irc/bot-engine/ingestion/files.py')
+    )
+    files_module = importlib.util.module_from_spec(spec)
+    sys.modules['ingestion_files'] = files_module
+    spec.loader.exec_module(files_module)
+    
+    FileIngestion = files_module.FileIngestion
     
     # Create temporary directory and file
     with tempfile.TemporaryDirectory() as tmpdir:

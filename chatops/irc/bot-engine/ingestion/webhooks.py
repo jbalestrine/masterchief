@@ -56,7 +56,7 @@ class WebhookIngestion(BaseIngestion):
                 # Process based on webhook type
                 event_data = self._process_webhook(data, headers)
                 
-                # Create and dispatch event
+                # Create event
                 event = IngestionEvent(
                     source_type="webhook",
                     source_id=self.source_id,
@@ -69,8 +69,13 @@ class WebhookIngestion(BaseIngestion):
                     timestamp=time.time()
                 )
                 
-                # Dispatch in async context
-                asyncio.create_task(self._dispatch_event(event))
+                # Dispatch event synchronously (we're in Flask sync context)
+                # Handlers will be called synchronously
+                for handler in self.handlers:
+                    try:
+                        handler(event)
+                    except Exception as e:
+                        logger.error(f"Error in webhook handler: {e}")
                 
                 return jsonify({"status": "received"}), 200
                 
