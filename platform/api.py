@@ -25,6 +25,8 @@ def create_app(config):
     from cmdb.api import cmdb_bp
     from backup.api import backup_bp
     from monitoring.api import monitoring_bp
+    from plugins.api import plugins_bp
+    from deployments.api import deployments_bp
     
     app.register_blueprint(services_bp, url_prefix='/api/services')
     app.register_blueprint(bare_metal_bp, url_prefix='/api/bare-metal')
@@ -34,6 +36,8 @@ def create_app(config):
     app.register_blueprint(cmdb_bp, url_prefix='/api/cmdb')
     app.register_blueprint(backup_bp, url_prefix='/api/backup')
     app.register_blueprint(monitoring_bp, url_prefix='/api/monitoring')
+    app.register_blueprint(plugins_bp, url_prefix='/api/plugins')
+    app.register_blueprint(deployments_bp, url_prefix='/api/deployments')
     
     @app.route('/')
     def index():
