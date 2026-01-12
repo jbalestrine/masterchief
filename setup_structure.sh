@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Create core directory structure
-mkdir -p core/{module-loader,config-engine,event-bus,cli}
+mkdir -p core/{module_loader,config-engine,event-bus,cli}
 mkdir -p modules/{terraform/azure/{networking,compute,storage,database,web-integration,security},ansible/{playbooks,roles,inventory},powershell-dsc/{configurations,resources},kubernetes/{helm-charts,kustomize,policies}}
 mkdir -p chatops/irc/{inspircd,bot-engine,data-ingestion,web-client}
 mkdir -p platform/{web-ide,scripts,addons,system-manager,cmdb,portal,catalog}

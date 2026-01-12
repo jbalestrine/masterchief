@@ -1,81 +1,57 @@
 """
-Configuration management for MasterChief platform
+Smart configuration - automatically detects environment.
+ZERO configuration needed for development.
 """
-
-import yaml
+import os
 from pathlib import Path
-from typing import Dict, Any
 
-DEFAULT_CONFIG_PATHS = [
-    '/etc/masterchief/config.yml',
-    Path.home() / '.masterchief' / 'config.yml',
-    Path(__file__).parent.parent / 'config.yml',
-]
 
-DEFAULT_CONFIG = {
-    'platform': {
-        'version': '1.0.0',
-        'install_dir': '/opt/masterchief',
-        'config_dir': '/etc/masterchief',
-        'log_dir': '/var/log/masterchief',
-        'data_dir': '/var/lib/masterchief',
-    },
-    'api': {
-        'host': '0.0.0.0',
-        'port': 8443,
-        'ssl': True,
-    },
-    'database': {
-        'type': 'postgresql',
-        'host': 'localhost',
-        'port': 5432,
-        'database': 'masterchief',
-        'user': 'masterchief',
-        'password': '',
-    },
-    'monitoring': {
-        'enabled': True,
-        'prometheus_port': 9090,
-        'grafana_port': 3000,
-    },
-    'security': {
-        'cis_compliance': True,
-        'firewall_enabled': True,
-        'auto_updates': True,
-    },
-}
-
-def load_config() -> Dict[str, Any]:
-    """Load configuration from file or use defaults"""
+class Config:
+    """Configuration that just works everywhere."""
     
-    # Try to load from config files
-    for config_path in DEFAULT_CONFIG_PATHS:
-        if Path(config_path).exists():
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-                # Merge with defaults
-                return deep_merge(DEFAULT_CONFIG, config)
+    # Auto-detect environment
+    ENV = os.environ.get('MASTERCHIEF_ENV', 'local')
+    IS_AZURE = bool(os.environ.get('WEBSITE_SITE_NAME'))
     
-    # Use defaults if no config file found
-    return DEFAULT_CONFIG.copy()
+    # Paths
+    BASE_DIR = Path(__file__).parent.parent
+    DATA_DIR = BASE_DIR / 'data'
+    LOGS_DIR = BASE_DIR / 'logs'
+    PLUGINS_DIR = BASE_DIR / 'plugins'
+    SCRIPTS_DIR = DATA_DIR / 'custom_scripts'
+    BACKUPS_DIR = BASE_DIR / 'backups'
+    
+    # Database - SQLite by default
+    @property
+    def DATABASE_URL(self):
+        return os.environ.get(
+            'DATABASE_URL', 
+            f"sqlite:///{self.DATA_DIR}/masterchief.db"
+        )
+    
+    # Redis - optional
+    REDIS_URL = os.environ.get('REDIS_URL')
+    REDIS_ENABLED = os.environ.get('REDIS_ENABLED', 'false').lower() == 'true'
+    
+    # Server
+    HOST = os.environ.get('HOST', '0.0.0.0')
+    PORT = int(os.environ.get('PORT', 8080))
+    DEBUG = os.environ.get('DEBUG', 'true').lower() == 'true'
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
+    
+    # IRC Bot
+    IRC_ENABLED = os.environ.get('IRC_ENABLED', 'false').lower() == 'true'
+    IRC_SERVER = os.environ.get('IRC_SERVER', 'localhost')
+    IRC_PORT = int(os.environ.get('IRC_PORT', 6667))
+    IRC_NICKNAME = os.environ.get('IRC_NICKNAME', 'masterchief')
+    IRC_CHANNELS = os.environ.get('IRC_CHANNELS', '#devops').split(',')
+    
+    def __init__(self):
+        """Ensure required directories exist."""
+        for directory in [self.DATA_DIR, self.LOGS_DIR, self.PLUGINS_DIR, 
+                         self.SCRIPTS_DIR, self.BACKUPS_DIR]:
+            directory.mkdir(parents=True, exist_ok=True)
 
-def deep_merge(base: Dict, update: Dict) -> Dict:
-    """Deep merge two dictionaries"""
-    result = base.copy()
-    for key, value in update.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
 
-def save_config(config: Dict[str, Any], path: str = None):
-    """Save configuration to file"""
-    if path is None:
-        path = DEFAULT_CONFIG_PATHS[0]
-    
-    config_path = Path(path)
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    with open(config_path, 'w') as f:
-        yaml.dump(config, f, default_flow_style=False)
+# Global config instance
+config = Config()
