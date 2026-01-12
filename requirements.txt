@@ -53,6 +53,7 @@ pydantic>=2.5.0
 
 # Background Tasks & Scheduling
 apscheduler>=3.10.0
+sqlalchemy>=2.0.0  # Required for APScheduler's SQLAlchemyJobStore
 
 # Web Server
 gunicorn>=21.0.0
@@ -65,6 +66,14 @@ pytest>=7.4.0
 pytest-cov>=4.1.0
 httpx>=0.25.0
 
+# AI/LLM for script generation
+ollama>=0.1.0
+
+# Validation
+ruff>=0.1.0
+
+# Scheduling
+croniter>=1.3.0
 # Voice Cloning
 # XTTS/Coqui TTS
 TTS>=0.22.0
