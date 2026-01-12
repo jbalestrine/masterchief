@@ -252,7 +252,7 @@ class WizardEngine:
                 'error': 'Confirmation required'
             }
         
-        # Import here to avoid circular dependency
+        # Import here to avoid circular dependency (these modules import from wizard_engine)
         from .folder_generator import FolderGenerator
         from .template_generator import TemplateGenerator
         

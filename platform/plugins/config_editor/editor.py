@@ -4,6 +4,7 @@ Real-time configuration editor logic.
 
 import yaml
 import json
+import shutil
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional, List
@@ -99,7 +100,6 @@ class ConfigEditor:
         # Create backup
         backup_path = config_path.with_suffix('.yaml.bak')
         if config_path.exists():
-            import shutil
             shutil.copy2(config_path, backup_path)
             logger.info(f"Created backup: {backup_path}")
         
@@ -120,7 +120,6 @@ class ConfigEditor:
             
             # Restore from backup
             if backup_path.exists():
-                import shutil
                 shutil.copy2(backup_path, config_path)
                 logger.info(f"Restored from backup")
             
@@ -146,6 +145,7 @@ class ConfigEditor:
             existing_config = self.get_plugin_config(plugin_id)
             plugin_type = existing_config.get('plugin', {}).get('type', 'python')
             
+            # Import here to avoid circular dependency during module initialization
             from .schema_validator import SchemaValidator
             validator = SchemaValidator()
             
