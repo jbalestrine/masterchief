@@ -338,7 +338,7 @@ def generate_ai(ctx, description, language, output, no_comments, no_error_handli
 
     except Exception as e:
         click.echo(f"✗ Error generating code: {e}", err=True)
-        if ctx.obj.get("verbose"):
+        if ctx.obj and ctx.obj.get("verbose"):
             import traceback
             click.echo(traceback.format_exc())
         sys.exit(1)
