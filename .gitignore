@@ -104,6 +104,38 @@ vendor/
 # Terraform
 .terraform/
 *.tfstate
+*.tfstate.*
+*.tfvars
+.terraform.lock.hcl
+
+# Ansible
+*.retry
+.vault_pass
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build artifacts
+node_modules/
+package-lock.json
+yarn.lock
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 *.tfstate.backup
 *.tfvars
 
