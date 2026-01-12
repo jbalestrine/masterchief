@@ -1,6 +1,8 @@
 """Deployment Manager for MasterChief platform."""
 import logging
-import uuid
+import sys
+import random
+import time
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -86,7 +88,9 @@ class DeploymentManager:
         Returns:
             Created deployment
         """
-        deployment_id = str(uuid.uuid4())
+        # Generate a simple unique ID without using uuid module
+        # to avoid platform module shadowing issues
+        deployment_id = f"deploy-{int(time.time() * 1000000)}-{random.randint(1000, 9999)}"
         deployment = Deployment(
             deployment_id=deployment_id,
             name=name,
