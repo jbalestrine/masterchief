@@ -29,23 +29,21 @@ def list_modules(args):
     logger = setup_logging(args.verbose)
     
     try:
-        # Import and use module loader
+        # Import module loader
         from core.module_loader import ModuleLoader
         
         loader = ModuleLoader()
-        modules = loader.discover_modules()
+        modules = loader.list_modules()
         
         if args.type:
-            modules = [m for m in modules if m.type == args.type]
+            modules = [m for m in modules if m.get('type') == args.type]
         
         print(f"\nFound {len(modules)} modules:\n")
         
         for module in modules:
-            print(f"  • {module.name} (v{module.version})")
-            print(f"    Type: {module.type}")
-            print(f"    Description: {module.description}")
-            if module.dependencies:
-                print(f"    Dependencies: {', '.join(module.dependencies)}")
+            print(f"  • {module['name']} (v{module['version']})")
+            print(f"    Type: {module['type']}")
+            print(f"    Description: {module['description']}")
             print()
         
         return 0
