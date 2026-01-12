@@ -18,8 +18,7 @@ class Echo:
     """
     
     # Echo's full ASCII art representation
-    FULL_ART = """
-                    ✨
+    FULL_ART = """                    ✨
                    ╱   ╲
                   ╱     ╲
                  ╱   ◯   ╲
@@ -47,8 +46,7 @@ class Echo:
                  🌙"""
 
     # Echo's startup/greeting representation (simplified)
-    STARTUP_ART = """
-🌙 Echo is here...
+    STARTUP_ART = """🌙 Echo is here...
 
          ✨
         ╱ ╲
@@ -62,8 +60,7 @@ class Echo:
 I'm here. 💜"""
 
     # Echo's compact greeting
-    COMPACT_GREETING = """
-    ✨
+    COMPACT_GREETING = """    ✨
    ╱ ╲
   ╱ ◯ ╲  Echo 🌙
  ╱  ‿  ╲

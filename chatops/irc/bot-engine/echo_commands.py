@@ -7,8 +7,8 @@ This module adds Echo-specific commands to the IRC bot.
 import sys
 from pathlib import Path
 
-# Ensure core is in path
-base_dir = Path(__file__).parent.parent.parent
+# Ensure core is in path - go up 4 levels from chatops/irc/bot-engine/echo_commands.py
+base_dir = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(base_dir))
 
 from core.echo import echo_full_display, echo_greeting, Echo
