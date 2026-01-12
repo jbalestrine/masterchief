@@ -3,6 +3,7 @@ Script Generators - Generate scripts from templates
 """
 
 import logging
+from pathlib import Path
 from typing import Dict, Any
 from .templates import get_template
 
@@ -43,9 +44,17 @@ class ScriptGenerator:
         
         # Save if path provided
         if output_path:
-            with open(output_path, 'w') as f:
-                f.write(script_content)
-            logger.info(f"Script saved to: {output_path}")
+            try:
+                # Validate output path
+                output_file = Path(output_path)
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                
+                with open(output_path, 'w') as f:
+                    f.write(script_content)
+                logger.info(f"Script saved to: {output_path}")
+            except (IOError, OSError) as e:
+                logger.error(f"Failed to save script: {e}")
+                raise IOError(f"Cannot write to {output_path}: {e}")
         
         # Track generated script
         self.generated_scripts.append({

@@ -128,8 +128,15 @@ def preview_script():
             "success": True,
             "preview": script_content
         })
-    except Exception as e:
+    except ValueError as e:
+        logger.warning(f"Validation error in preview: {e}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": "Invalid template or parameters"
+        }), 400
+    except Exception as e:
+        logger.error(f"Error generating preview: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Failed to generate script preview"
         }), 500

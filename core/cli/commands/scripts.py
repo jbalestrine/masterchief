@@ -1,6 +1,7 @@
 """Script management commands."""
 
 import os
+import sys
 import subprocess
 from pathlib import Path
 import click
@@ -155,6 +156,7 @@ def script_generate(ctx, template, output):
             
     except ImportError:
         click.echo("✗ Script Wizard module not available", err=True)
+        click.echo("  Install dependencies: pip install -r requirements.txt")
     except Exception as e:
         click.echo(f"✗ Error generating script: {e}", err=True)
 

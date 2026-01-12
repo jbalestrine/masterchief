@@ -1,5 +1,6 @@
 """Dashboard management commands."""
 
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -46,7 +47,7 @@ def dashboard_start(ctx, port, host, dev):
             click.echo("\n📊 Dashboard starting at http://{}:{}".format(host, port))
             click.echo("Press Ctrl+C to stop\n")
         
-        subprocess.run(cmd, env={**subprocess.os.environ, **env})
+        subprocess.run(cmd, env={**os.environ, **env})
         
     except KeyboardInterrupt:
         click.echo("\n\n✓ Dashboard stopped")
