@@ -1,4 +1,4 @@
-"""Data upload and management API."""
+"""Data upload and management API with Web GUI."""
 import os
 import json
 import hashlib
@@ -7,11 +7,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from werkzeug.utils import secure_filename
-from flask import Blueprint, request, jsonify, current_app, send_file
+from flask import Blueprint, request, jsonify, current_app, send_file, render_template, redirect, url_for
 
 logger = logging.getLogger(__name__)
 
-data_bp = Blueprint('data', __name__)
+data_bp = Blueprint('data', __name__, template_folder='../templates')
 
 # Configuration
 UPLOAD_FOLDER = Path("data/uploads")
@@ -71,7 +71,34 @@ def load_metadata(filepath: Path) -> Optional[Dict[str, Any]]:
     return None
 
 
-@data_bp.route('/upload', methods=['POST'])
+# ============================================================================
+# Web GUI Routes
+# ============================================================================
+
+@data_bp.route('/', methods=['GET'])
+@data_bp.route('/upload', methods=['GET'])
+def upload_page():
+    """Render the upload page."""
+    return render_template('data/upload.html')
+
+
+@data_bp.route('/browse', methods=['GET'])
+def browse_page():
+    """Render the file browser page."""
+    return render_template('data/browse.html')
+
+
+@data_bp.route('/manage', methods=['GET'])
+def manage_page():
+    """Render the file management page."""
+    return render_template('data/manage.html')
+
+
+# ============================================================================
+# API Routes
+# ============================================================================
+
+@data_bp.route('/api/upload', methods=['POST'])
 def upload_file():
     """
     Upload a file for data ingestion or training.
@@ -203,7 +230,7 @@ def upload_file():
     }), 201
 
 
-@data_bp.route('/files', methods=['GET'])
+@data_bp.route('/api/files', methods=['GET'])
 def list_files():
     """
     List uploaded files.
@@ -289,7 +316,7 @@ def list_files():
     })
 
 
-@data_bp.route('/files/<path:file_path>', methods=['GET'])
+@data_bp.route('/api/files/<path:file_path>', methods=['GET'])
 def get_file(file_path: str):
     """
     Get a specific file.
@@ -327,7 +354,7 @@ def get_file(file_path: str):
         return jsonify({"error": str(e)}), 500
 
 
-@data_bp.route('/files/<path:file_path>', methods=['DELETE'])
+@data_bp.route('/api/files/<path:file_path>', methods=['DELETE'])
 def delete_file(file_path: str):
     """
     Delete a file and its metadata.
@@ -369,7 +396,7 @@ def delete_file(file_path: str):
         return jsonify({"error": str(e)}), 500
 
 
-@data_bp.route('/stats', methods=['GET'])
+@data_bp.route('/api/stats', methods=['GET'])
 def get_stats():
     """
     Get statistics about uploaded data.
