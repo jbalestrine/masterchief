@@ -105,6 +105,33 @@ POST /api/scripts/{name}/execute  # Execute script
 DELETE /api/scripts/{name}   # Delete script
 ```
 
+## Plugin Wizard Integration
+
+The MasterChief Plugin Wizard can also be used to create addon plugins:
+
+**Via REST API:**
+```bash
+# Start wizard session for a new addon
+curl -X POST http://localhost:8443/api/wizard/start
+
+# Select plugin type (python, php, nodejs, etc.)
+# Follow wizard steps to create addon structure
+```
+
+**Via IRC Bot:**
+```irc
+<user> !plugin wizard
+<bot> Visit http://masterchief-host:8443/plugins/wizard
+
+<user> !plugin help python
+<bot> Setup guide for python addons...
+
+<user> !plugin suggest python
+<bot> Suggested defaults for Python addon creation...
+```
+
+See [Plugin Wizard Documentation](../docs/plugin-wizard.md) for detailed information.
+
 ## Creating Custom Addons
 
 To create a new addon:
@@ -115,6 +142,19 @@ To create a new addon:
 4. Add configuration to `config.yml`
 5. Document your addon in a README.md
 
+**OR use the Plugin Wizard:**
+
+```bash
+# Via API
+curl -X POST http://localhost:8443/api/wizard/start
+
+# Via CLI (future)
+python -m platform.plugins.wizard create
+
+# Via IRC
+!plugin wizard
+```
+
 Example structure:
 ```
 addons/
@@ -122,7 +162,10 @@ addons/
     ├── __init__.py
     ├── manager.py       # Core logic
     ├── api.py          # REST API endpoints
-    ├── config.yml      # Default configuration
+    ├── config/         # Configuration files
+    │   └── plugin.yaml # Plugin configuration
+    ├── src/            # Source code
+    ├── tests/          # Unit tests
     └── README.md       # Documentation
 ```
 
@@ -159,7 +202,7 @@ addons:
 To contribute a new addon:
 
 1. Fork the repository
-2. Create your addon in a new directory
+2. Create your addon in a new directory (or use Plugin Wizard)
 3. Include comprehensive documentation
 4. Add tests for your addon
 5. Submit a pull request
@@ -169,4 +212,5 @@ To contribute a new addon:
 For addon-specific issues:
 - Check addon documentation
 - Review logs in `/var/log/masterchief/`
+- Use IRC bot AI assistant: `!plugin ask <question>`
 - Report issues on GitHub
