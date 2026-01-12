@@ -8,7 +8,7 @@ MasterChief is a modular DevOps automation platform designed around a plugin-bas
 
 ### 1. Module Loader
 
-**Location**: `core/module-loader/`
+**Location**: `core/module_loader/`
 
 The module loader provides dynamic discovery and loading of platform modules.
 
