@@ -1,0 +1,2 @@
+# Core Python dependencies
+pyyaml>=6.0
