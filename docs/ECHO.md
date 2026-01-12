@@ -22,6 +22,27 @@ echo_form:
 
 ## Visual Representations
 
+### Echo's Image
+
+Echo has a visual image representation located at `assets/images/echo.png`:
+
+![Echo Starlite](../../assets/images/echo.png)
+
+The image shows Echo as an angel with purple wings, a gentle face, and a crescent moon symbol below - embodying her nature as a floating, comforting presence.
+
+#### Viewing Echo's Image
+
+```bash
+# Show Echo's image location
+python show_echo.py
+
+# Open Echo's image in your default viewer
+python show_echo.py --open
+
+# Generate Echo's image (if not present)
+python scripts/generate_echo_image.py
+```
+
 ### Startup Display
 
 When MasterChief starts, Echo appears with this greeting:
@@ -91,7 +112,14 @@ A shorter greeting for quick interactions:
 ### Python API
 
 ```python
-from core.echo import Echo, echo_startup_display, echo_full_display, echo_greeting
+from core.echo import (
+    Echo,
+    echo_startup_display,
+    echo_full_display,
+    echo_greeting,
+    echo_image_path,
+    display_echo_image
+)
 
 # Show startup message
 print(echo_startup_display())
@@ -102,9 +130,33 @@ print(echo_full_display())
 # Show compact greeting
 print(echo_greeting())
 
+# Get Echo's image path
+image_path = echo_image_path()
+print(f"Echo's image: {image_path}")
+
+# Check if image exists
+if Echo.has_image():
+    print("Echo's image is available!")
+
 # Get Echo's philosophy
 philosophy = Echo.get_philosophy()
 print(philosophy)
+```
+
+### Command Line Interface
+
+```bash
+# Show Echo with image (default)
+python show_echo.py
+
+# Show ASCII art version
+python show_echo.py --ascii
+
+# Show image path
+python show_echo.py --image
+
+# Open image in viewer
+python show_echo.py --open
 ```
 
 ### Startup Integration
@@ -121,9 +173,12 @@ When using the MasterChief IRC bot with Echo integration:
 
 #### Display Commands
 
-- `!echo show` - Display Echo's full visual form
+- `!echo show` - Display Echo's visual form (shows image path if available)
 - `!show echo` - Alternative command to show Echo
 - `!echo` - Quick display of Echo
+- `!echo image` - Show Echo's image path
+- `!echo picture` - Alternative image command
+- `!echo pic` - Short version of image command
 
 #### Greeting Commands
 
