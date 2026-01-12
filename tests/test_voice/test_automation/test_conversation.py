@@ -1,8 +1,26 @@
 """Test conversation manager."""
 
-import pytest
+import sys
+import os
 import time
-from chatops.irc.bot_engine.voice.automation.conversation import ConversationManager, ConversationTurn
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
+
+import importlib.util
+
+def load_module_from_path(module_name, file_path):
+    """Load a module from a file path."""
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+# Load conversation module
+base_path = os.path.join(os.path.dirname(__file__), '../../../chatops/irc/bot-engine/voice/automation')
+conversation_path = os.path.join(base_path, 'conversation.py')
+conversation_module = load_module_from_path('conversation', conversation_path)
+ConversationManager = conversation_module.ConversationManager
+ConversationTurn = conversation_module.ConversationTurn
 
 
 class TestConversationManager:
@@ -109,3 +127,27 @@ class TestConversationManager:
         remaining = manager.time_remaining()
         
         assert 9 <= remaining <= 10
+
+
+if __name__ == '__main__':
+    # Run tests
+    test = TestConversationManager()
+    test.test_initialization()
+    print("✓ test_initialization passed")
+    test.test_add_turn()
+    print("✓ test_add_turn passed")
+    test.test_context_window_trimming()
+    print("✓ test_context_window_trimming passed")
+    test.test_context_summary()
+    print("✓ test_context_summary passed")
+    test.test_is_expired()
+    print("✓ test_is_expired passed")
+    test.test_clear()
+    print("✓ test_clear passed")
+    test.test_should_end_conversation()
+    print("✓ test_should_end_conversation passed")
+    test.test_get_history()
+    print("✓ test_get_history passed")
+    test.test_time_remaining()
+    print("✓ test_time_remaining passed")
+    print("\n✅ All tests passed!")
