@@ -110,7 +110,7 @@ See [Plugin Wizard Documentation](docs/plugin-wizard.md) for detailed usage.
 
 ```
 core/                   # Core platform engine
-  ├── module-loader/    # Dynamic module discovery
+  ├── module_loader/    # Dynamic module discovery
   ├── config/          # Configuration management
   ├── logging/         # Centralized logging
   └── api/             # Module communication
@@ -415,7 +415,7 @@ npm install
 ```
 masterchief/
 ├── core/                   # Core platform components
-│   ├── module-loader/     # Dynamic module system
+│   ├── module_loader/     # Dynamic module system
 │   ├── config-engine/     # Configuration management
 │   ├── event-bus/         # Event-driven messaging
 │   └── cli/               # Command-line interface
