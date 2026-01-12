@@ -162,9 +162,20 @@ Eggdrop-style IRC bot with TCL-inspired Python bindings:
 
 **Binding System:**
 ```python
+# Traditional IRC bindings
 bot.bind("pub", "-|-", "!deploy", deploy_handler)  # Channel command
 bot.bind("msg", "-|-", "!status", status_handler)  # Private message
 bot.bind("time", "-|-", "*/5 * * * *", cron_handler)  # Scheduled
+bot.bind("voice", "-|-", "listen", voice_handler)  # Voice command
+bot.bind("tts", "-|-", "say", tts_handler)  # Text-to-speech
+bot.bind("audio", "-|-", "deploy:success", play_sound)  # Audio event
+
+# Data ingestion bindings
+bot.bind("webhook", "-|-", "github/push", handle_github_push)
+bot.bind("file", "-|-", "/data/*.json", handle_json_files)
+bot.bind("stream", "-|-", "kafka:deployments", handle_deployments)
+bot.bind("log", "-|-", "/var/log/app.log", handle_app_logs)
+bot.bind("metric", "-|-", "prometheus:cpu_usage>80", handle_high_cpu)
 ```
 
 **Features:**
@@ -172,6 +183,136 @@ bot.bind("time", "-|-", "*/5 * * * *", cron_handler)  # Scheduled
 - Data ingestion pipeline (webhooks, logs, metrics)
 - Partyline/bot mesh
 - Web IRC client
+- Local voice/audio system (TTS, STT, recording, announcements)
+
+### Voice/Audio System
+
+The IRC bot includes a comprehensive local voice and audio system that runs entirely offline:
+
+**Components:**
+- **Text-to-Speech (TTS)**: Convert bot responses to speech using `pyttsx3`
+- **Speech-to-Text (STT)**: Transcribe voice commands using OpenAI Whisper (local)
+- **Audio Recording**: Capture microphone input with voice activity detection
+- **Audio Playback**: Play audio files and announcements
+- **Event Announcements**: Trigger sounds for deployment, alerts, and events
+
+**Voice Bindings:**
+```python
+# Text-to-Speech
+bot.bind("tts", "-|-", "!say", tts_handler)
+
+# Voice Commands
+bot.bind("voice", "-|-", "!listen", voice_command_handler)
+
+# Event-based Announcements
+bot.bind("audio", "-|-", "deploy:success", play_success_sound)
+bot.bind("audio", "-|-", "alert:critical", play_alert_sound)
+```
+
+**Architecture:**
+```
+VoiceEngine
+├── TTSEngine (pyttsx3)         # Text-to-Speech
+├── STTEngine (Whisper)         # Speech-to-Text
+├── AudioRecorder (sounddevice) # Microphone recording
+├── AudioPlayer (pygame)        # Audio playback
+├── VoiceActivityDetector (VAD) # Voice detection
+└── AnnouncementManager         # Event-based sounds
+```
+
+**Key Features:**
+- Queue-based speech synthesis
+- Multiple Whisper model sizes (tiny, base, small, medium, large)
+- Real-time voice activity detection (VAD)
+- Configurable voice, rate, and volume
+- Support for WAV, MP3, OGG formats
+- Event-triggered audio announcements
+- 100% local processing - no cloud dependencies
+
+**Key Files:**
+- `chatops/irc/bot-engine/voice/base.py` - Configuration and main engine
+- `chatops/irc/bot-engine/voice/tts.py` - Text-to-speech
+- `chatops/irc/bot-engine/voice/stt.py` - Speech-to-text
+- `chatops/irc/bot-engine/voice/recorder.py` - Audio recording
+- `chatops/irc/bot-engine/voice/player.py` - Audio playback
+- `chatops/irc/bot-engine/voice/vad.py` - Voice activity detection
+- `chatops/irc/bot-engine/voice/announcements.py` - Event announcements
+
+**Data Ingestion System:**
+
+The IRC bot includes a comprehensive data ingestion system that supports multiple data sources:
+
+1. **Webhooks** - Receive and process webhooks from:
+   - GitHub (push, PR, issues)
+   - GitLab CI/CD
+   - Jenkins
+   - Alertmanager
+   - PagerDuty
+   - Generic webhooks with signature validation
+
+2. **REST APIs** - Poll external APIs with:
+   - Multiple authentication methods (API key, Bearer, Basic, OAuth)
+   - Configurable polling intervals
+   - Response transformation
+   - Change detection
+
+3. **File-based** - Watch and ingest files:
+   - CSV, JSON, YAML, XML formats
+   - File change detection
+   - Configurable glob patterns
+   - Recursive directory watching
+
+4. **Databases** - Query databases:
+   - PostgreSQL (async with asyncpg)
+   - MySQL (async with aiomysql)
+   - SQLite (async with aiosqlite)
+   - MongoDB (async with motor)
+   - Change detection and scheduled queries
+
+5. **Streaming** - Consume from message queues:
+   - Kafka topics
+   - RabbitMQ queues
+   - Redis Pub/Sub channels
+   - Reliable message processing
+
+6. **Logs** - Tail and parse log files:
+   - Syslog format support
+   - JSON logs
+   - Custom regex patterns
+   - Log rotation handling
+
+7. **Metrics** - Collect and monitor metrics:
+   - Prometheus queries
+   - StatsD integration
+   - InfluxDB queries
+   - Threshold-based alerting
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────┐
+│           IRC Bot with Bindings                 │
+│  ┌──────────────┐  ┌──────────────┐            │
+│  │ IRC Bindings │  │  Ingestion   │            │
+│  │  (pub, msg)  │  │   Bindings   │            │
+│  └──────────────┘  └──────────────┘            │
+│                           │                     │
+│                    ┌──────▼──────┐              │
+│                    │  Ingestion  │              │
+│                    │   Manager   │              │
+│                    └──────┬──────┘              │
+└───────────────────────────┼─────────────────────┘
+                            │
+        ┌───────────────────┴────────────────────┐
+        │                                        │
+┌───────▼────────┐  ┌────────▼─────────┐  ┌────▼──────┐
+│   Webhooks     │  │    Streaming     │  │  Metrics  │
+│   (Flask)      │  │ (Kafka/RabbitMQ) │  │(Prometheus)│
+└────────────────┘  └──────────────────┘  └───────────┘
+┌────────────────┐  ┌──────────────────┐  ┌───────────┐
+│   Files        │  │    Database      │  │   Logs    │
+│  (Watchdog)    │  │  (asyncpg/motor) │  │  (Tail)   │
+└────────────────┘  └──────────────────┘  └───────────┘
+```
 
 ## Data Flow
 
