@@ -30,15 +30,9 @@ def list_modules(args):
     
     try:
         # Import and use module loader
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "loader", 
-            "core/module-loader/loader.py"
-        )
-        loader_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(loader_module)
+        from core.module_loader import ModuleLoader
         
-        loader = loader_module.ModuleLoader()
+        loader = ModuleLoader()
         modules = loader.discover_modules()
         
         if args.type:
