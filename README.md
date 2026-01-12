@@ -457,7 +457,7 @@ npm install
 ```
 masterchief/
 ├── core/                   # Core platform components
-│   ├── module-loader/     # Dynamic module system
+│   ├── module_loader/     # Dynamic module system
 │   ├── config-engine/     # Configuration management
 │   ├── event-bus/         # Event-driven messaging
 │   └── cli/               # Command-line interface
