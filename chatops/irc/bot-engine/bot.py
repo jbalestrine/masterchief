@@ -22,6 +22,9 @@ class BindType(Enum):
     RAW = "raw"  # Raw IRC events
     DCC = "dcc"  # DCC commands
     PUBM = "pubm"  # Public channel pattern match
+    VOICE = "voice"  # Voice command events
+    TTS = "tts"  # Text-to-speech events
+    AUDIO = "audio"  # Audio playback events
 
 
 @dataclass
