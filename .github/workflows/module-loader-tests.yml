@@ -3,7 +3,8 @@ name: Module Loader Tests
 on:
   push:
     paths:
-      - 'core/**'
+      - 'core/module_loader/**'
+      - 'core/config/**'
       - '.github/workflows/module-loader-tests.yml'
   pull_request:
     paths:
