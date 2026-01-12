@@ -38,3 +38,37 @@ addons:
   scripts:
     enabled: true
     max_execution_time: 300
+
+voice:
+  automation:
+    enabled: false
+    
+    wake_word:
+      engine: openwakeword  # openwakeword, porcupine, or whisper
+      words:
+        - "hey masterchief"
+        - "hey chief"
+        - "okay masterchief"
+      sensitivity: 0.5
+      
+    conversation:
+      timeout: 30  # seconds of silence before returning to passive
+      context_window: 10  # turns to remember
+      confirm_critical: true  # require confirmation for critical actions
+      
+    response:
+      use_master_voice: false  # use cloned master voice
+      speak_confirmations: true
+      play_feedback_sounds: true
+      
+    commands:
+      enabled:
+        - scripts
+        - deployments
+        - monitoring
+        - data
+        - bot_control
+        
+    llm:
+      model: mistral
+      ollama_url: http://localhost:11434
