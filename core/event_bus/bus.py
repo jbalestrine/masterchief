@@ -62,11 +62,12 @@ class EventBus:
         """Publish an event to all subscribers."""
         logger.debug(f"Publishing event: {event.type} from {event.source}")
         
-        # Log event if enabled
-        if self.enable_logging:
-            self.event_log.append(event)
+        async with self._lock:
+            # Log event if enabled
+            if self.enable_logging:
+                self.event_log.append(event)
         
-        # Notify subscribers
+        # Notify subscribers (outside lock to prevent deadlock)
         event_type = event.type
         if event_type in self.subscribers:
             tasks = []
