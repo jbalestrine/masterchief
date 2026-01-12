@@ -66,6 +66,23 @@ pytest>=7.4.0
 pytest-cov>=4.1.0
 httpx>=0.25.0
 
+# Voice automation dependencies
+# Wake word detection
+openwakeword>=0.5.0
+# Alternative: pvporcupine for Porcupine
+
+# Audio processing
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# Speech recognition
+openai-whisper>=20231117
+
+# Text-to-speech
+pyttsx3>=2.90
+
+# LLM for intent parsing (optional)
+# ollama>=0.1.0  # Requires Ollama server running locally
 # AI/LLM for script generation
 ollama>=0.1.0
 
