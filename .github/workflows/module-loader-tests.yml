@@ -3,7 +3,8 @@ name: Module Loader Tests
 on:
   push:
     paths:
-      - 'core/**'
+      - 'core/module_loader/**'
+      - 'core/config/**'
       - '.github/workflows/module-loader-tests.yml'
   pull_request:
     paths:
@@ -66,19 +67,18 @@ jobs:
           import os
           sys.path.insert(0, os.getcwd())
           
-          # We can't import module-loader directly due to hyphen, so we test the file exists
-          loader_path = "core/module-loader/loader.py"
-          if os.path.exists(loader_path):
-              print(f"✓ Module loader file exists: {loader_path}")
-              
-              # Read and validate it's valid Python
-              with open(loader_path, 'r') as f:
-                  content = f.read()
-                  compile(content, loader_path, 'exec')
-              print("✓ Module loader is valid Python code")
-          else:
-              print(f"✗ Module loader file not found: {loader_path}")
-              sys.exit(1)
+          # Import and test the module loader
+          from core.module_loader import ModuleLoader, ModuleManifest
+          
+          print("✓ Module loader imported successfully")
+          
+          # Create a module loader instance
+          loader = ModuleLoader()
+          print("✓ Module loader instance created")
+          
+          # Test that we can list modules (even if empty)
+          modules = loader.list_modules()
+          print(f"✓ Module loader can list modules: {len(modules)} found")
           
           print("\n✓ Module loader validation passed!")
           EOF
