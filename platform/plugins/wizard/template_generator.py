@@ -3,6 +3,7 @@ Template generator for plugin configuration files.
 """
 
 import yaml
+import json
 import logging
 from pathlib import Path
 from typing import Dict, Any
@@ -197,7 +198,6 @@ class TemplateGenerator:
         }
         
         package_path = plugin_path / 'package.json'
-        import json
         with open(package_path, 'w') as f:
             json.dump(package_json, f, indent=2)
         
