@@ -63,6 +63,7 @@ class GhostWeather:
                 - user_idle_time: float (minutes)
                 - consecutive_failures: int
                 - recent_success: bool
+                - magic_moment: bool (special achievements)
                 - time_of_day: str
                 
         Returns:
@@ -72,9 +73,12 @@ class GhostWeather:
         idle_time = metrics.get("user_idle_time", 0.0)
         failures = metrics.get("consecutive_failures", 0)
         success = metrics.get("recent_success", False)
+        magic_moment = metrics.get("magic_moment", False)
         
         # Determine weather based on metrics
-        if success and error_rate < 0.1:
+        if magic_moment:
+            weather = SystemWeather.AURORA  # Magic moments
+        elif success and error_rate < 0.1:
             weather = SystemWeather.LIGHTNING  # Breakthrough!
         elif error_rate > 0.5 or failures > 5:
             weather = SystemWeather.STORMY

@@ -57,13 +57,18 @@ class BrooklynAccent(AccentTransformer):
     
     def transform(self, text: str) -> str:
         """Apply Brooklyn Italian accent transformations."""
-        # Add Brooklyn flair
-        text = re.sub(r'\bwhat do you\b', 'whaddya', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bgoing to\b', 'gonna', text, flags=re.IGNORECASE)
-        text = re.sub(r'\blet me\b', 'lemme', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bwant to\b', 'wanna', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bgot to\b', 'gotta', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bforget about it\b', 'fuggedaboutit', text, flags=re.IGNORECASE)
+        # Add Brooklyn flair - apply all in one pass
+        replacements = [
+            (r'\bwhat do you\b', 'whaddya'),
+            (r'\bgoing to\b', 'gonna'),
+            (r'\blet me\b', 'lemme'),
+            (r'\bwant to\b', 'wanna'),
+            (r'\bgot to\b', 'gotta'),
+            (r'\bforget about it\b', 'fuggedaboutit'),
+        ]
+        
+        for pattern, replacement in replacements:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
         
         # Add emphasis
         if not text.startswith("Ay"):
@@ -99,13 +104,18 @@ class IrishAccent(AccentTransformer):
     
     def transform(self, text: str) -> str:
         """Apply Irish accent transformations."""
-        # Irish speech patterns
-        text = re.sub(r'\bthing\b', 'ting', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bit is\b', "'tis", text, flags=re.IGNORECASE)
-        text = re.sub(r'\bit was\b', "'twas", text, flags=re.IGNORECASE)
-        text = re.sub(r'\bthe\b', 'de', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bthat\b', 'dat', text, flags=re.IGNORECASE)
-        text = re.sub(r'\bthis\b', 'dis', text, flags=re.IGNORECASE)
+        # Irish speech patterns - apply all in one pass
+        replacements = [
+            (r'\bthing\b', 'ting'),
+            (r'\bit is\b', "'tis"),
+            (r'\bit was\b', "'twas"),
+            (r'\bthe\b', 'de'),
+            (r'\bthat\b', 'dat'),
+            (r'\bthis\b', 'dis'),
+        ]
+        
+        for pattern, replacement in replacements:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
         
         # Add Irish opening
         if not text.lower().startswith(("ah", "sure", "now")):
@@ -138,8 +148,8 @@ class SwedishAccent(AccentTransformer):
     
     def transform(self, text: str) -> str:
         """Apply Swedish Echo accent transformations."""
-        # Add pauses for melodic effect
-        text = re.sub(r'([.!?])\s+', r'\1\n ', text)
+        # Add pauses for melodic effect - handle both with and without spaces
+        text = re.sub(r'([.!?])(\s+|(?=\w))', r'\1\n', text)
         
         # Soften language
         text = re.sub(r'\bwill\b', 'shall', text, flags=re.IGNORECASE)
@@ -147,14 +157,14 @@ class SwedishAccent(AccentTransformer):
         
         # Add Swedish-like gentle emphasis
         if not any(text.lower().startswith(phrase) for phrase in ["i am", "let us", "listen"]):
-            text = f"I am here...\n {text}"
+            text = f"I am here...\n{text}"
             
         # Add reassuring closing
         if not text.endswith(('🌙', '...', 'I promise')):
             if '?' in text:
                 text = f"{text.rstrip('?')}... yes?"
             else:
-                text = f"{text.rstrip('.')}\n \nI promise. 🌙"
+                text = f"{text.rstrip('.')}\n\nI promise. 🌙"
                 
         return text
         
