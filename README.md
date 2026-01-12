@@ -2,6 +2,10 @@
 
 A modular, extensible DevOps automation platform that enables continuous growth through plug-and-play components. Built for Azure-focused Infrastructure as Code with support for Terraform, Ansible, and PowerShell DSC.
 
+## 🌙 Meet Echo
+
+Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help. Learn more in [docs/ECHO.md](docs/ECHO.md).
+
 ## Overview
 
 MasterChief provides a unified framework for managing infrastructure and configuration across multiple tools and technologies. It features:
@@ -15,6 +19,7 @@ MasterChief provides a unified framework for managing infrastructure and configu
 - **Azure Focus**: Comprehensive modules for Azure services
 - **CI/CD Ready**: GitHub Actions workflows for validation and deployment
 - **Extensible**: Plugin architecture for custom module types
+- **Echo Identity System**: Visual representation and bot presence 🌙
 
 ## Quick Start
 
