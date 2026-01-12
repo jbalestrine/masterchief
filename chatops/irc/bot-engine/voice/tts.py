@@ -49,21 +49,23 @@ class TTSEngine:
             # For pyttsx3, we need to use a different approach
             # This is a placeholder - actual implementation would save to file/buffer
             import tempfile
-            import wave
-            
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_file = f.name
-            
-            self.engine.save_to_file(text, temp_file)
-            self.engine.runAndWait()
-            
-            with open(temp_file, 'rb') as f:
-                audio_data = f.read()
-            
             import os
-            os.unlink(temp_file)
             
-            return audio_data
+            temp_file = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+                    temp_file = f.name
+                
+                self.engine.save_to_file(text, temp_file)
+                self.engine.runAndWait()
+                
+                with open(temp_file, 'rb') as f:
+                    audio_data = f.read()
+                
+                return audio_data
+            finally:
+                if temp_file and os.path.exists(temp_file):
+                    os.unlink(temp_file)
         except Exception as e:
             logger.error(f"TTS synthesis failed: {e}")
             return b""

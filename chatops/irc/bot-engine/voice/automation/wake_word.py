@@ -105,14 +105,8 @@ class WakeWordDetector:
                 return False
             
             # In real implementation, this would listen to audio
-            # For now, just return False after a short delay
-            time.sleep(0.1)
-            
-            # Check for stop signal
-            if self._stop_event.is_set():
-                return False
-        
-        return False
+            # This is a placeholder that immediately returns False
+            return False
     
     def detect_in_audio(self, audio_data: bytes) -> bool:
         """
