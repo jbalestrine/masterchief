@@ -5,7 +5,11 @@ This avoids the platform module conflict in the repository.
 """
 
 import sys
-sys.path.insert(0, '/home/runner/work/masterchief/masterchief')
+from pathlib import Path
+
+# Add repository root to path dynamically
+repo_root = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(repo_root))
 
 from unittest.mock import Mock
 from echo.devops_suite.voice import (

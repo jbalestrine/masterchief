@@ -109,6 +109,9 @@ class EchoVoice:
             
         Returns:
             Formatted message with timestamp and icon
+            
+        Raises:
+            ValueError: If state is not a valid TaskState
         """
         # Select message based on state
         if state == TaskState.STARTING:
@@ -124,7 +127,10 @@ class EchoVoice:
         elif state == TaskState.WAITING:
             messages = cls.WAITING_MESSAGES
         else:
-            messages = ["..."]
+            raise ValueError(
+                f"Unknown task state: {state}. "
+                f"Expected one of: {', '.join(s.value for s in TaskState)}"
+            )
         
         # Choose a random message
         message_template = random.choice(messages)
