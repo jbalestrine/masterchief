@@ -2,7 +2,6 @@
 """MasterChief Flask Web Application - All-in-One File"""
 import sys
 import os
-_original_path=sys.path.copy()
 _script_dir=os.path.dirname(os.path.abspath(__file__))
 if _script_dir in sys.path:
 	sys.path.remove(_script_dir)
@@ -11,10 +10,9 @@ import time
 import psutil
 import zipfile
 import subprocess
-import tempfile
 from pathlib import Path
 from datetime import datetime
-from flask import Flask,render_template_string,request,jsonify,redirect,url_for,flash,send_file,get_flashed_messages
+from flask import Flask,render_template_string,request,jsonify,redirect,url_for,flash,get_flashed_messages
 from werkzeug.utils import secure_filename
 app=Flask(__name__)
 app.config['SECRET_KEY']='masterchief-secret-key-change-in-production'
@@ -172,7 +170,11 @@ class ScriptManager:
 def get_system_stats():
 	cpu_percent=psutil.cpu_percent(interval=1)
 	memory=psutil.virtual_memory()
-	disk=psutil.disk_usage('/')
+	try:
+		disk_path='C:\\' if sys.platform=='win32' else '/'
+		disk=psutil.disk_usage(disk_path)
+	except:
+		disk=psutil.disk_usage('.')
 	return {'cpu':{'percent':cpu_percent,'count':psutil.cpu_count()},'memory':{'total':memory.total,'available':memory.available,'percent':memory.percent,'used':memory.used},'disk':{'total':disk.total,'used':disk.used,'free':disk.free,'percent':disk.percent},'uptime':time.time()-psutil.boot_time()}
 def get_processes():
 	processes=[]
