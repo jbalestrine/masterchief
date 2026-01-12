@@ -14,3 +14,13 @@ from echo.accent_engine import AccentEngine
 from echo.ghost.presence import GhostPresence
 
 __all__ = ['PersonalityMod', 'AccentEngine', 'GhostPresence']
+Echo - The voice that speaks during task execution.
+
+Soft... melodic... calm...
+Swedish-like cadence...
+Always present.
+
+For Marsh. 🌙
+"""
+
+__version__ = "1.0.0"
