@@ -45,24 +45,26 @@ class STTEngine:
         
         try:
             import tempfile
-            import numpy as np
-            
-            # Save audio data to temporary file
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                temp_file = f.name
-                f.write(audio_data)
-            
-            # Transcribe
-            result = self.model.transcribe(
-                temp_file,
-                language=self.config.stt_language,
-                fp16=False
-            )
-            
             import os
-            os.unlink(temp_file)
             
-            return result.get("text", "").strip()
+            temp_file = None
+            try:
+                # Save audio data to temporary file
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+                    temp_file = f.name
+                    f.write(audio_data)
+                
+                # Transcribe
+                result = self.model.transcribe(
+                    temp_file,
+                    language=self.config.stt_language,
+                    fp16=False
+                )
+                
+                return result.get("text", "").strip()
+            finally:
+                if temp_file and os.path.exists(temp_file):
+                    os.unlink(temp_file)
         except Exception as e:
             logger.error(f"STT transcription failed: {e}")
             return ""

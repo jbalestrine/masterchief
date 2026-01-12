@@ -1,6 +1,7 @@
 """Action executor for voice commands."""
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Dict, Any, Optional, Callable
 from .intent_parser import Intent
@@ -137,7 +138,7 @@ class ActionExecutor:
         if self.automation.script_manager:
             try:
                 # Placeholder: actual AI generation would happen here
-                script_name = f"script_{int(__import__('time').time())}.sh"
+                script_name = f"script_{int(time.time())}.sh"
                 content = f"#!/bin/bash\n# {description}\necho 'Placeholder script'\n"
                 
                 success = self.automation.script_manager.upload_script(script_name, content)
