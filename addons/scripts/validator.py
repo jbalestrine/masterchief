@@ -96,7 +96,7 @@ class ScriptValidator:
         
         # Read script content
         try:
-            with open(path, 'r') as f:
+            with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
         except Exception as e:
             errors.append(f"Failed to read script: {e}")

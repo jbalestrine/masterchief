@@ -120,6 +120,11 @@ class ScriptTemplates:
         Returns:
             List of variable names
         """
+        # Return empty list if nodes module not available
+        if nodes is None:
+            logger.warning("Jinja2 nodes module not available, cannot parse template variables")
+            return []
+        
         try:
             # Load template source
             if not template_path.endswith(".j2"):

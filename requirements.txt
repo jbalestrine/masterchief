@@ -30,6 +30,7 @@ pydantic>=2.5.0
 
 # Background Tasks & Scheduling
 apscheduler>=3.10.0
+sqlalchemy>=2.0.0  # Required for APScheduler's SQLAlchemyJobStore
 
 # Web Server
 gunicorn>=21.0.0

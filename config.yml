@@ -35,11 +35,11 @@ addons:
   jamroom:
     enabled: false
     path: "/var/www/jamroom"
-  scripts:
-    enabled: true
-    max_execution_time: 300
     
 scripts:
+  enabled: true
+  max_execution_time: 300
+  
   ai_generation:
     enabled: true
     ollama_url: "http://localhost:11434"
