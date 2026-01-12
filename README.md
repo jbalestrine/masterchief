@@ -12,6 +12,9 @@ MasterChief provides a unified framework for managing infrastructure and configu
 - **Azure Focus**: Comprehensive modules for Azure services
 - **CI/CD Ready**: GitHub Actions workflows for validation and deployment
 - **Extensible**: Plugin architecture for custom module types
+- **Plugin Wizard**: Interactive wizard for creating plugins with support for PHP, Python, PowerShell, Node.js, and Shell
+- **AI Assistant**: Intelligent IRC bot for plugin configuration guidance and troubleshooting
+- **Config Editor**: Real-time configuration editor with validation and diff viewing
 
 ## Quick Start
 
@@ -21,7 +24,7 @@ git clone https://github.com/jbalestrine/masterchief.git
 cd masterchief
 
 # Install dependencies
-pip install pyyaml
+pip install pyyaml flask flask-cors
 
 # List available modules
 python scripts/python/masterchief.py list
@@ -31,7 +34,51 @@ python scripts/python/masterchief.py config dev
 
 # Initialize a new module
 python scripts/python/masterchief.py init terraform my-module
+
+# Start the platform API (includes Plugin Wizard and Config Editor)
+cd platform
+python main.py
 ```
+
+## Plugin Wizard
+
+Create plugins easily with the interactive wizard:
+
+### Via REST API
+
+```bash
+# Start wizard session
+curl -X POST http://localhost:8443/api/wizard/start
+
+# Follow the wizard steps to create your plugin
+```
+
+### Via IRC Bot
+
+```irc
+# In IRC channel
+<user> !plugin wizard
+<bot> Visit http://masterchief-host:8443/plugins/wizard
+
+# Get help for a plugin type
+<user> !plugin help python
+
+# Get suggested defaults
+<user> !plugin suggest nodejs
+
+# Ask AI assistant (private message)
+/msg bot !plugin ask how do I configure PHP memory limit?
+```
+
+### Supported Plugin Types
+
+- **PHP** - Web applications and PHP-based plugins
+- **Python** - Automation scripts and Python applications  
+- **PowerShell** - Windows automation and infrastructure management
+- **Node.js** - JavaScript-based services and applications
+- **Shell/Bash** - Unix/Linux shell scripts
+
+See [Plugin Wizard Documentation](docs/plugin-wizard.md) for detailed usage.
 
 ## Available Modules
 
@@ -55,6 +102,9 @@ python scripts/python/masterchief.py init terraform my-module
 - [Complete Documentation](docs/README.md) - Full platform documentation
 - [Module Development Guide](docs/MODULE_DEVELOPMENT.md) - Create custom modules
 - [Architecture Overview](docs/ARCHITECTURE.md) - Platform architecture and design
+- **[Plugin Wizard](docs/plugin-wizard.md)** - Create plugins with the interactive wizard
+- **[Configuration Editor](docs/config-editor.md)** - Edit plugin configurations in real-time
+- **[AI Assistant](docs/ai-assistant.md)** - IRC bot commands for plugin help
 
 ## Platform Architecture
 

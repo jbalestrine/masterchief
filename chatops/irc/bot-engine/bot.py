@@ -197,6 +197,31 @@ class IRCBot(irc.bot.SingleServerIRCBot):
         }
 
 
-def create_bot(server: str, port: int, nickname: str, channels: List[str]) -> IRCBot:
-    """Factory function to create an IRC bot."""
-    return IRCBot(server, port, nickname, channels)
+def create_bot(server: str, port: int, nickname: str, channels: List[str], enable_ai_assistant: bool = True) -> IRCBot:
+    """
+    Factory function to create an IRC bot.
+    
+    Args:
+        server: IRC server hostname
+        port: IRC server port
+        nickname: Bot nickname
+        channels: List of channels to join
+        enable_ai_assistant: Whether to enable AI assistant (default: True)
+        
+    Returns:
+        Configured IRC bot instance
+    """
+    bot = IRCBot(server, port, nickname, channels)
+    
+    # Register AI assistant handlers if enabled
+    if enable_ai_assistant:
+        try:
+            from ai_assistant.handlers import register_handlers
+            register_handlers(bot)
+            logger.info("AI Assistant handlers registered")
+        except ImportError as e:
+            logger.warning(f"Could not import AI assistant: {e}")
+        except Exception as e:
+            logger.error(f"Error registering AI assistant handlers: {e}")
+    
+    return bot
