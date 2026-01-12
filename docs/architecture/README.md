@@ -165,6 +165,9 @@ Eggdrop-style IRC bot with TCL-inspired Python bindings:
 bot.bind("pub", "-|-", "!deploy", deploy_handler)  # Channel command
 bot.bind("msg", "-|-", "!status", status_handler)  # Private message
 bot.bind("time", "-|-", "*/5 * * * *", cron_handler)  # Scheduled
+bot.bind("voice", "-|-", "listen", voice_handler)  # Voice command
+bot.bind("tts", "-|-", "say", tts_handler)  # Text-to-speech
+bot.bind("audio", "-|-", "deploy:success", play_sound)  # Audio event
 ```
 
 **Features:**
@@ -172,6 +175,60 @@ bot.bind("time", "-|-", "*/5 * * * *", cron_handler)  # Scheduled
 - Data ingestion pipeline (webhooks, logs, metrics)
 - Partyline/bot mesh
 - Web IRC client
+- Local voice/audio system (TTS, STT, recording, announcements)
+
+### Voice/Audio System
+
+The IRC bot includes a comprehensive local voice and audio system that runs entirely offline:
+
+**Components:**
+- **Text-to-Speech (TTS)**: Convert bot responses to speech using `pyttsx3`
+- **Speech-to-Text (STT)**: Transcribe voice commands using OpenAI Whisper (local)
+- **Audio Recording**: Capture microphone input with voice activity detection
+- **Audio Playback**: Play audio files and announcements
+- **Event Announcements**: Trigger sounds for deployment, alerts, and events
+
+**Voice Bindings:**
+```python
+# Text-to-Speech
+bot.bind("tts", "-|-", "!say", tts_handler)
+
+# Voice Commands
+bot.bind("voice", "-|-", "!listen", voice_command_handler)
+
+# Event-based Announcements
+bot.bind("audio", "-|-", "deploy:success", play_success_sound)
+bot.bind("audio", "-|-", "alert:critical", play_alert_sound)
+```
+
+**Architecture:**
+```
+VoiceEngine
+├── TTSEngine (pyttsx3)         # Text-to-Speech
+├── STTEngine (Whisper)         # Speech-to-Text
+├── AudioRecorder (sounddevice) # Microphone recording
+├── AudioPlayer (pygame)        # Audio playback
+├── VoiceActivityDetector (VAD) # Voice detection
+└── AnnouncementManager         # Event-based sounds
+```
+
+**Key Features:**
+- Queue-based speech synthesis
+- Multiple Whisper model sizes (tiny, base, small, medium, large)
+- Real-time voice activity detection (VAD)
+- Configurable voice, rate, and volume
+- Support for WAV, MP3, OGG formats
+- Event-triggered audio announcements
+- 100% local processing - no cloud dependencies
+
+**Key Files:**
+- `chatops/irc/bot-engine/voice/base.py` - Configuration and main engine
+- `chatops/irc/bot-engine/voice/tts.py` - Text-to-speech
+- `chatops/irc/bot-engine/voice/stt.py` - Speech-to-text
+- `chatops/irc/bot-engine/voice/recorder.py` - Audio recording
+- `chatops/irc/bot-engine/voice/player.py` - Audio playback
+- `chatops/irc/bot-engine/voice/vad.py` - Voice activity detection
+- `chatops/irc/bot-engine/voice/announcements.py` - Event announcements
 
 ## Data Flow
 
