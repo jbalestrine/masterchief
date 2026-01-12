@@ -9,6 +9,8 @@ from enum import Enum
 import irc.client
 import irc.bot
 
+from .ingestion import IngestionManager, IngestionEvent
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +27,14 @@ class BindType(Enum):
     VOICE = "voice"  # Voice command events
     TTS = "tts"  # Text-to-speech events
     AUDIO = "audio"  # Audio playback events
+    # Data ingestion types
+    WEBHOOK = "webhook"  # Webhook events
+    API = "api"  # API polling events
+    FILE = "file"  # File ingestion events
+    DB = "db"  # Database events
+    STREAM = "stream"  # Streaming data events
+    LOG = "log"  # Log ingestion events
+    METRIC = "metric"  # Metrics events
 
 
 @dataclass
@@ -47,6 +57,7 @@ class IRCBot(irc.bot.SingleServerIRCBot):
         self.bindings: List[Binding] = []
         self.user_levels: Dict[str, str] = {}  # nickname -> level
         self.command_stats: Dict[str, int] = {}
+        self.ingestion_manager = IngestionManager()  # Data ingestion manager
 
     def on_welcome(self, connection, event):
         """Handle connection to server."""
@@ -116,6 +127,9 @@ class IRCBot(irc.bot.SingleServerIRCBot):
             bind("msg", "-|-", "!status", status_handler)
             bind("join", "-|-", "*", welcome_handler)
             bind("pubm", "-|-", "*terraform*", tf_mention)
+            bind("webhook", "-|-", "github/push", handle_github_push)
+            bind("file", "-|-", "/data/*.json", handle_json_files)
+            bind("stream", "-|-", "kafka:deployments", handle_deployments)
         """
         try:
             bind_type_enum = BindType(bind_type)
@@ -132,6 +146,11 @@ class IRCBot(irc.bot.SingleServerIRCBot):
         )
         self.bindings.append(binding)
         logger.info(f"Registered binding: {bind_type} {pattern}")
+        
+        # For ingestion types, setup ingestion handler
+        if bind_type_enum in [BindType.WEBHOOK, BindType.API, BindType.FILE, 
+                               BindType.DB, BindType.STREAM, BindType.LOG, BindType.METRIC]:
+            self._setup_ingestion_handler(binding)
 
     def unbind(self, bind_type: str, pattern: str):
         """Remove a binding."""
@@ -197,7 +216,51 @@ class IRCBot(irc.bot.SingleServerIRCBot):
             "bindings_count": len(self.bindings),
             "command_stats": self.command_stats,
             "users_tracked": len(self.user_levels),
+            "ingestion_sources": self.ingestion_manager.get_all_status(),
         }
+    
+    def _setup_ingestion_handler(self, binding: Binding):
+        """Setup handler for ingestion binding."""
+        # This method can be extended to automatically create ingestion sources
+        # For now, it just logs that an ingestion binding was created
+        logger.info(f"Ingestion binding registered: {binding.bind_type.value} {binding.pattern}")
+    
+    def handle_ingestion_event(self, event: IngestionEvent):
+        """Handle an ingestion event by matching against bindings."""
+        for binding in self.bindings:
+            # Match ingestion events to bindings
+            if binding.bind_type.value == event.source_type:
+                # Check if pattern matches
+                if self._match_ingestion_pattern(binding.pattern, event):
+                    try:
+                        # Call handler with ingestion event
+                        binding.handler(None, event, [event.data])
+                        
+                        # Update stats
+                        key = f"{binding.bind_type.value}:{binding.pattern}"
+                        self.command_stats[key] = self.command_stats.get(key, 0) + 1
+                    except Exception as e:
+                        logger.error(f"Error executing ingestion handler: {e}")
+    
+    def _match_ingestion_pattern(self, pattern: str, event: IngestionEvent) -> bool:
+        """Check if ingestion event matches binding pattern."""
+        # Support wildcard and specific patterns
+        if pattern == "*":
+            return True
+        
+        # For webhook events, match on event type
+        if event.source_type == "webhook":
+            event_type = event.metadata.get('webhook_type', '')
+            return pattern in event.source_id or pattern in event_type
+        
+        # For file events, match on filepath
+        if event.source_type == "file":
+            filepath = event.metadata.get('filepath', '')
+            from fnmatch import fnmatch
+            return fnmatch(filepath, pattern)
+        
+        # For other types, match on source_id
+        return pattern in event.source_id
 
 
 def create_bot(server: str, port: int, nickname: str, channels: List[str]) -> IRCBot:
