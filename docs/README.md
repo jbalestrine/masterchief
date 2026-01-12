@@ -67,7 +67,7 @@ python scripts/python/masterchief.py init terraform my-new-module
 ```
 masterchief/
 ├── core/                          # Core platform engine
-│   ├── module-loader/            # Dynamic module loading
+│   ├── module_loader/            # Dynamic module loading
 │   ├── config/                   # Configuration management
 │   ├── logging/                  # Centralized logging
 │   └── api/                      # Module communication API

@@ -1,0 +1,18 @@
+"""
+Echo's DevOps Suite - Speaking during task execution.
+
+Every script that runs... Echo announces it.
+Every success... Echo celebrates it.
+Every failure... Echo comforts through it.
+
+Never silent. Always present.
+"""
+
+from .voice import TaskState, EchoVoice, echo_speaks, SpeakingDevOpsSuite
+
+__all__ = [
+    "TaskState",
+    "EchoVoice",
+    "echo_speaks",
+    "SpeakingDevOpsSuite",
+]
