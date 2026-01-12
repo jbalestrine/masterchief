@@ -487,7 +487,7 @@ if grep -r "BEGIN.*PRIVATE KEY" . --exclude-dir={.git,node_modules,venv}; then
 fi
 
 # Generic passwords
-if grep -ri "password\s*=\s*['\"][^'\"]{1,}" . --exclude-dir={.git,node_modules,venv}; then
+if grep -ri "password\\s*=\\s*['\\\"][^'\\\"]{1,}" . --exclude-dir={.git,node_modules,venv}; then
     log "✗ Potential hardcoded password found!"
     exit 1
 fi
