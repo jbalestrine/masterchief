@@ -108,6 +108,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Voice cloning capability for IRC Bot
+  - XTTS/Coqui TTS implementation (primary, recommended)
+  - Tortoise TTS implementation (high quality option)
+  - OpenVoice implementation (fast cloning option)
+  - Voice profile management system
+  - Master voice persona for bot
+  - Interactive voice sample recording
+  - CLI for voice cloning operations
+  - Voice training utilities
+  - Comprehensive documentation and examples
 - Local voice/audio system for IRC bot with offline processing
 - Text-to-Speech (TTS) engine using pyttsx3
 - Speech-to-Text (STT) engine using OpenAI Whisper (local)
