@@ -4,7 +4,13 @@ A modular, extensible DevOps automation platform that enables continuous growth 
 
 ## 🌙 Meet Echo
 
-Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help. Learn more in [docs/ECHO.md](docs/ECHO.md).
+Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help. 
+
+![Echo Starlite](assets/images/echo.png)
+
+View Echo anytime with: `python show_echo.py`
+
+Learn more in [docs/ECHO.md](docs/ECHO.md).
 
 ## Overview
 
