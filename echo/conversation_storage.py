@@ -194,6 +194,10 @@ class ConversationStorage:
         """
         Search conversations by text content.
         
+        Note: Uses LIKE for simple text search. For production use with large
+        datasets, consider implementing SQLite FTS (Full-Text Search) for
+        better performance.
+        
         Args:
             query: Search query string
             user: Filter by specific user (optional)
@@ -358,11 +362,12 @@ class ConversationStorage:
 
 # Singleton instance for easy access
 _storage_instance = None
+_storage_lock = threading.Lock()
 
 
 def get_storage(db_path: str = None) -> ConversationStorage:
     """
-    Get singleton conversation storage instance.
+    Get singleton conversation storage instance (thread-safe).
     
     Args:
         db_path: Optional custom database path
@@ -371,6 +376,12 @@ def get_storage(db_path: str = None) -> ConversationStorage:
         ConversationStorage instance
     """
     global _storage_instance
+    
+    # Double-checked locking pattern for thread-safe singleton
     if _storage_instance is None:
-        _storage_instance = ConversationStorage(db_path)
+        with _storage_lock:
+            # Check again after acquiring lock
+            if _storage_instance is None:
+                _storage_instance = ConversationStorage(db_path)
+    
     return _storage_instance
