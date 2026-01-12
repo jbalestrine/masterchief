@@ -1,3 +1,47 @@
+# Core dependencies
+click>=8.1.0
+pyyaml>=6.0
+jinja2>=3.1.0
+
+# Web framework
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# Database and caching
+redis>=5.0.0
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+
+# Azure SDK
+azure-identity>=1.15.0
+azure-keyvault-secrets>=4.7.0
+azure-mgmt-compute>=30.0.0
+azure-mgmt-network>=25.0.0
+azure-mgmt-storage>=21.0.0
+
+# Infrastructure tools
+ansible>=8.0.0
+kubernetes>=28.0.0
+docker>=6.1.0
+
+# Monitoring and observability
+prometheus-client>=0.19.0
+grafana-api>=1.0.3
+
+# IRC and messaging
+irc>=20.0.0
+websockets>=12.0
+
+# Logging
+fluent-logger>=0.10.0
+
+# HTTP clients
+httpx>=0.25.0
+aiohttp>=3.9.0
+
+# Security
+cryptography>=41.0.0
 # MasterChief Platform - Python Dependencies
 
 # Web Framework

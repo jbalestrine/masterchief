@@ -1,0 +1,52 @@
+---
+# Common role for baseline server configuration
+# Part of MasterChief Enterprise DevOps Platform
+
+- name: Update system packages
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+    upgrade: safe
+  when: ansible_os_family == "Debian"
+
+- name: Update system packages (RedHat)
+  ansible.builtin.yum:
+    name: "*"
+    state: latest
+    update_cache: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Install common packages
+  ansible.builtin.package:
+    name:
+      - curl
+      - wget
+      - git
+      - vim
+      - htop
+      - net-tools
+      - telnet
+      - unzip
+      - tar
+      - jq
+    state: present
+
+- name: Configure timezone
+  community.general.timezone:
+    name: "{{ timezone | default('UTC') }}"
+
+- name: Create admin users
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    groups: "{{ item.groups | default(['wheel' if ansible_os_family == 'RedHat' else 'sudo']) }}"
+    shell: /bin/bash
+    create_home: yes
+  loop: "{{ admin_users | default([]) }}"
+
+- name: Configure SSH authorized keys
+  ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    state: present
+    key: "{{ item.ssh_key }}"
+  loop: "{{ admin_users | default([]) }}"
+  when: item.ssh_key is defined

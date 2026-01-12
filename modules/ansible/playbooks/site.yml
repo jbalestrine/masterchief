@@ -1,0 +1,40 @@
+---
+# Main orchestration playbook
+# Part of MasterChief Enterprise DevOps Platform
+
+- name: Configure baseline servers
+  hosts: all
+  become: yes
+  gather_facts: yes
+  
+  vars:
+    timezone: "UTC"
+    admin_users:
+      - name: masterchief
+        groups:
+          - sudo
+        ssh_key: "{{ lookup('env', 'MASTERCHIEF_SSH_KEY') }}"
+    
+  roles:
+    - common
+    - security-hardening
+    - monitoring-agent
+
+  tasks:
+    - name: Display server information
+      ansible.builtin.debug:
+        msg: "Configured {{ inventory_hostname }} - {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+- name: Configure Docker hosts
+  hosts: docker_hosts
+  become: yes
+  
+  roles:
+    - docker
+
+- name: Configure Kubernetes nodes
+  hosts: kubernetes_nodes
+  become: yes
+  
+  roles:
+    - kubernetes
