@@ -8,9 +8,18 @@ from typing import Optional
 import click
 import yaml
 
-from core.module_loader import ModuleLoader
-from core.config_engine import ConfigEngine
-from core.event_bus import get_event_bus, Event, EventType
+try:
+    from core.module_loader import ModuleLoader
+    from core.config_engine import ConfigEngine
+    from core.event_bus import get_event_bus, Event, EventType
+except ImportError:
+    # Fallback for when running from source
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from core.module_loader import ModuleLoader
+    from core.config_engine import ConfigEngine
+    from core.event_bus import get_event_bus, Event, EventType
 
 
 @click.group()
