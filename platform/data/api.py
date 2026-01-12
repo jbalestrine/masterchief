@@ -142,6 +142,16 @@ def upload_file():
     
     filepath = target_dir / filename
     
+    # Check file size (read file to check actual size)
+    file.seek(0, 2)  # Seek to end
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        return jsonify({
+            "error": f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024):.0f}MB"
+        }), 400
+    
     # Save file
     try:
         file.save(str(filepath))
@@ -451,14 +461,21 @@ def trigger_ingestion(filepath: Path, category: str, metadata: Dict[str, Any]):
     
     This integrates with the existing ingestion system to process
     the uploaded file through the appropriate handlers.
+    
+    Note: This is currently a stub that logs the file availability.
+    Full integration with the chatops.irc.bot_engine.ingestion system
+    requires the bot to be running. When the bot is active, it will
+    automatically detect and process files in the data/uploads directory
+    through the FileIngestion module.
     """
     logger.info(f"Triggering ingestion for {filepath}")
     
-    # This is a placeholder for integration with the ingestion system
-    # In a full implementation, this would:
-    # 1. Create an IngestionEvent
-    # 2. Dispatch it to the appropriate handlers
-    # 3. Process the file based on its type
+    # TODO: Full integration implementation would:
+    # 1. Import from chatops.irc.bot_engine.ingestion
+    # 2. Create an IngestionEvent with the file data
+    # 3. Dispatch it to registered ingestion handlers
+    # 4. Process the file based on its type and category
     
-    # For now, just log it
+    # For now, the file is available in the uploads directory
+    # and will be picked up by FileIngestion watchers when the bot runs
     logger.info(f"File ready for ingestion: {filepath} (category: {category})")

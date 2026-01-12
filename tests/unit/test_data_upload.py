@@ -1,5 +1,6 @@
 """Unit tests for data upload API."""
 import json
+import shutil
 import pytest
 from pathlib import Path
 from io import BytesIO
@@ -27,7 +28,6 @@ def cleanup():
     """Cleanup test data after tests."""
     yield
     # Clean up test files
-    import shutil
     for folder in [Path("data/uploads"), Path("data/training")]:
         if folder.exists():
             shutil.rmtree(folder)
