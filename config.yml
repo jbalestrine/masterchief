@@ -1,0 +1,40 @@
+platform:
+  version: "1.0.0"
+  install_dir: "/opt/masterchief"
+  config_dir: "/etc/masterchief"
+  log_dir: "/var/log/masterchief"
+  data_dir: "/var/lib/masterchief"
+
+api:
+  host: "0.0.0.0"
+  port: 8443
+  ssl: true
+
+database:
+  type: "postgresql"
+  host: "localhost"
+  port: 5432
+  database: "masterchief"
+  user: "masterchief"
+  password: ""
+
+monitoring:
+  enabled: true
+  prometheus_port: 9090
+  grafana_port: 3000
+
+security:
+  cis_compliance: true
+  firewall_enabled: true
+  auto_updates: true
+  
+addons:
+  shoutcast:
+    enabled: false
+    port: 8000
+  jamroom:
+    enabled: false
+    path: "/var/www/jamroom"
+  scripts:
+    enabled: true
+    max_execution_time: 300
