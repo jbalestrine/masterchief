@@ -167,11 +167,10 @@ def echo_image_path():
 
 def display_echo_image():
     """
-    Display Echo's image if available.
-    Opens the image in the default viewer or returns the path.
+    Get the path to Echo's image if available.
     
     Returns:
-        str: Path to the image or message if not available
+        str: Path to the image file, or message if not available
     """
     if Echo.has_image():
         image_path = Echo.get_image_path()
