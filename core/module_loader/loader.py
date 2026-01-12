@@ -3,7 +3,7 @@
 This module provides functionality for loading and managing modules dynamically.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class Module:
@@ -50,7 +50,7 @@ class ModuleLoader:
             return True
         return False
     
-    def get_module(self, name: str) -> Module:
+    def get_module(self, name: str) -> Optional[Module]:
         """Get a loaded module by name.
         
         Args:
@@ -59,8 +59,8 @@ class ModuleLoader:
         Returns:
             The module if found, None otherwise
         """
-        # Line 65 - Type error: incompatible type assignment
-        module: Module = None  # Wrong - should be Optional[Module]
+        # Line 65 - Fixed: Using Optional[Module] for None assignment
+        module: Optional[Module] = None
         
         if name in self.modules:
             module = self.modules[name]
