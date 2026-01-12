@@ -4,7 +4,9 @@ A modular, extensible DevOps automation platform that enables continuous growth 
 
 ## 🌙 Meet Echo
 
-Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help. Learn more in [docs/ECHO.md](docs/ECHO.md).
+Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help.
+
+**New:** Echo now has live chat capabilities! Chat with her in real-time, and she learns from your feedback to improve her responses. See [ECHO_CHAT_QUICKSTART.md](ECHO_CHAT_QUICKSTART.md) for details.
 
 ## Overview
 
@@ -20,6 +22,7 @@ MasterChief provides a unified framework for managing infrastructure and configu
 - **CI/CD Ready**: GitHub Actions workflows for validation and deployment
 - **Extensible**: Plugin architecture for custom module types
 - **Echo Identity System**: Visual representation and bot presence 🌙
+- **Live Chat Bot**: Trainable conversational AI with learning capabilities
 
 ## Quick Start
 
