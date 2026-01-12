@@ -2,6 +2,9 @@
 Echo Voice System - Integration Examples
 
 Shows how to integrate Echo's voice into existing DevOps workflows.
+
+Note: Each example includes its own imports to be self-contained.
+This allows users to copy individual examples without dependencies on other examples.
 """
 
 # Example 1: Basic integration with Echo speaking
