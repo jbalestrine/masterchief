@@ -98,6 +98,10 @@ def register_blueprints(app):
     from platform.logs import logs_bp
     app.register_blueprint(logs_bp, url_prefix='/api/v1')
     
+    # Data Upload API
+    from platform.data import data_bp
+    app.register_blueprint(data_bp, url_prefix='/api/v1/data')
+    
     # Platform API (existing)
     try:
         from platform.api import api_bp
