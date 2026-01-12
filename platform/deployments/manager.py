@@ -1,6 +1,5 @@
 """Deployment Manager for MasterChief platform."""
 import logging
-import sys
 import random
 import time
 from datetime import datetime
@@ -88,9 +87,16 @@ class DeploymentManager:
         Returns:
             Created deployment
         """
-        # Generate a simple unique ID without using uuid module
-        # to avoid platform module shadowing issues
-        deployment_id = f"deploy-{int(time.time() * 1000000)}-{random.randint(1000, 9999)}"
+        # Generate a unique ID using timestamp and random number
+        # Check for collisions and retry if necessary
+        max_retries = 10
+        for _ in range(max_retries):
+            deployment_id = f"deploy-{int(time.time() * 1000000)}-{random.randint(1000, 9999)}"
+            if deployment_id not in self.deployments:
+                break
+        else:
+            # Fallback to a guaranteed unique ID if we hit max retries
+            deployment_id = f"deploy-{int(time.time() * 1000000)}-{random.randint(10000, 99999)}-{random.randint(1000, 9999)}"
         deployment = Deployment(
             deployment_id=deployment_id,
             name=name,
