@@ -51,9 +51,10 @@ python scripts/python/masterchief.py init terraform my-module
 
 ## Documentation
 
-- [Complete Documentation](docs/README.md)
-- [Module Development Guide](docs/MODULE_DEVELOPMENT.md)
-- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Getting Started Guide](docs/GETTING_STARTED.md) - Step-by-step setup and usage
+- [Complete Documentation](docs/README.md) - Full platform documentation
+- [Module Development Guide](docs/MODULE_DEVELOPMENT.md) - Create custom modules
+- [Architecture Overview](docs/ARCHITECTURE.md) - Platform architecture and design
 
 ## Platform Architecture
 
