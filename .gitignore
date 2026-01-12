@@ -123,6 +123,14 @@ logs/
 tmp/
 temp/
 
+# Voice cloning
+voice_profiles/
+voice_samples/
+*.wav
+*.mp3
+*.ogg
+announcements/
+
 # OS
 Thumbs.db
 .DS_Store
