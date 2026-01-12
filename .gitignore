@@ -47,6 +47,24 @@ logs/
 *.log
 
 # IDE
+# Build artifacts
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.iso
+*.img
+*.vhd
+*.vmdk
+*.ova
+
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
@@ -64,6 +82,30 @@ node_modules/
 dist/
 *.zip
 *.tar.gz
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.venv
+venv/
+ENV/
+
+# Output directories
+os/iso-builder/output/
+platform/backup/backups/
+/tmp/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
 
 # Secrets
 secrets/
