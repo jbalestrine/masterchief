@@ -105,6 +105,16 @@ def register_blueprints(app):
     except ImportError:
         logger.warning("Platform API blueprint not found")
     
+    # Chat API
+    try:
+        from platform.chat import init_chat_api
+        socketio = app.extensions.get('socketio')
+        if socketio:
+            init_chat_api(app, socketio)
+            logger.info("Chat API registered")
+    except ImportError as e:
+        logger.warning(f"Chat API not available: {e}")
+    
     logger.info("Blueprints registered")
 
 
