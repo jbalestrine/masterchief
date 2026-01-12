@@ -41,3 +41,12 @@ eventlet>=0.33.0
 pytest>=7.4.0
 pytest-cov>=4.1.0
 httpx>=0.25.0
+
+# AI/LLM for script generation
+ollama>=0.1.0
+
+# Validation
+ruff>=0.1.0
+
+# Scheduling
+croniter>=1.3.0
