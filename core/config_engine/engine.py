@@ -62,9 +62,6 @@ class ConfigEngine:
         Returns:
             True if the value was set successfully
         """
-        # Line 75 - Fixed: Using Optional[dict[str, Any]] for None assignment
-        config: Optional[dict[str, Any]] = None
-        
         if path not in self.configs:
             self.configs[path] = {}
         

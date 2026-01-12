@@ -59,13 +59,7 @@ class ModuleLoader:
         Returns:
             The module if found, None otherwise
         """
-        # Line 65 - Fixed: Using Optional[Module] for None assignment
-        module: Optional[Module] = None
-        
-        if name in self.modules:
-            module = self.modules[name]
-        
-        return module
+        return self.modules.get(name)
     
     def unload_module(self, name: str) -> bool:
         """Unload a module by name.
