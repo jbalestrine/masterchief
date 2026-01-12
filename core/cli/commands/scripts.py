@@ -199,3 +199,146 @@ def script_validate(ctx, script_path):
     except FileNotFoundError:
         click.echo("⚠ shellcheck not installed, skipping validation")
         click.echo("  Install with: apt-get install shellcheck")
+
+
+@script.command("generate-ai")
+@click.option("--description", "-d", help="Description of what the code should do")
+@click.option("--language", "-l", 
+              type=click.Choice(["bash", "python", "powershell"], case_sensitive=False),
+              default="bash",
+              help="Target programming language")
+@click.option("--output", "-o", type=click.Path(), help="Output file path")
+@click.option("--no-comments", is_flag=True, help="Exclude comments from generated code")
+@click.option("--no-error-handling", is_flag=True, help="Exclude error handling")
+@click.option("--model", default="codellama", help="Ollama model to use (default: codellama)")
+@click.pass_context
+def generate_ai(ctx, description, language, output, no_comments, no_error_handling, model):
+    """Generate code using AI based on natural language description.
+    
+    Examples:
+        # Interactive mode (will prompt for description)
+        masterchief script generate-ai
+        
+        # Direct mode with description
+        masterchief script generate-ai -d "backup database to S3" -l python -o backup.py
+        
+        # Generate bash script with minimal options
+        masterchief script generate-ai -d "deploy app to kubernetes" --no-comments
+    """
+    try:
+        from addons.scripts.ai_generator import AIScriptGenerator
+    except ImportError:
+        click.echo("✗ AI Script Generator not available", err=True)
+        click.echo("  Install dependencies: pip install -r requirements.txt")
+        sys.exit(1)
+    
+    # Initialize the AI generator
+    generator = AIScriptGenerator(model=model)
+    
+    # Check if Ollama is available
+    click.echo("🔍 Checking Ollama availability...")
+    if not generator.check_availability():
+        click.echo("✗ Ollama is not available or model is not loaded", err=True)
+        click.echo("\nTo use this feature:")
+        click.echo("  1. Install Ollama: https://ollama.ai")
+        click.echo(f"  2. Pull the model: ollama pull {model}")
+        click.echo("  3. Ensure Ollama is running: ollama serve")
+        sys.exit(1)
+    
+    click.echo(f"✓ Ollama is available with model: {model}\n")
+    
+    # Get description interactively if not provided
+    if not description:
+        click.echo("🤖 AI-Powered Code Generator")
+        click.echo("=" * 60)
+        click.echo("Describe what you want the code to do. Be as specific as possible.\n")
+        
+        description = click.prompt(
+            "What should the code do?",
+            type=str
+        )
+        
+        if not description or description.strip() == "":
+            click.echo("✗ Description cannot be empty", err=True)
+            sys.exit(1)
+    
+    # Show generation parameters
+    click.echo("\n📝 Generation Parameters:")
+    click.echo(f"  • Language: {language}")
+    click.echo(f"  • Description: {description}")
+    click.echo(f"  • Include comments: {not no_comments}")
+    click.echo(f"  • Include error handling: {not no_error_handling}")
+    click.echo(f"  • Model: {model}")
+    
+    # Confirm generation
+    if not click.confirm("\nProceed with code generation?", default=True):
+        click.echo("Cancelled.")
+        return
+    
+    # Generate the code
+    click.echo("\n🚀 Generating code... (this may take a moment)")
+    
+    try:
+        generated = generator.generate(
+            description=description,
+            language=language,
+            include_comments=not no_comments,
+            include_error_handling=not no_error_handling
+        )
+        
+        click.echo("✓ Code generated successfully!\n")
+        
+        # Display or save the generated code
+        if output:
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(output_path, 'w') as f:
+                f.write(generated.content)
+            
+            # Make executable if it's a script
+            if language in ["bash", "shell", "sh"]:
+                os.chmod(output_path, 0o755)
+            
+            click.echo(f"💾 Code saved to: {output_path}")
+            click.echo(f"   Language: {generated.language}")
+            click.echo(f"   Description: {generated.description}")
+            
+            # Ask if user wants to see the code
+            if click.confirm("\nDisplay the generated code?", default=True):
+                click.echo("\n" + "=" * 60)
+                click.echo(generated.content)
+                click.echo("=" * 60)
+        else:
+            # Display the code
+            click.echo("Generated code:")
+            click.echo("=" * 60)
+            click.echo(generated.content)
+            click.echo("=" * 60)
+            
+            # Ask if user wants to save it
+            if click.confirm("\nSave this code to a file?", default=False):
+                save_path = click.prompt(
+                    "Enter file path",
+                    default=generated.name,
+                    type=str
+                )
+                
+                save_path = Path(save_path)
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                with open(save_path, 'w') as f:
+                    f.write(generated.content)
+                
+                # Make executable if it's a script
+                if language in ["bash", "shell", "sh"]:
+                    os.chmod(save_path, 0o755)
+                
+                click.echo(f"✓ Code saved to: {save_path}")
+        
+    except Exception as e:
+        click.echo(f"✗ Error generating code: {e}", err=True)
+        if ctx.obj.get("verbose"):
+            import traceback
+            click.echo(traceback.format_exc())
+        sys.exit(1)
