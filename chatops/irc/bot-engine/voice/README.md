@@ -39,6 +39,29 @@ A comprehensive local voice and audio system for the MasterChief IRC Bot, enabli
 
 ## Installation
 
+### Important Note About Module Path
+
+The bot engine directory is named `bot-engine` (with a hyphen), but Python imports require underscores. If you encounter import errors, you have two options:
+
+**Option 1: Install as package (recommended)**
+```bash
+cd /path/to/masterchief
+pip install -e .
+```
+
+**Option 2: Direct import**
+```python
+import sys
+sys.path.insert(0, '/path/to/masterchief')
+# Now imports will work
+from chatops.irc.bot_engine import create_bot
+```
+
+**Option 3: Rename directory**
+```bash
+mv chatops/irc/bot-engine chatops/irc/bot_engine
+```
+
 ### Dependencies
 
 Install the required packages:
