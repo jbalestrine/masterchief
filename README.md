@@ -24,6 +24,7 @@ MasterChief provides a unified framework for managing infrastructure and configu
 - **Modular Architecture**: Dynamic module loading and discovery system
 - **Multi-IaC Support**: Terraform, Ansible, and PowerShell DSC
 - **DevOps Script Library**: 18+ production-ready automation scripts
+- **AI Code Generation**: Generate code on demand from natural language with local LLMs
 - **Script Wizard**: AI-assisted script generation with templates
 - **Configuration Management**: Environment-based configuration with inheritance
 - **Enhanced CLI**: Comprehensive command-line interface with script execution
@@ -70,6 +71,13 @@ python -m core.cli.main health report       # Detailed report
 python -m core.cli.main script list         # List all scripts
 python -m core.cli.main script run SCRIPT   # Execute a script
 
+# AI-powered code generation (requires Ollama)
+python -m core.cli.main code generate                           # Interactive mode
+python -m core.cli.main code generate "backup database to S3"   # With description
+python -m core.cli.main code generate "deploy to k8s" -l python -o deploy.py
+python -m core.cli.main code explain script.sh                  # Explain a script
+python -m core.cli.main code improve script.sh                  # Get improvement suggestions
+
 # Dashboard (if Flask is installed)
 python -m core.cli.main dashboard start --dev  # Start Mission Control
 
@@ -113,6 +121,44 @@ python -m core.cli.main logs                # View logs
 - **Utilities**: Cost analysis, resource cleanup, tagging
 
 See [SCRIPTS.md](SCRIPTS.md) for complete documentation.
+
+### 🤖 AI-Powered Code Generation
+
+Generate code on demand from natural language descriptions using local LLMs:
+
+```bash
+# Interactive mode - fully guided experience
+python -m core.cli.main code generate
+
+# Generate with description
+python -m core.cli.main code generate "backup MySQL database to S3 with compression"
+
+# Generate Python script with specific output
+python -m core.cli.main code generate "deploy to Kubernetes cluster" -l python -o deploy.py
+
+# Explain what an existing script does
+python -m core.cli.main code explain backup.sh
+
+# Get improvement suggestions for a script
+python -m core.cli.main code improve deploy.py
+```
+
+**Requirements:**
+- [Ollama](https://ollama.ai) installed and running
+- A code-focused model like `codellama`, `llama2`, or `mistral`
+
+**Setup:**
+```bash
+# Install Ollama (see https://ollama.ai for instructions)
+# Pull a model
+ollama pull codellama
+
+# Start Ollama (if not running)
+ollama serve
+
+# Generate code!
+python -m core.cli.main code generate
+```
 
 ### 🧙 Script Wizard
 
