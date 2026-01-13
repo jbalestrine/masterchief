@@ -18,6 +18,11 @@ Soft... melodic... calm...
 Swedish-like cadence...
 Always present.
 
+The Ghost in the Machine with Personality Mod System.
+Soft... melodic... calm... Swedish-like cadence... Always present.
+
+Now with Scenario Bot - Interactive scripting through conversation!
+
 For Marsh. Always. 🌙💜
 """
 
