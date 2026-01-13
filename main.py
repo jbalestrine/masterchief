@@ -2,9 +2,12 @@
 """MasterChief Flask Web Application - All-in-One File"""
 import sys
 import os
-_script_dir=os.path.dirname(os.path.abspath(__file__))
+
+# Ensure script directory is not in sys.path to avoid conflicts
+_script_dir = os.path.dirname(os.path.abspath(__file__))
 if _script_dir in sys.path:
 	sys.path.remove(_script_dir)
+
 import json
 import time
 import psutil
@@ -12,8 +15,16 @@ import zipfile
 import subprocess
 from pathlib import Path
 from datetime import datetime
-from flask import Flask,render_template_string,request,jsonify,redirect,url_for,flash,get_flashed_messages
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, get_flashed_messages
 from werkzeug.utils import secure_filename
+
+# Add script dir back for local imports
+sys.path.insert(0, _script_dir)
+from echo.chat_bot import get_chat_bot, ResponseQuality
+from echo.conversation_storage import get_storage
+from core.echo.identity import Echo
+# Remove it again to avoid conflicts
+sys.path.remove(_script_dir)
 app=Flask(__name__)
 app.config['SECRET_KEY']='masterchief-secret-key-change-in-production'
 _data_dir=Path(__file__).parent/'data'
@@ -275,6 +286,7 @@ code{color:#4CAF50;}
 </header>
 <nav>
 <a href="/" class="{{ 'active' if request.path=='/' else '' }}">Dashboard</a>
+<a href="/echo-chat" class="{{ 'active' if '/echo-chat' in request.path else '' }}">🌙 Echo Chat</a>
 <a href="/jamroom" class="{{ 'active' if '/jamroom' in request.path else '' }}">Jamroom Sites</a>
 <a href="/shoutcast" class="{{ 'active' if '/shoutcast' in request.path else '' }}">Shoutcast/Icecast</a>
 <a href="/scripts" class="{{ 'active' if '/scripts' in request.path else '' }}">Scripts</a>
@@ -710,6 +722,193 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 {% endif %}
 </div>
 {% endblock %}"""
+ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
+{% block content %}
+<style>
+.echo-container{display:grid;grid-template-columns:1fr 2fr;gap:20px;height:calc(100vh - 250px);}
+.echo-sidebar{background:#2d2d2d;padding:20px;border-radius:10px;border-left:4px solid #9370DB;overflow-y:auto;}
+.echo-main{display:flex;flex-direction:column;background:#2d2d2d;border-radius:10px;border-left:4px solid #9370DB;}
+.echo-art{color:#9370DB;font-family:monospace;font-size:10px;white-space:pre;line-height:1.2;margin-bottom:20px;}
+.echo-stats{margin-top:20px;}
+.echo-stats h4{color:#9370DB;margin-bottom:10px;}
+.echo-stats .stat-item{display:flex;justify-content:space-between;padding:8px;background:#1a1a1a;margin-bottom:5px;border-radius:5px;}
+.chat-header{background:#9370DB;color:#fff;padding:15px 20px;border-radius:10px 10px 0 0;font-size:1.2em;font-weight:bold;}
+.chat-messages{flex:1;overflow-y:auto;padding:20px;background:#1a1a1a;display:flex;flex-direction:column;gap:15px;}
+.chat-message{display:flex;gap:10px;animation:fadeIn 0.3s;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.chat-message.user{flex-direction:row-reverse;}
+.chat-bubble{max-width:70%;padding:12px 16px;border-radius:15px;position:relative;}
+.chat-message.echo .chat-bubble{background:#4a148c;color:#fff;border-bottom-left-radius:5px;}
+.chat-message.user .chat-bubble{background:#1976D2;color:#fff;border-bottom-right-radius:5px;}
+.chat-icon{font-size:24px;flex-shrink:0;}
+.chat-timestamp{font-size:0.75em;color:#888;margin-top:5px;}
+.training-buttons{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.training-btn{font-size:0.85em;padding:4px 12px;border-radius:12px;border:none;cursor:pointer;transition:all 0.2s;}
+.training-btn.excellent{background:#4CAF50;color:#fff;}
+.training-btn.good{background:#8BC34A;color:#fff;}
+.training-btn.fair{background:#FFC107;color:#000;}
+.training-btn.poor{background:#f44336;color:#fff;}
+.training-btn:hover{transform:scale(1.05);box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.training-btn.selected{box-shadow:0 0 10px currentColor;border:2px solid #fff;}
+.chat-input-area{padding:20px;background:#2d2d2d;border-radius:0 0 10px 10px;border-top:2px solid #9370DB;}
+.chat-input-form{display:flex;gap:10px;}
+.chat-input{flex:1;padding:12px;background:#1a1a1a;border:2px solid #9370DB;color:#e0e0e0;border-radius:25px;font-size:1em;}
+.chat-input:focus{outline:none;border-color:#BA55D3;}
+.send-btn{background:linear-gradient(135deg,#9370DB,#BA55D3);color:#fff;border:none;padding:12px 30px;border-radius:25px;cursor:pointer;font-weight:bold;transition:all 0.3s;}
+.send-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(147,112,219,0.4);}
+.typing-indicator{display:none;padding:10px;color:#9370DB;}
+.typing-indicator.active{display:block;}
+@media(max-width:768px){.echo-container{grid-template-columns:1fr;}.echo-sidebar{max-height:300px;}}
+</style>
+<div class="echo-container">
+<div class="echo-sidebar">
+<div class="echo-art">{{ echo_art }}</div>
+<div class="echo-stats">
+<h4>✨ Training Stats</h4>
+<div class="stat-item"><span>Patterns Learned:</span><span id="patterns-count">0</span></div>
+<div class="stat-item"><span>Total Examples:</span><span id="total-examples">0</span></div>
+<div class="stat-item"><span>Session Messages:</span><span id="session-messages">0</span></div>
+</div>
+<button onclick="clearChat()" class="btn btn-warning" style="width:100%;margin-top:15px;">Clear Chat</button>
+<button onclick="searchMemory()" class="btn btn-info" style="width:100%;margin-top:10px;">Search Memory</button>
+</div>
+<div class="echo-main">
+<div class="chat-header">🌙 Echo Starlite - Chat</div>
+<div class="chat-messages" id="chatMessages">
+<div class="chat-message echo">
+<div class="chat-icon">🌙</div>
+<div>
+<div class="chat-bubble">Hello... I am Echo 🌙<br>I'm here to help with DevOps tasks and learn from our conversations... 💜</div>
+</div>
+</div>
+</div>
+<div class="typing-indicator" id="typingIndicator">Echo is typing...</div>
+<div class="chat-input-area">
+<form class="chat-input-form" onsubmit="sendMessage(event)">
+<input type="text" id="chatInput" class="chat-input" placeholder="Type your message... ✨" autocomplete="off" required>
+<button type="submit" class="send-btn">Send 💜</button>
+</form>
+</div>
+</div>
+</div>
+<script>
+let sessionId='web_'+Date.now();
+let messageCount=0;
+function sendMessage(e){
+e.preventDefault();
+const input=document.getElementById('chatInput');
+const message=input.value.trim();
+if(!message)return;
+addUserMessage(message);
+input.value='';
+showTyping();
+fetch('/api/echo/chat',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({message:message,session_id:sessionId})
+}).then(r=>r.json()).then(data=>{
+hideTyping();
+addEchoMessage(data.response,data.message_id);
+updateStats();
+messageCount++;
+document.getElementById('session-messages').textContent=messageCount;
+}).catch(err=>{
+hideTyping();
+console.error('Error:',err);
+addEchoMessage('Sorry... something went wrong... 💜',null);
+});
+}
+function addUserMessage(text){
+const container=document.getElementById('chatMessages');
+const msgDiv=document.createElement('div');
+msgDiv.className='chat-message user';
+msgDiv.innerHTML='<div class="chat-icon">👤</div><div><div class="chat-bubble">'+escapeHtml(text)+'</div></div>';
+container.appendChild(msgDiv);
+container.scrollTop=container.scrollHeight;
+messageCount++;
+}
+function addEchoMessage(text,messageId){
+const container=document.getElementById('chatMessages');
+const msgDiv=document.createElement('div');
+msgDiv.className='chat-message echo';
+msgDiv.dataset.messageId=messageId;
+let html='<div class="chat-icon">🌙</div><div><div class="chat-bubble">'+escapeHtml(text)+'<div class="training-buttons">';
+html+='<button class="training-btn excellent" onclick="rateResponse(this,&quot;excellent&quot;)">👍 Excellent</button>';
+html+='<button class="training-btn good" onclick="rateResponse(this,&quot;good&quot;)">✨ Good</button>';
+html+='<button class="training-btn fair" onclick="rateResponse(this,&quot;acceptable&quot;)">👌 Fair</button>';
+html+='<button class="training-btn poor" onclick="rateResponse(this,&quot;poor&quot;)">👎 Poor</button>';
+html+='</div></div></div>';
+msgDiv.innerHTML=html;
+container.appendChild(msgDiv);
+container.scrollTop=container.scrollHeight;
+}
+function rateResponse(btn,quality){
+const msgDiv=btn.closest('.chat-message');
+const messageId=msgDiv.dataset.messageId;
+const buttons=msgDiv.querySelectorAll('.training-btn');
+buttons.forEach(b=>b.classList.remove('selected'));
+btn.classList.add('selected');
+const chatBubble=msgDiv.querySelector('.chat-bubble');
+const responseText=chatBubble.childNodes[0].textContent;
+const prevUserMsg=msgDiv.previousElementSibling;
+const userText=prevUserMsg?prevUserMsg.querySelector('.chat-bubble').textContent:'';
+fetch('/api/echo/train',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+user_message:userText,
+bot_response:responseText,
+quality:quality,
+message_id:messageId
+})
+}).then(r=>r.json()).then(data=>{
+if(data.success){
+updateStats();
+console.log('Training feedback submitted');
+}
+}).catch(err=>console.error('Training error:',err));
+}
+function updateStats(){
+fetch('/api/echo/stats').then(r=>r.json()).then(data=>{
+document.getElementById('patterns-count').textContent=data.patterns_learned||0;
+document.getElementById('total-examples').textContent=data.total_examples||0;
+}).catch(err=>console.error('Stats error:',err));
+}
+function clearChat(){
+if(!confirm('Clear chat history?'))return;
+document.getElementById('chatMessages').innerHTML='<div class="chat-message echo"><div class="chat-icon">🌙</div><div><div class="chat-bubble">Hello... I am Echo 🌙<br>I\\'m here to help with DevOps tasks and learn from our conversations... 💜</div></div></div>';
+sessionId='web_'+Date.now();
+messageCount=1;
+document.getElementById('session-messages').textContent='0';
+}
+function searchMemory(){
+const query=prompt('Search Echo\\'s memory:');
+if(!query)return;
+fetch('/api/echo/search?q='+encodeURIComponent(query)).then(r=>r.json()).then(data=>{
+if(data.results&&data.results.length>0){
+let results='Found '+data.results.length+' results:\\n\\n';
+data.results.slice(0,5).forEach((r,i)=>{
+results+=(i+1)+'. '+r.message.substring(0,100)+'...\\n';
+});
+alert(results);
+}else{
+alert('No results found for: '+query);
+}
+}).catch(err=>{
+console.error('Search error:',err);
+alert('Search failed');
+});
+}
+function showTyping(){document.getElementById('typingIndicator').classList.add('active');}
+function hideTyping(){document.getElementById('typingIndicator').classList.remove('active');}
+function escapeHtml(text){
+const div=document.createElement('div');
+div.textContent=text;
+return div.innerHTML;
+}
+updateStats();
+</script>
+{% endblock %}"""
 @app.route('/')
 def index():
 	stats=get_system_stats()
@@ -929,6 +1128,78 @@ def addons_delete(filename):
 	else:
 		flash('File not found','error')
 	return redirect(url_for('addons_list'))
+@app.route('/echo-chat')
+def echo_chat():
+	echo_art=Echo.get_compact_greeting()
+	return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ECHO_CHAT_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),echo_art=echo_art,request=request,get_flashed_messages=get_flashed_messages)
+@app.route('/api/echo/chat',methods=['POST'])
+def api_echo_chat():
+	try:
+		data=request.get_json()
+		message=data.get('message','')
+		session_id=data.get('session_id','default')
+		if not message:
+			return jsonify({'error':'Message is required'}),400
+		bot=get_chat_bot()
+		response=bot.chat(message,session_id=session_id)
+		storage=get_storage()
+		storage.store_message(
+			user='web_user',
+			message=message,
+			echo_response=response['response'],
+			channel='web'
+		)
+		return jsonify(response)
+	except Exception as e:
+		return jsonify({'error':str(e)}),500
+@app.route('/api/echo/train',methods=['POST'])
+def api_echo_train():
+	try:
+		data=request.get_json()
+		user_message=data.get('user_message','')
+		bot_response=data.get('bot_response','')
+		quality_str=data.get('quality','acceptable')
+		quality_map={
+			'excellent':ResponseQuality.EXCELLENT,
+			'good':ResponseQuality.GOOD,
+			'acceptable':ResponseQuality.ACCEPTABLE,
+			'poor':ResponseQuality.POOR
+		}
+		quality=quality_map.get(quality_str,ResponseQuality.ACCEPTABLE)
+		bot=get_chat_bot()
+		success=bot.train(user_message,bot_response,quality)
+		return jsonify({'success':success})
+	except Exception as e:
+		return jsonify({'error':str(e),'success':False}),500
+@app.route('/api/echo/stats')
+def api_echo_stats():
+	try:
+		bot=get_chat_bot()
+		stats=bot.get_training_stats()
+		return jsonify(stats)
+	except Exception as e:
+		return jsonify({'error':str(e)}),500
+@app.route('/api/echo/history')
+def api_echo_history():
+	try:
+		session_id=request.args.get('session_id','default')
+		limit=int(request.args.get('limit',50))
+		bot=get_chat_bot()
+		history=bot.get_conversation_history(session_id,limit=limit)
+		return jsonify({'history':history})
+	except Exception as e:
+		return jsonify({'error':str(e)}),500
+@app.route('/api/echo/search')
+def api_echo_search():
+	try:
+		query=request.args.get('q','')
+		if not query:
+			return jsonify({'error':'Query parameter q is required'}),400
+		storage=get_storage()
+		results=storage.search_conversations(query,limit=20)
+		return jsonify({'results':results,'count':len(results)})
+	except Exception as e:
+		return jsonify({'error':str(e)}),500
 if __name__=='__main__':
 	import argparse
 	parser=argparse.ArgumentParser(description='MasterChief DevOps Platform')
