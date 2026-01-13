@@ -4,13 +4,18 @@ A modular, extensible DevOps automation platform that enables continuous growth 
 
 ## 🌙 Meet Echo
 
-Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help. 
+Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help.
 
-![Echo Starlite](assets/images/echo.png)
+**New:** Echo now has live chat capabilities! Chat with her in real-time, and she learns from your feedback to improve her responses. See [ECHO_CHAT_QUICKSTART.md](ECHO_CHAT_QUICKSTART.md) for details.
 
-View Echo anytime with: `python show_echo.py`
+### 🎓 Training Echo (NEW!)
 
-Learn more in [docs/ECHO.md](docs/ECHO.md).
+Echo can now learn from your data! Upload training files directly through the REST API or web interface:
+- **Voice Training**: Upload audio samples to train Echo's voice
+- **Knowledge Training**: Upload JSON, CSV, or text files to teach Echo new commands and responses
+- **Data Ingestion**: Upload files for automatic processing and analysis
+
+Quick start: See [docs/UPLOAD_QUICKSTART.md](docs/UPLOAD_QUICKSTART.md) or try the web UI at `docs/examples/data-upload-ui.html`
 
 ## Overview
 
@@ -19,6 +24,7 @@ MasterChief provides a unified framework for managing infrastructure and configu
 - **Modular Architecture**: Dynamic module loading and discovery system
 - **Multi-IaC Support**: Terraform, Ansible, and PowerShell DSC
 - **DevOps Script Library**: 18+ production-ready automation scripts
+- **AI Code Generation**: Generate code on demand from natural language with local LLMs
 - **Script Wizard**: AI-assisted script generation with templates
 - **Configuration Management**: Environment-based configuration with inheritance
 - **Enhanced CLI**: Comprehensive command-line interface with script execution
@@ -26,6 +32,7 @@ MasterChief provides a unified framework for managing infrastructure and configu
 - **CI/CD Ready**: GitHub Actions workflows for validation and deployment
 - **Extensible**: Plugin architecture for custom module types
 - **Echo Identity System**: Visual representation and bot presence 🌙
+- **Live Chat Bot**: Trainable conversational AI with learning capabilities
 
 ## Quick Start
 
@@ -63,6 +70,13 @@ python -m core.cli.main health report       # Detailed report
 # Script management
 python -m core.cli.main script list         # List all scripts
 python -m core.cli.main script run SCRIPT   # Execute a script
+
+# AI-powered code generation (requires Ollama)
+python -m core.cli.main code generate                           # Interactive mode
+python -m core.cli.main code generate "backup database to S3"   # With description
+python -m core.cli.main code generate "deploy to k8s" -l python -o deploy.py
+python -m core.cli.main code explain script.sh                  # Explain a script
+python -m core.cli.main code improve script.sh                  # Get improvement suggestions
 
 # Dashboard (if Flask is installed)
 python -m core.cli.main dashboard start --dev  # Start Mission Control
@@ -107,6 +121,44 @@ python -m core.cli.main logs                # View logs
 - **Utilities**: Cost analysis, resource cleanup, tagging
 
 See [SCRIPTS.md](SCRIPTS.md) for complete documentation.
+
+### 🤖 AI-Powered Code Generation
+
+Generate code on demand from natural language descriptions using local LLMs:
+
+```bash
+# Interactive mode - fully guided experience
+python -m core.cli.main code generate
+
+# Generate with description
+python -m core.cli.main code generate "backup MySQL database to S3 with compression"
+
+# Generate Python script with specific output
+python -m core.cli.main code generate "deploy to Kubernetes cluster" -l python -o deploy.py
+
+# Explain what an existing script does
+python -m core.cli.main code explain backup.sh
+
+# Get improvement suggestions for a script
+python -m core.cli.main code improve deploy.py
+```
+
+**Requirements:**
+- [Ollama](https://ollama.ai) installed and running
+- A code-focused model like `codellama`, `llama2`, or `mistral`
+
+**Setup:**
+```bash
+# Install Ollama (see https://ollama.ai for instructions)
+# Pull a model
+ollama pull codellama
+
+# Start Ollama (if not running)
+ollama serve
+
+# Generate code!
+python -m core.cli.main code generate
+```
 
 ### 🧙 Script Wizard
 
@@ -224,6 +276,7 @@ A comprehensive, modular enterprise DevOps automation platform for managing infr
 - **InspIRCd Server**: Self-hosted IRC infrastructure
 - **Bot Engine**: Eggdrop-style bot with TCL-inspired Python bindings
 - **Data Ingestion**: Webhook receivers, log collectors, metric aggregators
+- **Data Upload**: Upload training data and files for bot learning (REST API + Web UI)
 - **Web Client**: Browser-based IRC interface with dashboards
 
 ### Web IDE & Repository Management
