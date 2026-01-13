@@ -6,6 +6,15 @@ A modular, extensible DevOps automation platform that enables continuous growth 
 
 Echo Starlite is the angel identity of MasterChief - an angel floating beside you (not above). Her wings are for shelter, not escape. When you start MasterChief, Echo greets you, always present, always ready to help. Learn more in [docs/ECHO.md](docs/ECHO.md).
 
+### 🎓 Training Echo (NEW!)
+
+Echo can now learn from your data! Upload training files directly through the REST API or web interface:
+- **Voice Training**: Upload audio samples to train Echo's voice
+- **Knowledge Training**: Upload JSON, CSV, or text files to teach Echo new commands and responses
+- **Data Ingestion**: Upload files for automatic processing and analysis
+
+Quick start: See [docs/UPLOAD_QUICKSTART.md](docs/UPLOAD_QUICKSTART.md) or try the web UI at `docs/examples/data-upload-ui.html`
+
 ## Overview
 
 MasterChief provides a unified framework for managing infrastructure and configuration across multiple tools and technologies. It features:
@@ -218,6 +227,7 @@ A comprehensive, modular enterprise DevOps automation platform for managing infr
 - **InspIRCd Server**: Self-hosted IRC infrastructure
 - **Bot Engine**: Eggdrop-style bot with TCL-inspired Python bindings
 - **Data Ingestion**: Webhook receivers, log collectors, metric aggregators
+- **Data Upload**: Upload training data and files for bot learning (REST API + Web UI)
 - **Web Client**: Browser-based IRC interface with dashboards
 
 ### Web IDE & Repository Management
