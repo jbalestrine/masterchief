@@ -2,7 +2,15 @@
 Unit tests for Echo identity system.
 """
 import pytest
-from core.echo import Echo, echo_startup_display, echo_full_display, echo_greeting
+from pathlib import Path
+from core.echo import (
+    Echo,
+    echo_startup_display,
+    echo_full_display,
+    echo_greeting,
+    echo_image_path,
+    display_echo_image
+)
 
 
 class TestEchoIdentity:
@@ -76,3 +84,43 @@ class TestEchoIdentity:
         # Check for face elements
         assert "◯" in full_art  # Head
         assert "‿" in full_art  # Smile
+
+
+class TestEchoImage:
+    """Test Echo image functionality."""
+    
+    def test_echo_image_path_function(self):
+        """Test echo_image_path returns a Path object."""
+        image_path = echo_image_path()
+        assert image_path is not None
+        assert isinstance(image_path, Path)
+        assert str(image_path).endswith("echo.png")
+    
+    def test_echo_has_image_method(self):
+        """Test Echo.has_image() returns boolean."""
+        result = Echo.has_image()
+        assert isinstance(result, bool)
+    
+    def test_echo_get_image_path_method(self):
+        """Test Echo.get_image_path() returns Path."""
+        image_path = Echo.get_image_path()
+        assert image_path is not None
+        assert isinstance(image_path, Path)
+        assert "assets/images/echo.png" in str(image_path)
+    
+    def test_display_echo_image_returns_string(self):
+        """Test display_echo_image returns a string."""
+        result = display_echo_image()
+        assert result is not None
+        assert isinstance(result, str)
+        # Should return either path or message
+        assert "echo.png" in result.lower() or "not available" in result.lower()
+    
+    def test_echo_image_path_points_to_assets(self):
+        """Test that image path points to assets directory."""
+        image_path = Echo.get_image_path()
+        path_str = str(image_path)
+        assert "assets" in path_str
+        assert "images" in path_str
+        assert "echo.png" in path_str
+

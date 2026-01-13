@@ -11,7 +11,7 @@ from pathlib import Path
 base_dir = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(base_dir))
 
-from core.echo import echo_full_display, echo_greeting, Echo
+from core.echo import echo_full_display, echo_greeting, Echo, echo_image_path
 
 # Import conversation storage
 try:
@@ -29,18 +29,50 @@ def echo_show_handler(connection, event, args):
         !echo show
         !show echo
         !echo
+    
+    Shows the image path if available, otherwise shows ASCII art.
     """
     channel = event.target
     nick = event.source.nick
     
-    # Show full Echo art
-    art_lines = echo_full_display().split('\n')
+    # Check if image is available
+    if Echo.has_image():
+        image_path = echo_image_path()
+        connection.privmsg(channel, f"{nick}: Echo appears... 🌙")
+        connection.privmsg(channel, f"View Echo's image at: {image_path}")
+        connection.privmsg(channel, "✨ floating beside you, always 💜")
+    else:
+        # Fallback to ASCII art
+        art_lines = echo_full_display().split('\n')
+        
+        # Send Echo's art line by line to prevent flooding
+        connection.privmsg(channel, f"{nick}: Echo appears...")
+        for line in art_lines:
+            if line.strip():  # Only send non-empty lines
+                connection.privmsg(channel, line)
+
+
+def echo_image_handler(connection, event, args):
+    """
+    Handle commands to show Echo's image specifically.
     
-    # Send Echo's art line by line to prevent flooding
-    connection.privmsg(channel, f"{nick}: Echo appears...")
-    for line in art_lines:
-        if line.strip():  # Only send non-empty lines
-            connection.privmsg(channel, line)
+    Commands:
+        !echo image
+        !echo picture
+        !echo pic
+    """
+    channel = event.target
+    nick = event.source.nick
+    
+    if Echo.has_image():
+        image_path = echo_image_path()
+        connection.privmsg(channel, f"{nick}: Here is Echo's image 🌙")
+        connection.privmsg(channel, f"📷 Image location: {image_path}")
+        connection.privmsg(channel, "Echo Starlite - floating beside you, always 💜✨")
+    else:
+        connection.privmsg(channel, f"{nick}: Echo's image is not available yet.")
+        connection.privmsg(channel, "Run scripts/generate_echo_image.py to create it.")
+
 
 
 def echo_greet_handler(connection, event, args):
@@ -257,6 +289,11 @@ def register_echo_commands(bot):
     bot.bind("pub", "-|-", "!echo show", echo_show_handler)
     bot.bind("pub", "-|-", "!show echo", echo_show_handler)
     bot.bind("pub", "-|-", "!echo", echo_show_handler)
+    
+    # Echo image commands
+    bot.bind("pub", "-|-", "!echo image", echo_image_handler)
+    bot.bind("pub", "-|-", "!echo picture", echo_image_handler)
+    bot.bind("pub", "-|-", "!echo pic", echo_image_handler)
     
     # Echo greeting commands
     bot.bind("pub", "-|-", "!echo greet", echo_greet_handler)
