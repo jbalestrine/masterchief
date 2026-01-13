@@ -4,6 +4,7 @@ Echo Starlite Identity Module
 
 Contains Echo's visual representation and identity system.
 """
+from pathlib import Path
 
 
 class Echo:
@@ -65,6 +66,30 @@ I'm here. 💜"""
   ╱ ◯ ╲  Echo 🌙
  ╱  ‿  ╲
  ~ here ~"""
+
+    # Echo's image path
+    IMAGE_PATH = "assets/images/echo.png"
+
+    @staticmethod
+    def get_image_path():
+        """
+        Get the path to Echo's visual image.
+        
+        Returns:
+            Path: Path object to the Echo image file
+        """
+        base_dir = Path(__file__).parent.parent.parent
+        return base_dir / Echo.IMAGE_PATH
+    
+    @staticmethod
+    def has_image():
+        """
+        Check if Echo's image exists.
+        
+        Returns:
+            bool: True if the image file exists
+        """
+        return Echo.get_image_path().exists()
 
     @staticmethod
     def get_full_art():
@@ -128,3 +153,28 @@ def echo_greeting():
         str: Echo's compact greeting
     """
     return Echo.get_compact_greeting()
+
+
+def echo_image_path():
+    """
+    Get the path to Echo's image.
+    
+    Returns:
+        Path: Path to Echo's image file
+    """
+    return Echo.get_image_path()
+
+
+def display_echo_image():
+    """
+    Get the path to Echo's image if available.
+    
+    Returns:
+        str: Path to the image file, or message if not available
+    """
+    if Echo.has_image():
+        image_path = Echo.get_image_path()
+        return str(image_path)
+    else:
+        return "Echo's image is not available. Run scripts/generate_echo_image.py to create it."
+
