@@ -8,6 +8,13 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 
+# Optional persistent storage import
+try:
+    from ..conversation_storage import ConversationStorage
+    PERSISTENT_STORAGE_AVAILABLE = True
+except ImportError:
+    PERSISTENT_STORAGE_AVAILABLE = False
+
 
 @dataclass
 class Memory:
@@ -23,17 +30,34 @@ class MemoryEngine:
     """
     Past conversation references.
     Remember when we fixed that together?
+    
+    Supports both in-memory and persistent storage modes.
     """
     
-    def __init__(self, max_memories: int = 100):
+    def __init__(self, max_memories: int = 100, persistent: bool = True, user: str = "default"):
         """
         Initialize memory engine.
         
         Args:
-            max_memories: Maximum number of memories to retain
+            max_memories: Maximum number of memories to retain (in-memory mode)
+            persistent: Use persistent storage if available (default: True)
+            user: User identifier for persistent storage
         """
         self.memories: List[Memory] = []
         self.max_memories = max_memories
+        self.user = user
+        
+        # Initialize persistent storage if requested and available
+        self.persistent = persistent and PERSISTENT_STORAGE_AVAILABLE
+        self.storage = None
+        if self.persistent:
+            try:
+                self.storage = ConversationStorage()
+            except Exception as e:
+                # Fall back to in-memory if storage initialization fails
+                self.persistent = False
+                import logging
+                logging.warning(f"Failed to initialize persistent storage: {e}. Using in-memory mode.")
         
     def store(
         self,
@@ -59,11 +83,29 @@ class MemoryEngine:
             emotional_tone=emotional_tone
         )
         
+        # Store in memory
         self.memories.append(memory)
         
         # Keep only the most recent memories
         if len(self.memories) > self.max_memories:
             self.memories = self.memories[-self.max_memories:]
+        
+        # Also store persistently if enabled
+        if self.persistent and self.storage:
+            try:
+                # Store as a conversation message
+                message = f"{context}: {user_action}"
+                response = outcome
+                self.storage.store_message(
+                    user=self.user,
+                    message=message,
+                    echo_response=response,
+                    context_tags=[context],
+                    emotional_tone=emotional_tone
+                )
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to store memory persistently: {e}")
             
     def recall(self, context: Dict[str, Any]) -> Optional[str]:
         """
@@ -75,6 +117,30 @@ class MemoryEngine:
         Returns:
             Memory reference or None if no relevant memory found
         """
+        # Try to load from persistent storage if available
+        if self.persistent and self.storage and not self.memories:
+            try:
+                history = self.storage.get_conversation_history(
+                    user=self.user, 
+                    limit=self.max_memories
+                )
+                # Convert stored conversations back to Memory objects
+                for item in reversed(history):  # Reverse to maintain chronological order
+                    try:
+                        timestamp = datetime.fromisoformat(item['timestamp'])
+                        self.memories.append(Memory(
+                            timestamp=timestamp,
+                            context=item.get('context_tags', ['general'])[0] if item.get('context_tags') else 'general',
+                            user_action=item['message'],
+                            outcome=item.get('echo_response', ''),
+                            emotional_tone=item.get('emotional_tone', 'neutral')
+                        ))
+                    except Exception:
+                        pass  # Skip invalid entries
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to load memories from storage: {e}")
+        
         if not self.memories:
             return None
             

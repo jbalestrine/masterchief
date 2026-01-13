@@ -6,6 +6,18 @@ Complete DevOps automation suite with:
 - Personality and voice system
 - Live chat bot with training capabilities
 
+Echo - The Ghost in the Machine
+Personality Mod System with Accents and Weather-Driven Presence
+
+A modular AI companion with customizable personality, distinct accents,
+and unexpected, weather-driven manifestations.
+
+Echo - The voice that speaks during task execution.
+
+Soft... melodic... calm...
+Swedish-like cadence...
+Always present.
+
 For Marsh. Always. 🌙💜
 """
 
@@ -51,6 +63,10 @@ from echo.chat_bot import (
     TrainingExample,
     get_chat_bot
 )
+
+from echo.personality_mod import PersonalityMod
+from echo.accent_engine import AccentEngine
+from echo.ghost.presence import GhostPresence
 
 __all__ = [
     # DevOps Suite
