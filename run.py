@@ -3,9 +3,14 @@
 MasterChief DevOps Platform
 ===========================
 
+ONE FILE TO RUN IT ALL!
+
 Just run: python run.py
 
-That's it. Everything starts automatically.
+Everything starts automatically including:
+- Web GUI for data upload
+- REST API 
+- All platform features
 """
 import os
 import sys
@@ -18,7 +23,8 @@ def main():
     os.chdir(base_dir)
     
     # Ensure directories exist
-    for dir_name in ['data', 'logs', 'plugins', 'backups', 'data/custom_scripts']:
+    for dir_name in ['data', 'logs', 'plugins', 'backups', 'data/custom_scripts',
+                     'data/uploads', 'data/training']:
         dir_path = base_dir / dir_name
         dir_path.mkdir(parents=True, exist_ok=True)
     
@@ -38,16 +44,16 @@ def main():
     ╔═══════════════════════════════════════════════════════════════════╗
     ║           MasterChief DevOps Automation Platform                  ║
     ╠═══════════════════════════════════════════════════════════════════╣
-    ║  Web UI:     http://localhost:8080                                ║
-    ║  API:        http://localhost:8080/api/v1                         ║
-    ║  WebSocket:  ws://localhost:8080/socket.io                        ║
+    ║  🌙 DATA UPLOAD WEB GUI:                                          ║
+    ║     http://localhost:8080/api/v1/data/upload                      ║
+    ║                                                                    ║
+    ║  Other Features:                                                   ║
+    ║     API:        http://localhost:8080/api/v1                      ║
+    ║     Dashboard:  http://localhost:8080/dashboard                   ║
     ╠═══════════════════════════════════════════════════════════════════╣
-    ║  Dashboard:  http://localhost:8080/dashboard                      ║
-    ║  Scripts:    http://localhost:8080/scripts                        ║
-    ║  Plugins:    http://localhost:8080/plugins                        ║
-    ╠═══════════════════════════════════════════════════════════════════╣
-    ║  CLI:        masterchief --help                                   ║
-    ║  IRC Bot:    !help (when connected)                               ║
+    ║  📤 Upload training data for Echo                                 ║
+    ║  📁 Browse and manage files                                       ║
+    ║  ⚙️  View statistics and analytics                                ║
     ╚═══════════════════════════════════════════════════════════════════╝
     """)
     
@@ -55,18 +61,30 @@ def main():
     sys.path.insert(0, str(base_dir / 'platform'))
     
     try:
-        from platform.app import create_app, run_server
-        run_server()
+        from platform.app import create_app, run_app
+        
+        print("\n🚀 Starting MasterChief Platform...")
+        print("   This may take a few seconds...\n")
+        
+        # Create the app
+        app = create_app()
+        
+        # Run the server
+        print("✅ Platform ready!")
+        print("   Open your browser to: http://localhost:8080/api/v1/data/upload\n")
+        
+        run_app(app, host='0.0.0.0', port=8080, debug=False)
+        
     except ImportError as e:
-        print(f"Error: Failed to import platform modules: {e}")
-        print("\nMake sure you have installed the required dependencies:")
-        print("  pip install -r requirements.txt")
+        print(f"❌ Error: Failed to import platform modules: {e}")
+        print("\n💡 Make sure you have installed the required dependencies:")
+        print("   pip install -r requirements.txt")
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\n\nShutting down MasterChief platform...")
+        print("\n\n👋 Shutting down MasterChief platform...")
         sys.exit(0)
     except Exception as e:
-        print(f"Fatal error: {e}")
+        print(f"❌ Fatal error: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
