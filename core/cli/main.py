@@ -12,14 +12,14 @@ try:
     from core.module_loader import ModuleLoader
     from core.config_engine import ConfigEngine
     from core.event_bus import get_event_bus, Event, EventType
-    from core.cli.commands import script, dashboard, health
+    from core.cli.commands import script, dashboard, health, code
 except ImportError:
     # Fallback for when running from source without installation
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     from core.module_loader import ModuleLoader
     from core.config_engine import ConfigEngine
     from core.event_bus import get_event_bus, Event, EventType
-    from core.cli.commands import script, dashboard, health
+    from core.cli.commands import script, dashboard, health, code
 
 
 @click.group()
@@ -235,6 +235,7 @@ def interactive(ctx):
 cli.add_command(script)
 cli.add_command(dashboard)
 cli.add_command(health)
+cli.add_command(code)
 
 
 if __name__ == "__main__":

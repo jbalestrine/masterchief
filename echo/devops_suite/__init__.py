@@ -1,10 +1,9 @@
 """
 Echo DevOps Suite - Complete DevOps automation toolkit
 
-Echo's DevOps Suite - Speaking during task execution.
-Every script that runs... Echo announces it.
-Every success... Echo celebrates it.
-Every failure... Echo comforts through it.
+Every script that runs... Echo can announce it.
+Every success... Echo can celebrate it.
+Every failure... Echo can comfort through it.
 
 Never silent. Always present.
 """
@@ -20,12 +19,14 @@ from echo.devops_suite.master_suite import (
     devops_suite
 )
 
-from echo.devops_suite.voice import (
-    TaskState,
-    EchoVoice,
-    echo_speaks,
-    SpeakingDevOpsSuite
-)
+try:
+    from echo.devops_suite.voice import TaskState, EchoVoice, echo_speaks, SpeakingDevOpsSuite
+except ImportError:
+    # Voice module may not be available in all configurations
+    TaskState = None
+    EchoVoice = None
+    echo_speaks = None
+    SpeakingDevOpsSuite = None
 
 __all__ = [
     # Core suite
@@ -37,9 +38,9 @@ __all__ = [
     "TaskParser",
     "TemplateEngine",
     "devops_suite",
-    # Voice features
     "TaskState",
     "EchoVoice",
     "echo_speaks",
     "SpeakingDevOpsSuite",
 ]
+
