@@ -29,6 +29,7 @@ except ImportError:
     SpeakingDevOpsSuite = None
 
 __all__ = [
+    # Core suite
     "DevOpsMasterSuite",
     "DevOpsPhase",
     "DevOpsTask",
