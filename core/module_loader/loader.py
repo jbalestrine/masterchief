@@ -92,7 +92,10 @@ class ModuleLoader:
     """Dynamic module loader with hot-reload capabilities."""
 
     def __init__(self, module_dirs: Optional[List[Path]] = None):
-        self.module_dirs = module_dirs or []
+        default_dirs = [
+            Path(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../modules/installed')))
+        ]
+        self.module_dirs = module_dirs or default_dirs
         self.modules: Dict[str, Module] = {}
         self.load_order: List[str] = []
 
