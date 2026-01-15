@@ -45,6 +45,30 @@ except ImportError:
     ExecutionRecord = None
 
 class ScriptManager:
+        def generate_arm_template(self, description: str, save: bool = True) -> Optional[GeneratedScript]:
+            """
+            Generate an ARM template using AI from a natural language description.
+            Args:
+                description: Natural language description of the ARM template
+                save: Whether to save the generated template
+            Returns:
+                GeneratedScript object or None if failed
+            """
+            if not self.ai_generator:
+                logger.error("AI generator not initialized")
+                return None
+            try:
+                # Use 'json' as the language for ARM templates
+                script = self.ai_generator.generate(description, language="json")
+                # Ensure .json extension for ARM templates
+                if not script.name.endswith(".json"):
+                    script.name = script.name.rsplit('.', 1)[0] + ".json"
+                if save:
+                    self.upload_script(script.name, script.content)
+                return script
+            except Exception as e:
+                logger.error(f"Failed to generate ARM template: {e}")
+                return None
     """Manage custom scripts with AI generation, templates, validation, and scheduling"""
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
