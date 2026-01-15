@@ -77,21 +77,34 @@ class AIScriptGenerator:
         include_error_handling: bool = True
     ) -> GeneratedScript:
         """
-        Generate a script from natural language description.
+        Generate a script or template from natural language description.
         
         Args:
-            description: Natural language description of what the script should do
-            language: Target language (bash, python, powershell)
+            description: Natural language description of what the script or template should do
+            language: Target language (bash, python, powershell, arm, json)
             include_comments: Whether to include explanatory comments
             include_error_handling: Whether to include error handling
-            
-        Returns:
-            GeneratedScript object with the generated script
-        """
-        system_prompt = f"""You are an expert script developer. Generate clean, production-ready {language} scripts.
-Follow best practices and include proper error handling. Output only the script code without explanations."""
         
-        prompt = f"""Generate a {language} script that does the following:
+        Returns:
+            GeneratedScript object with the generated script or template
+        """
+        if language.lower() in ["arm", "json", "arm-template", "azure-arm"]:
+            system_prompt = (
+                "You are an expert in Azure ARM templates. Generate a valid Azure Resource Manager (ARM) template in JSON format. "
+                "Output only the ARM template JSON code, no explanations. Follow best practices for Azure deployments."
+            )
+            prompt = f"""Generate an Azure ARM template in JSON that does the following:
+
+{description}
+
+Requirements:
+- Use valid ARM schema and structure
+- Follow Azure best practices
+- Output only the ARM template JSON code, no explanations."""
+            ext_language = "json"
+        else:
+            system_prompt = f"You are an expert script developer. Generate clean, production-ready {language} scripts. Follow best practices and include proper error handling. Output only the script code without explanations."
+            prompt = f"""Generate a {language} script that does the following:
 
 {description}
 
@@ -103,10 +116,9 @@ Requirements:
 - Include shebang line for shell scripts
 
 Output only the script code, no explanations."""
-
+            ext_language = language
         try:
             script_content = self._call_ollama(prompt, system_prompt)
-            
             # Clean up the response - remove markdown code blocks if present
             script_content = script_content.strip()
             if script_content.startswith("```"):
@@ -117,17 +129,14 @@ Output only the script code, no explanations."""
                 if lines and lines[-1].strip() == "```":
                     lines = lines[:-1]
                 script_content = "\n".join(lines)
-            
             # Generate a filename
-            script_name = self._generate_filename(description, language)
-            
+            script_name = self._generate_filename(description, ext_language)
             return GeneratedScript(
                 name=script_name,
                 content=script_content,
                 language=language,
                 description=description
             )
-            
         except Exception as e:
             logger.error(f"Failed to generate script: {e}")
             raise
@@ -268,10 +277,13 @@ Output only the converted {to_lang} code."""
             "powershell": ".ps1",
             "shell": ".sh",
             "sh": ".sh",
-            "py": ".py"
+            "py": ".py",
+            "json": ".json",
+            "arm": ".json",
+            "arm-template": ".json",
+            "azure-arm": ".json"
         }
         ext = extensions.get(language.lower(), ".sh")
-        
         return f"{name}{ext}"
     
     def check_availability(self) -> bool:
