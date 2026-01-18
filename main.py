@@ -222,6 +222,15 @@ ECHO_RESOURCES_TEMPLATE = """{% extends "base.html" %}
 </div>
 <div style="flex:2;">
 <h4>Existing Resources</h4>
+</div>
+<div style="flex:2;">
+<h4>Existing Resources</h4>
+<div style="margin-bottom:10px;">
+Session id: <input id="sessionIdInput" placeholder="session id (optional)" style="width:220px;margin-right:8px;"> <button onclick="fetchPersonaStatus()">Check Persona</button>
+<select id="resourceSelect" style="width:60%;margin-left:8px"></select>
+<button onclick="enableSelectedPersona()">Enable persona for session</button>
+<div id="personaStatus" style="margin-top:6px;color:#8f8"></div>
+</div>
 <div id="resourcesList">(loading...)</div>
 </div>
 </div>
@@ -240,16 +249,42 @@ function loadResources(){
 	 const el=document.getElementById('resourcesList');
 	 el.innerHTML='';
 	 const idx=j || {};
+	 const sel = document.getElementById('resourceSelect'); sel.innerHTML='';
 	 Object.keys(idx).forEach(k=>{
 		 const r = idx[k];
 		 const div=document.createElement('div');
 		 div.style.border='1px solid #333';div.style.padding='8px';div.style.marginBottom='6px';
-		 div.innerHTML = '<b>'+r.filename+'</b> <small>['+r.category+']</small><br>'+
+		 let personaBadge = r.persona ? ' <span style="color:#ffb86b;font-weight:bold">[PERSONA]</span>' : '';
+		 div.innerHTML = '<b>'+r.filename+'</b> '+personaBadge+' <small>['+r.category+']</small><br>'+
 			 '<button class="btn btn-sm" onclick="loadIntoSession(\''+encodeURIComponent(k)+'\')">Load into session</button> '
 			 +'<button class="btn btn-sm btn-danger" onclick="deleteResource(\''+encodeURIComponent(k)+'\')">Delete</button>';
+		 // also add to select
+		 const opt = document.createElement('option'); opt.value = k; opt.text = r.filename + (r.persona ? ' [PERSONA]' : ''); sel.appendChild(opt);
 		 el.appendChild(div);
 	 });
  }).catch(e=>{document.getElementById('resourcesList').textContent='Failed to load resources';console.error(e)});
+}
+function fetchPersonaStatus(){
+    const sid = document.getElementById('sessionIdInput').value || '';
+    fetch('/api/personality/status?session_id='+encodeURIComponent(sid)).then(r=>r.json()).then(j=>{
+        const p = j.personality;
+        const out = document.getElementById('personaStatus');
+        if(p && p.enabled){
+            out.textContent = `Enabled: ${p.id}`;
+        } else {
+            out.textContent = 'No persona enabled for session';
+        }
+    }).catch(e=>{console.error(e)});
+}
+
+function enableSelectedPersona(){
+    const sel = document.getElementById('resourceSelect');
+    if(!sel.value){ alert('Select a resource first'); return; }
+    const sid = document.getElementById('sessionIdInput').value || '';
+    fetch('/api/resources/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id: decodeURIComponent(sel.value), session_id: sid || '', use_persona: true, for_ingestion: true})}).then(r=>r.json()).then(j=>{
+        alert(j.message || JSON.stringify(j));
+        fetchPersonaStatus();
+    }).catch(e=>{console.error(e)});
 }
 function deleteResource(id){ if(!confirm('Delete resource?')) return; fetch('/api/resources/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:decodeURIComponent(id)})}).then(r=>r.json()).then(j=>{ loadResources(); }).catch(e=>console.error(e)); }
 function loadIntoSession(id){ const sid = prompt('Load into which session id? (leave blank for current page session)'); fetch('/api/resources/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:decodeURIComponent(id), session_id: sid || ''})}).then(r=>r.json()).then(j=>{ alert(j.message||JSON.stringify(j)); }).catch(e=>console.error(e)); }
@@ -2148,6 +2183,11 @@ def api_resources_load():
 			# store the persona in session meta for runtime use
 			try:
 				meta['personality'] = {'id': rid, 'enabled': True, 'text': content.get('text') if content.get('type') == 'text' else None}
+				# log into session history so it's visible in chat
+				try:
+					storage.store_message(user='system', message=f'Persona {entry.get("filename")} enabled for session', echo_response='', channel=session_id)
+				except Exception:
+					app.logger.exception('Failed to log persona enable into session history')
 			except Exception:
 				app.logger.exception('Failed to set personality in session meta')
 		storage.set_session_meta(session_id, meta)
@@ -2167,6 +2207,18 @@ def api_resources_load():
 		return jsonify({'ok': True, 'message': 'Loaded into session', 'session_id': session_id})
 	except Exception as e:
 		app.logger.exception('Load failed')
+		return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personality/status')
+def api_personality_status():
+	try:
+		session_id = request.args.get('session_id') or 'default'
+		storage = get_storage()
+		meta = storage.get_session_meta(session_id) or {}
+		return jsonify({'personality': meta.get('personality')})
+	except Exception as e:
+		app.logger.exception('Personality status failed')
 		return jsonify({'error': str(e)}), 500
 
 @app.route('/echo-chat')
