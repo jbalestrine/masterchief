@@ -214,7 +214,8 @@ ECHO_RESOURCES_TEMPLATE = """{% extends "base.html" %}
 <option value="examples">Chat Examples</option>
 </select></label><br><br>
 <label><input type="checkbox" name="for_training"> Use for training</label><br>
-<label><input type="checkbox" name="for_ingestion" checked> Use for ingestion</label><br><br>
+<label><input type="checkbox" name="for_ingestion" checked> Use for ingestion</label><br>
+<label><input type="checkbox" name="persona"> Upload as Personality (persona)</label><br><br>
 <button class="btn btn-primary" type="submit">Upload</button>
 </form>
 <div id="uploadMsg" style="margin-top:10px;color:#6c6"></div>
@@ -1932,6 +1933,7 @@ def resources_load_options():
 	entry = idx.get(rid)
 	if not entry:
 		return 'not found', 404
+	use_persona_checked = 'checked' if entry.get('persona') else ''
 	html_form = f"""
 	<html><body>
 	<h3>Load resource: {html.escape(entry['filename'])}</h3>
@@ -1940,6 +1942,7 @@ def resources_load_options():
 	<input type="hidden" name="session_id" value="{html.escape(sid)}">
 	<label><input type="checkbox" name="for_ingestion" checked> Ingest into session now</label><br>
 	<label><input type="checkbox" name="for_training"> Use for training</label><br>
+	<label><input type="checkbox" name="use_persona" {use_persona_checked}> Enable persona for this session</label><br>
 	<button type="submit">Load & Ingest</button>
 	</form>
 	<form method="post" action="/api/resources/enqueue_ingest" style="margin-top:10px;">
@@ -1987,6 +1990,8 @@ def api_resources_upload():
 			return jsonify({'error': 'Resource already exists', 'message': 'Duplicate resource detected'}), 400
 
 		f.save(filepath)
+		persona = bool(request.form.get('persona'))
+
 		entry = {
 			'id': rid,
 			'filename': filename,
@@ -1994,6 +1999,7 @@ def api_resources_upload():
 			'path': str(filepath),
 			'for_training': for_training,
 			'for_ingestion': for_ingestion,
+			'persona': persona,
 			'uploaded_at': datetime.now().isoformat()
 		}
 		idx[rid] = entry
@@ -2012,6 +2018,20 @@ def api_resources_upload():
 				bot.training_store.add_example(ex)
 			except Exception:
 				app.logger.exception('Failed to add training example for uploaded resource')
+		# If uploaded as a persona, also save under data/personality for easy editing
+		if persona:
+			try:
+				pdir = Path(__file__).resolve().parent / 'data' / 'personality'
+				pdir.mkdir(parents=True, exist_ok=True)
+				ppath = pdir / filename
+				try:
+					text = filepath.read_text(encoding='utf-8')
+					ppath.write_text(text, encoding='utf-8')
+				except Exception:
+					# binary persona not supported; skip
+					pass
+			except Exception:
+				app.logger.exception('Failed to store persona file')
 		return jsonify({'ok': True, 'message': 'Uploaded', 'resource': entry})
 	except Exception as e:
 		app.logger.exception('Upload failed')
@@ -2122,6 +2142,14 @@ def api_resources_load():
 		loaded = meta.get('loaded_resources', {})
 		loaded[rid] = {'meta': entry, 'content': content, 'loaded_at': datetime.now().isoformat()}
 		meta['loaded_resources'] = loaded
+		# Handle persona enable flag from form/json
+		use_persona = bool(data.get('use_persona'))
+		if use_persona and entry.get('persona'):
+			# store the persona in session meta for runtime use
+			try:
+				meta['personality'] = {'id': rid, 'enabled': True, 'text': content.get('text') if content.get('type') == 'text' else None}
+			except Exception:
+				app.logger.exception('Failed to set personality in session meta')
 		storage.set_session_meta(session_id, meta)
 
 		# If immediate ingestion requested, call bot.ingest_resource
@@ -2229,7 +2257,17 @@ def api_echo_chat():
 
 		# Fallback to bot
 		bot = get_chat_bot()
-		response = bot.chat(message, session_id=session_id)
+		# If a personality is enabled for this session, prepend it as runtime context
+		try:
+			person = meta.get('personality') or {}
+			if person.get('enabled') and person.get('text'):
+				# prepend personality as instruction
+				message_for_bot = f"[Persona]\n{person.get('text')}\n\nUser: {message}"
+			else:
+				message_for_bot = message
+		except Exception:
+			message_for_bot = message
+		response = bot.chat(message_for_bot, session_id=session_id)
 		# persist session metadata so it appears in chat history list
 		try:
 			_upsert_session_meta(session_id)
@@ -2452,6 +2490,59 @@ def debug_fetch_model():
 	</body></html>
 	"""
 	return html
+
+
+@app.route('/personality')
+def personality_list():
+	pdir = Path(__file__).resolve().parent / 'data' / 'personality'
+	pdir.mkdir(parents=True, exist_ok=True)
+	files = [f.name for f in pdir.glob('*') if f.is_file()]
+	html_out = '<html><body><h3>Personality Files</h3><ul>'
+	for fn in files:
+		html_out += f'<li>{html.escape(fn)} - <a href="/personality/edit?id={html.escape(fn)}">Edit</a></li>'
+	html_out += '</ul><p><a href="/resources">Back</a></p></body></html>'
+	return html_out
+
+
+@app.route('/personality/edit')
+def personality_edit():
+	fid = request.args.get('id')
+	if not fid:
+		return 'id required', 400
+	pdir = Path(__file__).resolve().parent / 'data' / 'personality'
+	pfile = pdir / fid
+	if not pfile.exists():
+		return 'not found', 404
+	try:
+		text = pfile.read_text(encoding='utf-8')
+	except Exception:
+		text = ''
+	return f'''<html><body>
+	<h3>Edit personality: {html.escape(fid)}</h3>
+	<form method="post" action="/personality/save">
+	<input type="hidden" name="id" value="{html.escape(fid)}">
+	<textarea name="content" style="width:80%;height:400px;">{html.escape(text)}</textarea><br>
+	<button type="submit">Save</button>
+	</form>
+	<p><a href="/personality">Back</a></p>
+	</body></html>'''
+
+
+@app.route('/personality/save', methods=['POST'])
+def personality_save():
+	fid = request.form.get('id')
+	content = request.form.get('content') or ''
+	if not fid:
+		return jsonify({'error': 'id required'}), 400
+	pdir = Path(__file__).resolve().parent / 'data' / 'personality'
+	pdir.mkdir(parents=True, exist_ok=True)
+	pfile = pdir / fid
+	try:
+		pfile.write_text(content, encoding='utf-8')
+		return redirect(url_for('personality_list'))
+	except Exception as e:
+		app.logger.exception('Failed to save personality')
+		return jsonify({'error': str(e)}), 500
 if __name__=='__main__':
 	import argparse
 	parser=argparse.ArgumentParser(description='MasterChief DevOps Platform')
