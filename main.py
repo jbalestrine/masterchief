@@ -30,6 +30,34 @@ import tempfile
 sys.path.insert(0, _script_dir)
 from echo.chat_bot import get_chat_bot, ResponseQuality, TrainingExample
 from echo.conversation_storage import get_storage
+
+def _start_cleanup_thread(retention_days=30):
+	def runner():
+		while True:
+			try:
+				base = Path(__file__).parent / 'data' / 'models_output'
+				if base.exists():
+					for d in base.iterdir():
+						if not d.is_dir():
+							continue
+						# skip train_jobs.json
+						if d.name == 'train_jobs.json':
+							continue
+						try:
+							mtime = d.stat().st_mtime
+							age_days = (time.time() - mtime) / (60*60*24)
+							if age_days > retention_days:
+								shutil.make_archive(str(d), 'zip', root_dir=str(d))
+								shutil.rmtree(d)
+						except Exception:
+							app.logger.exception('Failed to archive old job %s', d)
+				# sleep between scans
+				time.sleep(60*60*6)
+			except Exception:
+				app.logger.exception('Cleanup thread error')
+				time.sleep(60*60)
+	thread = threading.Thread(target=runner, daemon=True)
+	thread.start()
 from core.echo.identity import Echo
 # Remove it again to avoid conflicts
 sys.path.remove(_script_dir)
@@ -372,36 +400,9 @@ Session id: <input id="sessionIdInput" placeholder="session id (optional)" style
 function uploadResource(e){
  e.preventDefault();
  const f = document.getElementById('uploadForm');
- const fd = new FormData(f);
+const fd = new FormData(f);
 
-
-ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
-{% block content %}
-<h2>Training Center</h2>
-<div style="display:flex;gap:20px;align-items:flex-start;">
-<div style="flex:1;max-width:420px;">
-<form id="trainForm" onsubmit="startTrain(event)">
-<label>Model path (relative to project): <input name="model" value="models/qwen2.5-7b-instruct-q4_k_m.gguf"></label>
-<label>Training file (data/echo_training/...): <input name="training_file" value=""></label>
-<label>Engine: <select name="engine"><option value="stub">stub</option><option value="peft">peft</option></select></label>
-<label>Epochs: <input name="epochs" value="1"></label>
-<label>Batch size: <input name="batch_size" value="8"></label>
-<label>Learning rate: <input name="lr" value="0.0001"></label>
-<button class="btn" type="submit">Start Training</button>
-</form>
-<div style="margin-top:12px;">Training jobs:</div>
-<div id="trainingJobsList" style="margin-top:8px;"></div>
-</div>
-<div style="flex:2">
-<h3>Logs</h3>
-<div id="trainLogModal" class="modal"><div class="modal-content"><span class="close" onclick="closeModal('trainLogModal')">&times;</span><pre id="trainLogContent">(logs)</pre></div></div>
-<p>Use the form to start a training job. The <b>peft</b> engine requires additional dependencies and GPUs for practical runs.</p>
-</div>
-</div>
-<script>loadTrainJobs();</script>
-{% endblock %}
-"""
- fetch('/api/resources/upload',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{
+fetch('/api/resources/upload',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{
 	 document.getElementById('uploadMsg').textContent = j.message || JSON.stringify(j);
 	 loadResources();
  }).catch(e=>{document.getElementById('uploadMsg').textContent='Upload failed';console.error(e)});
@@ -453,6 +454,33 @@ function loadIntoSession(id){ const sid = prompt('Load into which session id? (l
 loadResources();
 </script>
 {% endblock %}"""
+
+ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
+{% block content %}
+<h2>Training Center</h2>
+<div style="display:flex;gap:20px;align-items:flex-start;">
+<div style="flex:1;max-width:420px;">
+<form id="trainForm" onsubmit="startTrain(event)">
+<label>Model path (relative to project): <input name="model" value="models/qwen2.5-7b-instruct-q4_k_m.gguf"></label>
+<label>Training file (data/echo_training/...): <input name="training_file" value=""></label>
+<label>Engine: <select name="engine"><option value="stub">stub</option><option value="peft">peft</option></select></label>
+<label>Epochs: <input name="epochs" value="1"></label>
+<label>Batch size: <input name="batch_size" value="8"></label>
+<label>Learning rate: <input name="lr" value="0.0001"></label>
+<button class="btn" type="submit">Start Training</button>
+</form>
+<div style="margin-top:12px;">Training jobs:</div>
+<div id="trainingJobsList" style="margin-top:8px;"></div>
+</div>
+<div style="flex:2">
+<h3>Logs</h3>
+<div id="trainLogModal" class="modal"><div class="modal-content"><span class="close" onclick="closeModal('trainLogModal')">&times;</span><pre id="trainLogContent">(logs)</pre></div></div>
+<p>Use the form to start a training job. The <b>peft</b> engine requires additional dependencies and GPUs for practical runs.</p>
+</div>
+</div>
+<script>loadTrainJobs();</script>
+{% endblock %}
+"""
 
 class JamroomManager:
 	def __init__(self,db_path):
@@ -789,28 +817,26 @@ def _start_cleanup_thread(retention_days=30):
 				base = Path(__file__).parent / 'data' / 'models_output'
 				if base.exists():
 					for d in base.iterdir():
-						try:
-							if not d.is_dir():
-								continue
-							# skip train_jobs.json
-							if d.name == 'train_jobs.json':
-								continue
-							# if directory older than retention_days, remove
-							mtime = d.stat().st_mtime
-							age_days = (time.time() - mtime) / (60*60*24)
-							if age_days > retention_days:
-								try:
-									# create zip archive then remove folder
-									zip_path = str(d) + '.zip'
-									shutil.make_archive(str(d), 'zip', root_dir=str(d))
-									shutil.rmtree(d)
-								except Exception:
-									app.logger.exception('Failed to archive old job %s', d)
+						if not d.is_dir():
+							continue
+						# skip train_jobs.json
+						if d.name == 'train_jobs.json':
+							continue
+						mtime = d.stat().st_mtime
+						age_days = (time.time() - mtime) / (60*60*24)
+						if age_days > retention_days:
+							try:
+								shutil.make_archive(str(d), 'zip', root_dir=str(d))
+								shutil.rmtree(d)
+							except Exception:
+								app.logger.exception('Failed to archive old job %s', d)
+				# sleep between scans
 				time.sleep(60*60*6)
 			except Exception:
+				app.logger.exception('Cleanup thread error')
 				time.sleep(60*60)
-	t = threading.Thread(target=runner, daemon=True)
-	t.start()
+	thread = threading.Thread(target=runner, daemon=True)
+	thread.start()
 
 def _save_train_jobs():
 	try:
@@ -855,7 +881,7 @@ def _start_train_job(job_id, cmd, cwd=None):
 			return
 		job['status'] = 'running'
 		job['started_at'] = time.time()
-        _save_train_jobs()
+		_save_train_jobs()
 		try:
 			outdir = Path(__file__).parent / 'data' / 'models_output' / job_id
 			outdir.mkdir(parents=True, exist_ok=True)
@@ -872,7 +898,7 @@ def _start_train_job(job_id, cmd, cwd=None):
 			job['status'] = 'finished'
 		finally:
 			job['finished_at'] = time.time()
-        _save_train_jobs()
+			_save_train_jobs()
 
 	t = threading.Thread(target=runner, daemon=True)
 	t.start()
