@@ -1,0 +1,6 @@
+{
+  "addons": true,
+  "ai-chat": false,
+  "platform-chat": false,
+  "model-chat": false
+}

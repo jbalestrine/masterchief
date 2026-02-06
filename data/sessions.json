@@ -1,0 +1,527 @@
+{
+  "web_1768713591050": {
+    "session_id": "web_1768713591050",
+    "title": "Session web_1768713591050",
+    "last_updated": "2026-01-17T21:20:08.945774",
+    "created": "2026-01-17T21:19:51.054644",
+    "favorite": false
+  },
+  "web_1768713771489": {
+    "session_id": "web_1768713771489",
+    "title": "web_1768713771489",
+    "last_updated": "2026-01-17T21:25:18.862952",
+    "created": "2026-01-17T21:23:13.656205",
+    "favorite": false
+  },
+  "auto_test_1": {
+    "session_id": "auto_test_1",
+    "title": "auto_test_1",
+    "last_updated": "2026-01-17T21:49:09.241778",
+    "created": "2026-01-17T21:34:17.024181",
+    "favorite": false
+  },
+  "test_arm_template": {
+    "session_id": "test_arm_template",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:13.602310",
+    "created": "2026-01-17T21:52:24.277884",
+    "favorite": false
+  },
+  "test_web_app_planning": {
+    "session_id": "test_web_app_planning",
+    "title": "Can you help me plan a web app architecture for a multi-tenant SaaS?",
+    "last_updated": "2026-01-17T22:26:14.866327",
+    "created": "2026-01-17T21:52:53.014142",
+    "favorite": false
+  },
+  "web_1768715812727": {
+    "session_id": "web_1768715812727",
+    "title": "web_1768715812727",
+    "last_updated": "2026-01-17T21:57:02.803789",
+    "created": "2026-01-17T21:57:02.803789",
+    "favorite": false
+  },
+  "web_1768715984314": {
+    "session_id": "web_1768715984314",
+    "title": "web_1768715984314",
+    "last_updated": "2026-01-17T22:00:10.322622",
+    "created": "2026-01-17T21:59:56.928174",
+    "favorite": false
+  },
+  "test_new-topic-variant-1": {
+    "session_id": "test_new-topic-variant-1",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:15.117847",
+    "created": "2026-01-17T22:26:15.117847",
+    "favorite": false
+  },
+  "test_new-topic-variant-2": {
+    "session_id": "test_new-topic-variant-2",
+    "title": "I need an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:15.353969",
+    "created": "2026-01-17T22:26:15.353969",
+    "favorite": false
+  },
+  "test_new-topic-variant-3": {
+    "session_id": "test_new-topic-variant-3",
+    "title": "Can you help me create an ARM template for a web app and API?",
+    "last_updated": "2026-01-17T22:26:15.734364",
+    "created": "2026-01-17T22:26:15.734364",
+    "favorite": false
+  },
+  "test_new-topic-variant-4": {
+    "session_id": "test_new-topic-variant-4",
+    "title": "task: Create ARM template for web app + API",
+    "last_updated": "2026-01-17T22:26:15.968352",
+    "created": "2026-01-17T22:26:15.968352",
+    "favorite": false
+  },
+  "test_refine-variant-1": {
+    "session_id": "test_refine-variant-1",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:16.449896",
+    "created": "2026-01-17T22:26:16.206746",
+    "favorite": false
+  },
+  "test_refine-variant-2": {
+    "session_id": "test_refine-variant-2",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:16.933317",
+    "created": "2026-01-17T22:26:16.685539",
+    "favorite": false
+  },
+  "test_refine-variant-3": {
+    "session_id": "test_refine-variant-3",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:17.417781",
+    "created": "2026-01-17T22:26:17.182575",
+    "favorite": false
+  },
+  "test_refine-variant-4": {
+    "session_id": "test_refine-variant-4",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:17.884858",
+    "created": "2026-01-17T22:26:17.651201",
+    "favorite": false
+  },
+  "test_validate-variant-1": {
+    "session_id": "test_validate-variant-1",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:18.591139",
+    "created": "2026-01-17T22:26:18.119002",
+    "favorite": false
+  },
+  "test_validate-variant-2": {
+    "session_id": "test_validate-variant-2",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:19.301124",
+    "created": "2026-01-17T22:26:18.825736",
+    "favorite": false
+  },
+  "test_validate-variant-3": {
+    "session_id": "test_validate-variant-3",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:20.022704",
+    "created": "2026-01-17T22:26:19.535123",
+    "favorite": false
+  },
+  "test_validate-variant-4": {
+    "session_id": "test_validate-variant-4",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:20.750580",
+    "created": "2026-01-17T22:26:20.256884",
+    "favorite": false
+  },
+  "test_complete-variant-1": {
+    "session_id": "test_complete-variant-1",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:21.747718",
+    "created": "2026-01-17T22:26:21.020169",
+    "favorite": false
+  },
+  "test_complete-variant-2": {
+    "session_id": "test_complete-variant-2",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:22.728147",
+    "created": "2026-01-17T22:26:22.002720",
+    "favorite": false
+  },
+  "test_complete-variant-3": {
+    "session_id": "test_complete-variant-3",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:23.656786",
+    "created": "2026-01-17T22:26:22.961964",
+    "favorite": false
+  },
+  "test_complete-variant-4": {
+    "session_id": "test_complete-variant-4",
+    "title": "I want to create an ARM template to deploy a web app and an API.",
+    "last_updated": "2026-01-17T22:26:24.617113",
+    "created": "2026-01-17T22:26:23.892004",
+    "favorite": false
+  },
+  "web_1768718640848": {
+    "session_id": "web_1768718640848",
+    "title": "Session web_1768718640848",
+    "last_updated": "2026-01-17T22:44:00.866409",
+    "created": "2026-01-17T22:44:00.866409",
+    "favorite": false
+  },
+  "web_1768718629674": {
+    "session_id": "web_1768718629674",
+    "title": "web_1768718629674",
+    "last_updated": "2026-01-17T22:44:02.078858",
+    "created": "2026-01-17T22:44:02.078858",
+    "favorite": false
+  },
+  "web_1768719086521": {
+    "session_id": "web_1768719086521",
+    "title": "web_1768719086521",
+    "last_updated": "2026-01-17T22:51:37.041955",
+    "created": "2026-01-17T22:51:37.041955",
+    "favorite": false
+  },
+  "web_1768722226593": {
+    "session_id": "web_1768722226593",
+    "title": "web_1768722226593",
+    "last_updated": "2026-01-17T23:45:59.506368",
+    "created": "2026-01-17T23:45:59.506368",
+    "favorite": false
+  },
+  "web_1768724138759": {
+    "session_id": "web_1768724138759",
+    "title": "web_1768724138759",
+    "last_updated": "2026-01-18T00:16:56.479561",
+    "created": "2026-01-18T00:16:01.627777",
+    "favorite": false
+  },
+  "web_1768724488061": {
+    "session_id": "web_1768724488061",
+    "title": "web_1768724488061",
+    "last_updated": "2026-01-18T00:32:26.909029",
+    "created": "2026-01-18T00:21:48.460068",
+    "favorite": false
+  },
+  "ui_test_tab": {
+    "session_id": "ui_test_tab",
+    "title": "ui_test_tab",
+    "last_updated": "2026-01-18T09:54:38.825561",
+    "created": "2026-01-18T00:35:51.648384",
+    "favorite": false
+  },
+  "testsession": {
+    "session_id": "testsession",
+    "title": "testsession",
+    "last_updated": "2026-01-18T04:10:44.831525",
+    "created": "2026-01-18T00:58:18.144201",
+    "favorite": false
+  },
+  "web_1768727686043": {
+    "session_id": "web_1768727686043",
+    "title": "web_1768727686043",
+    "last_updated": "2026-01-18T01:15:27.976776",
+    "created": "2026-01-18T01:15:16.253664",
+    "favorite": false
+  },
+  "web_1768728362999": {
+    "session_id": "web_1768728362999",
+    "title": "web_1768728362999",
+    "last_updated": "2026-01-18T01:26:11.773078",
+    "created": "2026-01-18T01:26:11.773078",
+    "favorite": false
+  },
+  "web_1768728378508": {
+    "session_id": "web_1768728378508",
+    "title": "web_1768728378508",
+    "last_updated": "2026-01-18T01:26:29.574111",
+    "created": "2026-01-18T01:26:29.574111",
+    "favorite": false
+  },
+  "web_1768729800476": {
+    "session_id": "web_1768729800476",
+    "title": "web_1768729800476",
+    "last_updated": "2026-01-18T01:50:07.189942",
+    "created": "2026-01-18T01:50:07.189942",
+    "favorite": false
+  },
+  "web_1768729952510": {
+    "session_id": "web_1768729952510",
+    "title": "web_1768729952510",
+    "last_updated": "2026-01-18T01:59:09.833471",
+    "created": "2026-01-18T01:53:49.252103",
+    "favorite": false
+  },
+  "web_1768730364451": {
+    "session_id": "web_1768730364451",
+    "title": "web_1768730364451",
+    "last_updated": "2026-01-18T02:01:34.519817",
+    "created": "2026-01-18T01:59:38.970420",
+    "favorite": false
+  },
+  "web_1768730540625": {
+    "session_id": "web_1768730540625",
+    "title": "web_1768730540625",
+    "last_updated": "2026-01-18T02:03:04.427110",
+    "created": "2026-01-18T02:02:45.108206",
+    "favorite": false
+  },
+  "web_1768730600347": {
+    "session_id": "web_1768730600347",
+    "title": "web_1768730600347",
+    "last_updated": "2026-01-18T02:05:08.521996",
+    "created": "2026-01-18T02:04:23.216324",
+    "favorite": false
+  },
+  "web_1768733875488": {
+    "session_id": "web_1768733875488",
+    "title": "web_1768733875488",
+    "last_updated": "2026-01-18T02:58:48.393632",
+    "created": "2026-01-18T02:58:41.298277",
+    "favorite": false
+  },
+  "test_session": {
+    "session_id": "test_session",
+    "title": "test_session",
+    "last_updated": "2026-01-18T04:10:58.092970",
+    "created": "2026-01-18T03:46:05.226884",
+    "favorite": false
+  },
+  "probe": {
+    "session_id": "probe",
+    "title": "probe",
+    "last_updated": "2026-01-18T04:00:47.043035",
+    "created": "2026-01-18T03:56:26.489292",
+    "favorite": false
+  },
+  "web_1768751458482": {
+    "session_id": "web_1768751458482",
+    "title": "web_1768751458482",
+    "last_updated": "2026-01-18T07:52:38.299716",
+    "created": "2026-01-18T07:51:59.148585",
+    "favorite": false
+  },
+  "web_1768756992548": {
+    "session_id": "web_1768756992548",
+    "title": "yes. but i want you to know who you are. you are Echo Star light. i am Marsh warthog.",
+    "last_updated": "2026-01-18T09:35:55.599816",
+    "created": "2026-01-18T09:23:56.557861",
+    "favorite": false
+  },
+  "web_1768757761032": {
+    "session_id": "web_1768757761032",
+    "title": "web_1768757761032",
+    "last_updated": "2026-01-18T09:54:15.749520",
+    "created": "2026-01-18T09:36:29.606146",
+    "favorite": false
+  },
+  "web_1768758874452": {
+    "session_id": "web_1768758874452",
+    "title": "i need a script in powershell to check the date in paraguay",
+    "last_updated": "2026-01-18T09:59:33.819688",
+    "created": "2026-01-18T09:57:42.877501",
+    "favorite": false
+  },
+  "web_1768901168722": {
+    "session_id": "web_1768901168722",
+    "title": "web_1768901168722",
+    "last_updated": "2026-01-20T01:27:47.793626",
+    "created": "2026-01-20T01:27:08.727637",
+    "favorite": false
+  },
+  "web_1768907541969": {
+    "session_id": "web_1768907541969",
+    "title": "web_1768907541969",
+    "last_updated": "2026-01-20T03:12:32.723858",
+    "created": "2026-01-20T03:12:32.723858",
+    "favorite": false
+  },
+  "web_1768931837305": {
+    "session_id": "web_1768931837305",
+    "title": "web_1768931837305",
+    "last_updated": "2026-01-20T09:57:49.670229",
+    "created": "2026-01-20T09:57:34.289883",
+    "favorite": false
+  },
+  "e2e_test": {
+    "session_id": "e2e_test",
+    "title": "e2e_test",
+    "last_updated": "2026-01-20T10:04:04.958924",
+    "created": "2026-01-20T10:04:04.958924",
+    "favorite": false
+  },
+  "web_1768935101382": {
+    "session_id": "web_1768935101382",
+    "title": "web_1768935101382",
+    "last_updated": "2026-01-20T10:51:59.172455",
+    "created": "2026-01-20T10:51:59.172455",
+    "favorite": false
+  },
+  "web_1768935800128": {
+    "session_id": "web_1768935800128",
+    "title": "web_1768935800128",
+    "last_updated": "2026-01-20T11:03:31.973756",
+    "created": "2026-01-20T11:03:31.973756",
+    "favorite": false
+  },
+  "web_1768937226012": {
+    "session_id": "web_1768937226012",
+    "title": "web_1768937226012",
+    "last_updated": "2026-01-20T11:27:20.402459",
+    "created": "2026-01-20T11:27:20.402459",
+    "favorite": false
+  },
+  "web_1768939723552": {
+    "session_id": "web_1768939723552",
+    "title": "web_1768939723552",
+    "last_updated": "2026-01-20T12:09:21.194769",
+    "created": "2026-01-20T12:09:02.769576",
+    "favorite": false
+  },
+  "web_1769774637302": {
+    "session_id": "web_1769774637302",
+    "title": "web_1769774637302",
+    "last_updated": "2026-01-30T04:08:33.058390",
+    "created": "2026-01-30T04:08:33.058390",
+    "favorite": false
+  },
+  "web_1769774910719": {
+    "session_id": "web_1769774910719",
+    "title": "web_1769774910719",
+    "last_updated": "2026-01-30T04:13:59.141859",
+    "created": "2026-01-30T04:08:49.948593",
+    "favorite": false
+  },
+  "web_1769775665065": {
+    "session_id": "web_1769775665065",
+    "title": "web_1769775665065",
+    "last_updated": "2026-01-30T04:32:21.579539",
+    "created": "2026-01-30T04:21:42.290444",
+    "favorite": false
+  },
+  "irc_#echo": {
+    "session_id": "irc_#echo",
+    "title": "irc_#echo",
+    "last_updated": "2026-01-30T07:44:18.132951",
+    "created": "2026-01-30T04:56:16.102418",
+    "favorite": false
+  },
+  "irc_#masterchief": {
+    "session_id": "irc_#masterchief",
+    "title": "irc_#masterchief",
+    "last_updated": "2026-01-30T05:07:47.069978",
+    "created": "2026-01-30T04:57:18.258010",
+    "favorite": false
+  },
+  "web_1769782191415": {
+    "session_id": "web_1769782191415",
+    "title": "web_1769782191415",
+    "last_updated": "2026-01-30T06:11:05.188082",
+    "created": "2026-01-30T06:11:05.188082",
+    "favorite": false
+  },
+  "web_1769782266518": {
+    "session_id": "web_1769782266518",
+    "title": "web_1769782266518",
+    "last_updated": "2026-01-30T06:48:08.207591",
+    "created": "2026-01-30T06:45:46.946994",
+    "favorite": false
+  },
+  "local_session": {
+    "session_id": "local_session",
+    "title": "local_session",
+    "last_updated": "2026-01-30T07:44:28.105693",
+    "created": "2026-01-30T07:18:12.846548",
+    "favorite": false
+  },
+  "web_1769787182387": {
+    "session_id": "web_1769787182387",
+    "title": "web_1769787182387",
+    "last_updated": "2026-01-30T07:36:22.290144",
+    "created": "2026-01-30T07:34:39.244284",
+    "favorite": false
+  },
+  "web_1769787897484": {
+    "session_id": "web_1769787897484",
+    "title": "web_1769787897484",
+    "last_updated": "2026-01-30T07:48:04.596969",
+    "created": "2026-01-30T07:46:42.996713",
+    "favorite": false
+  },
+  "web_1769788094661": {
+    "session_id": "web_1769788094661",
+    "title": "web_1769788094661",
+    "last_updated": "2026-01-30T07:52:45.197418",
+    "created": "2026-01-30T07:48:59.342780",
+    "favorite": false
+  },
+  "web_1769788404671": {
+    "session_id": "web_1769788404671",
+    "title": "Session web_1769788404671",
+    "last_updated": "2026-01-30T07:53:24.684012",
+    "created": "2026-01-30T07:53:24.684012",
+    "favorite": false
+  },
+  "web_1769789465595": {
+    "session_id": "web_1769789465595",
+    "title": "Session web_1769789465595",
+    "last_updated": "2026-01-30T08:11:05.605934",
+    "created": "2026-01-30T08:11:05.605934",
+    "favorite": false
+  },
+  "web_1769789493044": {
+    "session_id": "web_1769789493044",
+    "title": "Session web_1769789493044",
+    "last_updated": "2026-01-30T08:11:33.048334",
+    "created": "2026-01-30T08:11:33.048334",
+    "favorite": false
+  },
+  "web_1769789494885": {
+    "session_id": "web_1769789494885",
+    "title": "web_1769789494885",
+    "last_updated": "2026-01-30T08:13:12.443776",
+    "created": "2026-01-30T08:13:12.443776",
+    "favorite": false
+  },
+  "web_1769789636711": {
+    "session_id": "web_1769789636711",
+    "title": "Session web_1769789636711",
+    "last_updated": "2026-01-30T08:13:56.734177",
+    "created": "2026-01-30T08:13:56.734177",
+    "favorite": false
+  },
+  "web_1769791964216": {
+    "session_id": "web_1769791964216",
+    "title": "web_1769791964216",
+    "last_updated": "2026-01-30T09:02:02.231914",
+    "created": "2026-01-30T09:02:02.231914",
+    "favorite": false
+  },
+  "web_1769807503213": {
+    "session_id": "web_1769807503213",
+    "title": "yes, i want the inspircd container to start and my anope + Services container to run so i can use nickserv and chanserv. also, want to link echo chat with my irc server on port 6667 so i can bridge yo",
+    "last_updated": "2026-01-30T15:14:17.341952",
+    "created": "2026-01-30T13:12:41.105516",
+    "favorite": false
+  },
+  "web_1769809501405": {
+    "session_id": "web_1769809501405",
+    "title": "web_1769809501405",
+    "last_updated": "2026-01-30T14:00:57.537422",
+    "created": "2026-01-30T13:45:35.752513",
+    "favorite": false
+  },
+  "web_1770232040793": {
+    "session_id": "web_1770232040793",
+    "title": "web_1770232040793",
+    "last_updated": "2026-02-04T11:08:08.331276",
+    "created": "2026-02-04T11:08:08.331276",
+    "favorite": false
+  },
+  "test_restore": {
+    "session_id": "test_restore",
+    "title": "test_restore",
+    "last_updated": "2026-02-05T14:43:12.199489",
+    "created": "2026-02-05T14:43:12.199489",
+    "favorite": false
+  }
+}

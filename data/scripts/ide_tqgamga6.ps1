@@ -1,0 +1,1 @@
+Get-Content .\data\features.json -Raw | ConvertFrom-Json

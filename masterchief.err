@@ -1,0 +1,21 @@
+C:\users\Echo\masterchief\main.py:3516: SyntaxWarning: "\." is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\."? A raw string is also an option.
+  const addon = filename.replace(/\.zip$/i,'');
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://10.0.0.159:8080
+Press CTRL+C to quit
+127.0.0.1 - - [20/Jan/2026 02:59:39] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 02:59:44] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 02:59:49] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 02:59:54] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 02:59:59] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 03:00:04] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 03:00:08] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 03:00:09] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 03:00:09] "GET /feature/run/app_installer.feature_docker_list HTTP/1.1" 400 -
+127.0.0.1 - - [20/Jan/2026 03:00:13] "GET /feature/run/app_installer.feature_docker_status HTTP/1.1" 400 -
+127.0.0.1 - - [20/Jan/2026 03:00:14] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 03:00:19] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 03:00:24] "GET /api/stats HTTP/1.1" 200 -
+127.0.0.1 - - [20/Jan/2026 03:00:29] "GET /api/stats HTTP/1.1" 200 -

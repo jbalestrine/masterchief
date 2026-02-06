@@ -21,6 +21,10 @@ import base64
 import shutil
 import html
 import difflib
+import threading
+import uuid
+import io
+import tempfile
 
 # Add script dir back for local imports
 sys.path.insert(0, _script_dir)
@@ -44,161 +48,286 @@ app.config['MAX_CONTENT_LENGTH']=100*1024*1024
 for folder in [app.config['UPLOAD_FOLDER'],app.config['SCRIPTS_FOLDER'],_data_dir]:
 	folder.mkdir(parents=True,exist_ok=True)
 # Sessions index file (persistent metadata for chat sessions)
-SESSIONS_INDEX = Path(__file__).resolve().parent / 'data' / 'sessions.json'
 
-def _load_sessions_index():
+
+# --- Minimal Web IDE API endpoints -----------------------------------------------------
+def _safe_script_path(filename: str):
 	try:
-		if SESSIONS_INDEX.exists():
-			with open(SESSIONS_INDEX,'r',encoding='utf-8') as f:
-				return json.load(f)
+		fname = secure_filename(filename)
+		if not fname:
+			return None
+		return Path(app.config['SCRIPTS_FOLDER']) / fname
+	except Exception:
+		return None
+
+
+@app.route('/api/ide/scripts')
+def api_ide_scripts():
+	files = []
+	try:
+		scripts_dir = Path(app.config['SCRIPTS_FOLDER'])
+		for p in sorted(scripts_dir.glob('*')):
+			if p.is_file():
+				files.append({'name': p.name, 'size': p.stat().st_size, 'modified': datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
+	except Exception as e:
+		return jsonify({'ok': False, 'error': str(e)}), 500
+	return jsonify({'ok': True, 'files': files})
+
+
+@app.route('/api/ide/load', methods=['POST'])
+def api_ide_load():
+	data = request.get_json(silent=True) or (request.form if request.form else {})
+	filename = data.get('filename') if isinstance(data, dict) else None
+	if not filename:
+		return jsonify({'ok': False, 'error': 'filename required'}), 400
+	path = _safe_script_path(filename)
+	if not path or not path.exists():
+		return jsonify({'ok': False, 'error': 'file not found'}), 404
+	try:
+		content = path.read_text(encoding='utf-8')
+		return jsonify({'ok': True, 'content': content})
+	except Exception as e:
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ide/save', methods=['POST'])
+def api_ide_save():
+	data = request.get_json(silent=True) or (request.form if request.form else {})
+	filename = data.get('filename') if isinstance(data, dict) else None
+	content = data.get('content','') if isinstance(data, dict) else (request.form.get('content','') if request.form else '')
+	if not filename:
+		return jsonify({'ok': False, 'error': 'filename required'}), 400
+	try:
+		script_mgr.add_script(filename, content)
+		return jsonify({'ok': True, 'filename': filename})
+	except Exception as e:
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ide/execute', methods=['POST'])
+def api_ide_execute():
+	data = request.get_json(silent=True) or (request.form if request.form else {})
+	filename = data.get('filename') if isinstance(data, dict) else None
+	content = data.get('content') if isinstance(data, dict) else None
+	shell = data.get('shell') if isinstance(data, dict) else None
+	remote = bool(data.get('remote')) if isinstance(data, dict) else False
+	if remote:
+		return jsonify({'ok': False, 'error': 'remote execution not implemented'}), 501
+	try:
+		if filename:
+			path = _safe_script_path(filename)
+			if not path or not path.exists():
+				if content:
+					script_mgr.add_script(filename, content)
+				else:
+					return jsonify({'ok': False, 'error': 'file not found'}), 404
+			result = script_mgr.execute_script(filename)
+			return jsonify({'ok': True, 'stdout': result.get('stdout',''), 'stderr': result.get('stderr',''), 'returncode': result.get('returncode', -1)})
+		elif content:
+			ext = '.sh'
+			if shell == 'python':
+				ext = '.py'
+			elif shell in ('powershell','ps1'):
+				ext = '.ps1'
+			fd, tmp = tempfile.mkstemp(suffix=ext, prefix='masterchief_exec_', dir=str(app.config['SCRIPTS_FOLDER']))
+			os.close(fd)
+			with open(tmp,'w',encoding='utf-8') as f:
+				f.write(content)
+			os.chmod(tmp, 0o755)
+			p = Path(tmp)
+			if p.suffix == '.py':
+				cmd = [sys.executable, str(p)]
+			elif p.suffix == '.ps1':
+				cmd = ['powershell','-ExecutionPolicy','Bypass','-File', str(p)]
+			else:
+				cmd = [str(p)]
+			proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+			out = proc.stdout
+			err = proc.stderr
+			rc = proc.returncode
+			try:
+				p.unlink()
+			except Exception:
+				pass
+			return jsonify({'ok': True, 'stdout': out, 'stderr': err, 'returncode': rc})
+		else:
+			return jsonify({'ok': False, 'error': 'no filename or content provided'}), 400
+	except subprocess.TimeoutExpired:
+		return jsonify({'ok': False, 'error':'execution timed out'}), 500
+	except Exception as e:
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# Remote credential storage for IDE remote execution (basic, stored in data/ide_creds.json)
+CREDS_FILE = Path(__file__).resolve().parent / 'data' / 'ide_creds.json'
+
+@app.route('/api/ide/remote/creds', methods=['POST'])
+def api_ide_remote_creds_save():
+	data = request.get_json(silent=True) or (request.form if request.form else {})
+	target = data.get('target') if isinstance(data, dict) else (request.form.get('target') if request.form else None)
+	username = data.get('username') if isinstance(data, dict) else (request.form.get('username') if request.form else None)
+	password = data.get('password') if isinstance(data, dict) else (request.form.get('password') if request.form else None)
+	if not target or not username or not password:
+		return jsonify({'ok': False, 'error':'target,username,password required'}), 400
+	try:
+		d = {}
+		if CREDS_FILE.exists():
+			try:
+				d = json.loads(CREDS_FILE.read_text(encoding='utf-8'))
+			except Exception:
+				d = {}
+		d[target] = {'username': username, 'password': password, 'saved_at': datetime.now().isoformat()}
+		CREDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+		CREDS_FILE.write_text(json.dumps(d, indent=2), encoding='utf-8')
+		return jsonify({'ok': True})
+	except Exception as e:
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ide/remote/creds', methods=['GET'])
+def api_ide_remote_creds_get():
+	target = request.args.get('target')
+	if not target:
+		return jsonify({'ok': False, 'error': 'target required'}), 400
+	try:
+		if not CREDS_FILE.exists():
+			return jsonify({'ok': True, 'cred': None})
+		d = json.loads(CREDS_FILE.read_text(encoding='utf-8'))
+		return jsonify({'ok': True, 'cred': d.get(target)})
+	except Exception as e:
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/ide/tree')
+def api_ide_tree():
+	# return directory tree under scripts folder; optional `path` query for subfolder
+	rel = request.args.get('path','')
+	try:
+		base = Path(app.config['SCRIPTS_FOLDER']).resolve()
+		target = (base / rel).resolve()
+		if not str(target).startswith(str(base)):
+			return jsonify({'ok': False, 'error':'invalid path'}), 400
+		nodes = []
+		for p in sorted(target.iterdir()):
+			if p.is_dir():
+				nodes.append({'type':'dir','name':p.name,'path':str(p.relative_to(base))})
+			else:
+				nodes.append({'type':'file','name':p.name,'path':str(p.relative_to(base)),'size':p.stat().st_size,'modified':datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
+		return jsonify({'ok':True,'path':str(target.relative_to(base)),'nodes':nodes})
+	except Exception as e:
+		return jsonify({'ok':False,'error':str(e)}),500
+
+
+@app.route('/api/ide/exec_async', methods=['POST'])
+def api_ide_exec_async():
+	data = request.get_json(silent=True) or {}
+	cmd = data.get('command') or data.get('content') or data.get('filename')
+	cwd = data.get('cwd')
+	if not cmd:
+		return jsonify({'ok':False,'error':'command required'}),400
+	exec_id = uuid.uuid4().hex
+	EXEC_JOBS[exec_id] = {'id':exec_id,'status':'queued','cmd':cmd,'pid':None,'returncode':None,'started_at':None,'finished_at':None,'cwd':cwd}
+	# determine actual command form: if user passed filename within scripts folder, run script
+	# if cmd looks like a filename under scripts, run it
+	base = Path(app.config['SCRIPTS_FOLDER']).resolve()
+	try:
+		maybe = base / cmd
+		if maybe.exists():
+			# run file
+			command = str(maybe)
+		else:
+			command = cmd
+	except Exception:
+		command = cmd
+	_start_job_thread(exec_id, command, cwd=cwd)
+	return jsonify({'ok':True,'exec_id':exec_id})
+
+
+@app.route('/api/ide/exec_status')
+def api_ide_exec_status():
+	exec_id = request.args.get('exec_id')
+	if not exec_id:
+		return jsonify({'ok':False,'error':'exec_id required'}),400
+	job = EXEC_JOBS.get(exec_id)
+	if not job:
+		return jsonify({'ok':False,'error':'not found'}),404
+	# attach small output preview
+	out=''
+	err=''
+	base = Path(app.config['SCRIPTS_FOLDER']).resolve()
+	stdout_path = base / f"{exec_id}.stdout"
+	stderr_path = base / f"{exec_id}.stderr"
+	try:
+		if stdout_path.exists():
+			out = stdout_path.read_text(encoding='utf-8', errors='ignore')
+		if stderr_path.exists():
+			err = stderr_path.read_text(encoding='utf-8', errors='ignore')
 	except Exception:
 		pass
-	return {}
+	res = dict(job)
+	res.update({'stdout': out, 'stderr': err})
+	return jsonify({'ok':True,'job':res})
 
-def _save_sessions_index(idx: dict):
-	try:
-		SESSIONS_INDEX.parent.mkdir(parents=True,exist_ok=True)
-		with open(SESSIONS_INDEX,'w',encoding='utf-8') as f:
-			json.dump(idx,f,indent=2)
-		return True
-	except Exception:
-		return False
-
-def _upsert_session_meta(session_id: str, title: str = None):
-	idx = _load_sessions_index()
-	now = datetime.now().isoformat()
-	entry = idx.get(session_id, {})
-	entry['session_id'] = session_id
-	entry['title'] = title or entry.get('title') or session_id
-	entry['last_updated'] = now
-	entry.setdefault('created', now)
-	entry.setdefault('favorite', False)
-	idx[session_id] = entry
-	_save_sessions_index(idx)
-	return entry
-
-# --- Resources (Reference / Template / Examples) manager ---------------------------------
-RESOURCES_INDEX = Path(__file__).resolve().parent / 'data' / 'resources.json'
-RESOURCES_DIR = app.config['UPLOAD_FOLDER'] / 'resources'
-RESOURCES_DIR.mkdir(parents=True, exist_ok=True)
-
-# Ingestion queue and persistent tasks file
-INGEST_TASKS_PATH = Path(__file__).resolve().parent / 'data' / 'ingest_tasks.json'
-INGEST_QUEUE = {}
-
-def _load_ingest_tasks():
-	try:
-		if INGEST_TASKS_PATH.exists():
-			data = json.loads(INGEST_TASKS_PATH.read_text(encoding='utf-8'))
-			# Normalize older task entries to include a bot_ingested flag
-			changed = False
-			for tid, t in list(data.items()):
-				if 'bot_ingested' not in t:
-					t['bot_ingested'] = False
-					changed = True
-			if changed:
-				try:
-					_ingest_tasks_backup = INGEST_TASKS_PATH.with_suffix('.bak.json')
-					_ingest_tasks_backup.write_text(json.dumps(data, indent=2), encoding='utf-8')
-					_ingEST_SAVE = _save_ingest_tasks(data)
-				except Exception:
-					pass
-			return data
-	except Exception:
-		app.logger.exception('Failed to load ingest tasks')
-	return {}
-
-def _save_ingest_tasks(tasks: dict):
-	try:
-		INGEST_TASKS_PATH.parent.mkdir(parents=True, exist_ok=True)
-		INGEST_TASKS_PATH.write_text(json.dumps(tasks, indent=2), encoding='utf-8')
-		return True
-	except Exception:
-		app.logger.exception('Failed to save ingest tasks')
-		return False
-
-def _start_ingest_worker():
-	import threading, time
-
-	def worker():
-		app.logger.info('Ingest worker started')
-		while True:
-			try:
-				tasks = _load_ingest_tasks()
-				for tid, t in list(tasks.items()):
-					if t.get('status') in ('pending', 'running'):
-						# mark running
-						t['status'] = 'running'
-						_save_ingest_tasks(tasks)
-						try:
-							# perform ingest: read file and store into session meta
-							path = Path(t['resource']['path'])
-							sess = t.get('session_id','default')
-							content = None
-							try:
-								content = path.read_text(encoding='utf-8')
-							except Exception:
-								content = None
-							storage = get_storage()
-							meta = storage.get_session_meta(sess) or {}
-							# If the bot supports ingest, call it to wire into knowledge store
-							bot_ingested = False
-							try:
-								bot = get_chat_bot()
-								if hasattr(bot, 'ingest_resource'):
-									try:
-										payload = {'type':'text','text': content} if isinstance(content, str) else {'type':'binary', 'path': str(path), 'size': path.stat().st_size}
-										bot_ingested = bool(bot.ingest_resource(sess, t['resource'], payload))
-									except Exception:
-										app.logger.exception('Bot ingest failed inside worker')
-							except Exception:
-								app.logger.exception('Failed to obtain bot for ingest')
-							ing = meta.get('ingestions', {})
-							ing[tid] = {'resource_id': t['resource']['id'], 'status': 'done' if bot_ingested else 'done', 'bot_ingested': bot_ingested, 'ingested_at': datetime.now().isoformat(), 'preview': content[:100] if isinstance(content,str) else None}
-							meta['ingestions'] = ing
-							storage.set_session_meta(sess, meta)
-							# record bot ingestion result on the persistent task
-							t['bot_ingested'] = bool(bot_ingested)
-							t['status'] = 'done'
-							_save_ingest_tasks(tasks)
-						except Exception:
-							app.logger.exception('Ingest task failed')
-							t['status'] = 'error'
-							t['bot_ingested'] = False
-							_save_ingest_tasks(tasks)
-				time.sleep(1)
-			except Exception:
-				app.logger.exception('Ingest worker loop failed')
-				time.sleep(2)
-
-	th = threading.Thread(target=worker, daemon=True)
-	th.start()
-
-# start worker at import time
-_start_ingest_worker()
-
-def _load_resources_index():
-		try:
-				if RESOURCES_INDEX.exists():
-						with open(RESOURCES_INDEX, 'r', encoding='utf-8') as f:
-								return json.load(f)
-		except Exception:
-				app.logger.exception('Failed to load resources index')
-		return {}
-
-def _save_resources_index(idx: dict):
-		try:
-				RESOURCES_INDEX.parent.mkdir(parents=True, exist_ok=True)
-				with open(RESOURCES_INDEX, 'w', encoding='utf-8') as f:
-						json.dump(idx, f, indent=2)
-				return True
-		except Exception:
-				app.logger.exception('Failed to save resources index')
-				return False
 
 def _resource_id_for(category: str, filename: str) -> str:
 		# stable id to reference resources in index
 		return f"{category}:{filename}"
+
+# Resources storage location and helpers
+RESOURCES_DIR = Path(__file__).resolve().parent / 'data' / 'resources'
+RESOURCES_DIR.mkdir(parents=True, exist_ok=True)
+RESOURCES_INDEX_FILE = RESOURCES_DIR / 'index.json'
+INGEST_TASKS_FILE = RESOURCES_DIR / 'ingest_tasks.json'
+
+def _load_resources_index():
+	try:
+		if RESOURCES_INDEX_FILE.exists():
+			try:
+				return json.loads(RESOURCES_INDEX_FILE.read_text(encoding='utf-8'))
+			except Exception:
+				# corrupt index file -> rebuild empty
+				return {}
+		# build initial index by scanning data/resources categories
+		idx = {}
+		for cat_dir in RESOURCES_DIR.iterdir():
+			if not cat_dir.is_dir():
+				continue
+			for p in cat_dir.iterdir():
+				if p.is_file():
+					rid = _resource_id_for(cat_dir.name, p.name)
+					# Treat files as persona only when stored in a 'personality' category.
+					is_persona = (cat_dir.name.lower() == 'personality')
+					idx[rid] = {'id': rid, 'filename': p.name, 'category': cat_dir.name, 'path': str(p), 'persona': is_persona, 'uploaded_at': datetime.fromtimestamp(p.stat().st_mtime).isoformat()}
+		# persist initial index
+		_save_resources_index(idx)
+		return idx
+	except Exception:
+		return {}
+
+def _save_resources_index(idx: dict):
+	try:
+		RESOURCES_INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
+		RESOURCES_INDEX_FILE.write_text(json.dumps(idx, indent=2), encoding='utf-8')
+	except Exception:
+		app.logger.exception('Failed to save resources index')
+
+def _load_ingest_tasks():
+	try:
+		if INGEST_TASKS_FILE.exists():
+			try:
+				return json.loads(INGEST_TASKS_FILE.read_text(encoding='utf-8'))
+			except Exception:
+				return {}
+		return {}
+	except Exception:
+		return {}
+
+def _save_ingest_tasks(tasks: dict):
+	try:
+		INGEST_TASKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+		INGEST_TASKS_FILE.write_text(json.dumps(tasks, indent=2), encoding='utf-8')
+	except Exception:
+		app.logger.exception('Failed to save ingest tasks')
 
 ECHO_RESOURCES_TEMPLATE = """{% extends "base.html" %}
 {% block content %}
@@ -235,10 +364,43 @@ Session id: <input id="sessionIdInput" placeholder="session id (optional)" style
 </div>
 </div>
 <script>
+		// Training page render helper
+		function showTrainingPage(){
+			const el = document.getElementById('trainingPage');
+			if(!el) return;
+		}
 function uploadResource(e){
  e.preventDefault();
  const f = document.getElementById('uploadForm');
  const fd = new FormData(f);
+
+
+ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
+{% block content %}
+<h2>Training Center</h2>
+<div style="display:flex;gap:20px;align-items:flex-start;">
+<div style="flex:1;max-width:420px;">
+<form id="trainForm" onsubmit="startTrain(event)">
+<label>Model path (relative to project): <input name="model" value="models/qwen2.5-7b-instruct-q4_k_m.gguf"></label>
+<label>Training file (data/echo_training/...): <input name="training_file" value=""></label>
+<label>Engine: <select name="engine"><option value="stub">stub</option><option value="peft">peft</option></select></label>
+<label>Epochs: <input name="epochs" value="1"></label>
+<label>Batch size: <input name="batch_size" value="8"></label>
+<label>Learning rate: <input name="lr" value="0.0001"></label>
+<button class="btn" type="submit">Start Training</button>
+</form>
+<div style="margin-top:12px;">Training jobs:</div>
+<div id="trainingJobsList" style="margin-top:8px;"></div>
+</div>
+<div style="flex:2">
+<h3>Logs</h3>
+<div id="trainLogModal" class="modal"><div class="modal-content"><span class="close" onclick="closeModal('trainLogModal')">&times;</span><pre id="trainLogContent">(logs)</pre></div></div>
+<p>Use the form to start a training job. The <b>peft</b> engine requires additional dependencies and GPUs for practical runs.</p>
+</div>
+</div>
+<script>loadTrainJobs();</script>
+{% endblock %}
+"""
  fetch('/api/resources/upload',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{
 	 document.getElementById('uploadMsg').textContent = j.message || JSON.stringify(j);
 	 loadResources();
@@ -490,17 +652,46 @@ class ScriptManager:
 
 		return result
 	def add_script(self,filename,content):
-		script_path=self.scripts_folder/secure_filename(filename)
-		with open(script_path,'w') as f:
-			f.write(content)
-		os.chmod(script_path,0o755)
-		return True
-	def delete_script(self,filename):
-		script_path=self.scripts_folder/secure_filename(filename)
-		if script_path.exists():
-			script_path.unlink()
+		# Allow subdirectories but prevent path traversal
+		try:
+			# normalize and join
+			target = Path(self.scripts_folder) / Path(filename)
+			resolved = target.resolve()
+			base = Path(self.scripts_folder).resolve()
+			if not str(resolved).startswith(str(base)):
+				return False
+			resolved.parent.mkdir(parents=True, exist_ok=True)
+			with open(resolved, 'w', encoding='utf-8') as f:
+				f.write(content)
+			# make executable where appropriate
+			try:
+				os.chmod(resolved, 0o755)
+			except Exception:
+				pass
 			return True
-		return False
+		except Exception:
+			return False
+	def delete_script(self,filename):
+		try:
+			target = Path(self.scripts_folder) / Path(filename)
+			resolved = target.resolve()
+			base = Path(self.scripts_folder).resolve()
+			if not str(resolved).startswith(str(base)):
+				return False
+			if resolved.exists():
+				resolved.unlink()
+				# cleanup empty parents
+				try:
+					p = resolved.parent
+					while p != base and not any(p.iterdir()):
+						p.rmdir()
+						p = p.parent
+				except Exception:
+					pass
+				return True
+			return False
+		except Exception:
+			return False
 	def execute_script(self,filename,args=''):
 		script_path=self.scripts_folder/secure_filename(filename)
 		if not script_path.exists():
@@ -521,11 +712,18 @@ class ScriptManager:
 		except Exception as e:
 			return {'success':False,'error':str(e)}
 	def get_script_content(self,filename):
-		script_path=self.scripts_folder/secure_filename(filename)
-		if script_path.exists():
-			with open(script_path,'r') as f:
-				return f.read()
-		return None
+		try:
+			target = Path(self.scripts_folder) / Path(filename)
+			resolved = target.resolve()
+			base = Path(self.scripts_folder).resolve()
+			if not str(resolved).startswith(str(base)):
+				return None
+			if resolved.exists():
+				with open(resolved,'r', encoding='utf-8') as f:
+					return f.read()
+			return None
+		except Exception:
+			return None
 def get_system_stats():
 	cpu_percent=psutil.cpu_percent(interval=1)
 	memory=psutil.virtual_memory()
@@ -569,6 +767,116 @@ def get_windows_services():
 jamroom_mgr=JamroomManager(app.config['JAMROOM_DB'])
 shoutcast_mgr=ShoutcastManager(app.config['SHOUTCAST_DB'])
 script_mgr=ScriptManager(app.config['SCRIPTS_FOLDER'])
+# Execution jobs store for async/parallel execution
+EXEC_JOBS = {}
+# Training jobs store
+TRAIN_JOBS = {}
+TRAIN_JOBS_FILE = Path(__file__).parent / 'data' / 'models_output' / 'train_jobs.json'
+
+def _load_train_jobs():
+	try:
+		if TRAIN_JOBS_FILE.exists():
+			return json.loads(TRAIN_JOBS_FILE.read_text(encoding='utf-8'))
+	except Exception:
+		app.logger.exception('Failed to load train jobs file')
+	return {}
+
+
+def _start_cleanup_thread(retention_days=30):
+	def runner():
+		while True:
+			try:
+				base = Path(__file__).parent / 'data' / 'models_output'
+				if base.exists():
+					for d in base.iterdir():
+						try:
+							if not d.is_dir():
+								continue
+							# skip train_jobs.json
+							if d.name == 'train_jobs.json':
+								continue
+							# if directory older than retention_days, remove
+							mtime = d.stat().st_mtime
+							age_days = (time.time() - mtime) / (60*60*24)
+							if age_days > retention_days:
+								try:
+									# create zip archive then remove folder
+									zip_path = str(d) + '.zip'
+									shutil.make_archive(str(d), 'zip', root_dir=str(d))
+									shutil.rmtree(d)
+								except Exception:
+									app.logger.exception('Failed to archive old job %s', d)
+				time.sleep(60*60*6)
+			except Exception:
+				time.sleep(60*60)
+	t = threading.Thread(target=runner, daemon=True)
+	t.start()
+
+def _save_train_jobs():
+	try:
+		TRAIN_JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
+		TRAIN_JOBS_FILE.write_text(json.dumps(TRAIN_JOBS, indent=2), encoding='utf-8')
+	except Exception:
+		app.logger.exception('Failed to save train jobs file')
+
+def _start_job_thread(exec_id, cmd, cwd=None):
+	def runner():
+		job = EXEC_JOBS.get(exec_id)
+		if not job:
+			return
+		job['status'] = 'running'
+		job['started_at'] = time.time()
+		try:
+			# run as subprocess and capture to files
+			stdout_path = Path(app.config['SCRIPTS_FOLDER']) / f"{exec_id}.stdout"
+			stderr_path = Path(app.config['SCRIPTS_FOLDER']) / f"{exec_id}.stderr"
+			with open(stdout_path, 'wb') as out_f, open(stderr_path, 'wb') as err_f:
+				proc = subprocess.Popen(cmd, cwd=cwd or str(app.config['SCRIPTS_FOLDER']), stdout=out_f, stderr=err_f, shell=isinstance(cmd, str))
+				job['pid'] = proc.pid
+				# Do not store the Popen object in the job dict (not JSON-serializable).
+				proc.wait()
+				job['returncode'] = proc.returncode
+		except Exception as e:
+			job['error'] = str(e)
+			job['status'] = 'error'
+		else:
+			job['status'] = 'finished'
+		finally:
+			job['finished_at'] = time.time()
+
+	t = threading.Thread(target=runner, daemon=True)
+	t.start()
+
+
+def _start_train_job(job_id, cmd, cwd=None):
+	def runner():
+		job = TRAIN_JOBS.get(job_id)
+		if not job:
+			return
+		job['status'] = 'running'
+		job['started_at'] = time.time()
+        _save_train_jobs()
+		try:
+			outdir = Path(__file__).parent / 'data' / 'models_output' / job_id
+			outdir.mkdir(parents=True, exist_ok=True)
+			log_path = outdir / 'train.log'
+			with open(log_path, 'wb') as log_f:
+				proc = subprocess.Popen(cmd, cwd=cwd or str(Path.cwd()), stdout=log_f, stderr=log_f, shell=isinstance(cmd, str))
+				job['pid'] = proc.pid
+				proc.wait()
+				job['returncode'] = proc.returncode
+		except Exception as e:
+			job['error'] = str(e)
+			job['status'] = 'error'
+		else:
+			job['status'] = 'finished'
+		finally:
+			job['finished_at'] = time.time()
+        _save_train_jobs()
+
+	t = threading.Thread(target=runner, daemon=True)
+	t.start()
+
 HTML_TEMPLATE="""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -641,6 +949,7 @@ code{color:#4CAF50;}
 <a href="/processes" class="{{ 'active' if '/processes' in request.path else '' }}">Processes</a>
 <a href="/services" class="{{ 'active' if '/services' in request.path else '' }}">Services</a>
 <a href="/addons" class="{{ 'active' if '/addons' in request.path else '' }}">Addons</a>
+<a href="/echo-train" class="{{ 'active' if '/echo-train' in request.path else '' }}">Training</a>
 </nav>
 {% with messages=get_flashed_messages(with_categories=true) %}
 {% if messages %}
@@ -665,7 +974,44 @@ document.getElementById('disk-progress').style.width=data.disk.percent+'%';
 }).catch(err=>console.error('Failed to refresh stats:',err));}
 setInterval(refreshStats,5000);
 function refreshIndex(){
-	fetch('/scripts/refresh_index',{method:'POST'}).then(async r=>{
+		fetch('/scripts/refresh_index',{method:'POST'}).then(async r => {
+		// Training UI helpers
+		function loadTrainJobs() {
+			fetch('/api/echo/train_list').then(r => r.json()).then(j => {
+				const jobs = j.jobs || [];
+				const el = document.getElementById('trainingJobsList');
+				if (!el) return;
+				el.innerHTML = '';
+				jobs.forEach(job => {
+					const div = document.createElement('div');
+					div.style.border = '1px solid #444'; div.style.padding = '8px'; div.style.margin = '6px 0';
+					div.innerHTML = `<b>${job.id}</b> - ${job.status} - <button onclick="viewLog('${job.id}')">Log</button> <button onclick="cancelJob('${job.id}')">Cancel</button>`;
+					el.appendChild(div);
+				});
+			}).catch(console.error);
+		}
+		function startTrain(event) {
+			event.preventDefault();
+			const form = document.getElementById('trainForm');
+			const fd = new FormData(form);
+			const body = {};
+			form.querySelectorAll('input,select').forEach(i => { if (i.name) body[i.name] = i.value });
+			fetch('/api/echo/train_model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json()).then(j => {
+				alert(JSON.stringify(j));
+				loadTrainJobs();
+			}).catch(e => { console.error(e); alert('Start failed') });
+		}
+		function viewLog(id) {
+			fetch('/api/echo/train_status?job_id=' + encodeURIComponent(id)).then(r => r.json()).then(j => {
+				const modal = document.getElementById('trainLogModal');
+				document.getElementById('trainLogContent').textContent = j.log_tail || 'No log';
+				modal.style.display = 'block';
+			}).catch(console.error);
+		}
+		function cancelJob(id) {
+			fetch('/api/echo/train_cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job_id: id }) }).then(r => r.json()).then(j => { alert(JSON.stringify(j)); loadTrainJobs(); }).catch(console.error);
+		}
+		setInterval(loadTrainJobs, 5000);
 		if(r.status===401){
 			// server requires admin token
 			let token = prompt('Admin token required to refresh index:');
@@ -1218,6 +1564,17 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 <div class="stat-item"><span>Total Examples:</span><span id="total-examples">0</span></div>
 <div class="stat-item"><span>Session Messages:</span><span id="session-messages">0</span></div>
 <div class="stat-item"><span>Current Model:</span><span id="current-model">(checking...)</span></div>
+<div style="margin-top:8px;">
+<select id="modelSelect" style="width:100%;padding:6px;border-radius:6px;background:#111;color:#eee;border:1px solid #333;"></select>
+<div style="display:flex;gap:6px;margin-top:6px;">
+<button class="btn btn-sm btn-primary" onclick="selectModel()">Load Model</button>
+<button class="btn btn-sm btn-secondary" onclick="fetchModels()">Refresh</button>
+<button class="btn btn-sm" onclick="document.getElementById('personaFile').click()">Upload Persona</button>
+<button class="btn btn-sm" onclick="document.getElementById('trainingFile').click()">Upload Training</button>
+<input id="personaFile" type="file" accept=".txt,.md,.jsonl" style="display:none" onchange="uploadPersona(this.files[0])">
+<input id="trainingFile" type="file" accept=".jsonl,.json,.txt" style="display:none" onchange="uploadTraining(this.files[0])">
+</div>
+</div>
 </div>
 <div style="margin-top:15px;">
 <h4>💬 Chat History</h4>
@@ -1225,6 +1582,23 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 <div style="display:flex;gap:8px;margin-top:8px;">
 <button onclick="createSession()" class="btn btn-sm btn-success">New Session</button>
 <button onclick="fetchSessions()" class="btn btn-sm btn-secondary">Refresh</button>
+</div>
+</div>
+<div style="margin-top:15px;">
+<h4>⚙️ Fine-tune Model</h4>
+<div style="display:flex;gap:8px;flex-direction:column;">
+<div style="display:flex;gap:8px;">
+<select id="trainingFileSelect" style="flex:1"></select>
+<button class="btn btn-sm" onclick="fetchTrainingFiles()">Refresh</button>
+</div>
+<div style="display:flex;gap:8px;">
+<input id="tf_epochs" type="number" value="1" style="width:100px" />
+<input id="tf_batch" type="number" value="8" style="width:100px" />
+<input id="tf_lr" type="text" value="1e-4" style="width:140px" />
+<input id="tf_output" type="text" placeholder="output name (optional)" />
+<button class="btn btn-sm btn-warning" onclick="startTraining()">Start Training</button>
+</div>
+<div id="trainingJobs" style="margin-top:8px;max-height:160px;overflow:auto;background:#111;padding:8px;border-radius:6px;font-size:0.9em;color:#ddd"></div>
 </div>
 </div>
 <div style="margin-top:15px;">
@@ -1432,6 +1806,108 @@ function populateResourceList(){
 
 // fetch initial resources for sidebar
 fetchResourcesForSidebar();
+fetchModels();
+
+function fetchModels(){
+	fetch('/api/echo/models').then(r=>r.json()).then(j=>{
+		const sel = document.getElementById('modelSelect');
+		if(!sel) return;
+		sel.innerHTML='';
+		const models = (j.models||[]);
+		models.forEach(m=>{
+			const opt = document.createElement('option');
+			opt.value = m;
+			opt.textContent = m.split('/').slice(-1)[0];
+			sel.appendChild(opt);
+		});
+		// preselect current-model if present
+		fetch('/api/echo/model').then(r=>r.json()).then(jm=>{
+			if(jm && jm.model){
+				const idx = Array.from(sel.options).findIndex(o=>o.value===jm.model || o.value===jm.model.replace(window.location.origin+'\\/',''));
+				if(idx>=0) sel.selectedIndex = idx;
+			}
+		}).catch(()=>{});
+	}).catch(e=>{console.error('Failed to fetch models',e);});
+}
+
+function selectModel(){
+	const sel = document.getElementById('modelSelect');
+	if(!sel || !sel.value) return appendEcho('No model selected');
+	fetch('/api/echo/select_model',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:sel.value})}).then(r=>r.json()).then(j=>{
+		if(j.ok){ appendEcho('Model selected: '+j.model); fetchModel(); }
+		else appendEcho('Select model failed: '+(j.error||JSON.stringify(j)));
+	}).catch(e=>{ appendEcho('Select model request failed'); console.error(e); });
+}
+
+function appendEcho(msg){
+	const list = document.getElementById('chatMessages');
+	if(!list) return;
+	const d=document.createElement('div'); d.className='chat-message echo'; d.innerHTML='<div class="chat-icon">🌙</div><div><div class="chat-bubble">'+escapeHtml(msg)+'</div></div>';
+	list.appendChild(d); list.scrollTop=list.scrollHeight;
+}
+
+function uploadPersona(file){
+	if(!file) return;
+	const fd = new FormData(); fd.append('file', file); fd.append('type', 'personality'); fd.append('name', file.name);
+	fetch('/api/echo/upload_ingest',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{ if(j.ok) appendEcho('Persona uploaded: '+j.saved); else appendEcho('Upload failed: '+(j.error||JSON.stringify(j))); }).catch(e=>{ appendEcho('Upload failed'); console.error(e); });
+}
+
+function uploadTraining(file){
+	if(!file) return;
+	const fd = new FormData(); fd.append('file', file); fd.append('type', 'training'); fd.append('name', file.name);
+	fetch('/api/echo/upload_ingest',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{ if(j.ok) appendEcho('Training uploaded: '+j.saved); else appendEcho('Upload failed: '+(j.error||JSON.stringify(j))); }).catch(e=>{ appendEcho('Upload failed'); console.error(e); });
+}
+
+function fetchTrainingFiles(){
+	fetch('/api/echo/training_files').then(r=>r.json()).then(j=>{
+		const sel = document.getElementById('trainingFileSelect');
+		if(!sel) return;
+		sel.innerHTML='';
+		(j.files||[]).forEach(f=>{
+			const opt = document.createElement('option'); opt.value=f.name; opt.textContent=f.name; sel.appendChild(opt);
+		});
+	}).catch(e=>{console.error('Failed to fetch training files',e)});
+}
+
+function startTraining(){
+	const model = document.getElementById('modelSelect').value;
+	const training_file = document.getElementById('trainingFileSelect').value;
+	const epochs = parseInt(document.getElementById('tf_epochs').value || '1');
+	const batch_size = parseInt(document.getElementById('tf_batch').value || '8');
+	const lr = document.getElementById('tf_lr').value || '1e-4';
+	const output_name = document.getElementById('tf_output').value || '';
+	if(!model || !training_file){ appendEcho('Select a model and training file first'); return; }
+	appendEcho('Starting training job...');
+	fetch('/api/echo/train_model',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:model, training_file:training_file, output_name:output_name, epochs:epochs, batch_size:batch_size, lr:lr})}).then(r=>r.json()).then(j=>{
+		if(j.ok){ appendEcho('Started training job: '+j.job_id); addTrainingJobToList(j.job_id); }
+		else appendEcho('Failed to start: '+(j.error||JSON.stringify(j)));
+	}).catch(e=>{ appendEcho('Start training request failed'); console.error(e); });
+}
+
+function addTrainingJobToList(job_id){
+	const container = document.getElementById('trainingJobs');
+	const row = document.createElement('div'); row.id = 'train_'+job_id; row.style.padding='6px'; row.style.borderBottom='1px solid #222'; row.textContent = job_id + ' - queued';
+	container.prepend(row);
+	// start polling
+	const iv = setInterval(()=>{
+		fetch('/api/echo/train_status?job_id='+encodeURIComponent(job_id)).then(r=>r.json()).then(j=>{
+			if(j.job){
+				const s = j.job.status || 'unknown';
+				row.textContent = job_id + ' - ' + s;
+				if(j.log_tail) row.title = j.log_tail.slice(-2000);
+				if(s==='finished' || s==='error'){
+					clearInterval(iv);
+					row.textContent = job_id + ' - ' + s + ' (click to view logs)';
+					row.style.cursor='pointer';
+					row.onclick = ()=>{ const w = window.open('/data/models_output/'+job_id+'/train.log','_blank'); };
+				}
+			}
+		}).catch(e=>{console.error('Train status err',e);});
+	},2000);
+}
+
+// refresh jobs on load
+fetchTrainingFiles();
 
 function loadSession(sid){
 	fetch('/api/echo/session/'+encodeURIComponent(sid)).then(r=>r.json()).then(j=>{
@@ -1761,6 +2237,154 @@ def scripts_backup(b64path):
 		return jsonify({'success':False,'error':str(e)})
 
 
+	# --- Minimal Web IDE API endpoints -----------------------------------------------------
+	def _safe_script_path(filename: str):
+	    try:
+	        fname = secure_filename(filename)
+	        if not fname:
+	            return None
+	        return Path(app.config['SCRIPTS_FOLDER']) / fname
+	    except Exception:
+	        return None
+
+
+	@app.route('/api/ide/scripts')
+	def api_ide_scripts():
+	    files = []
+	    try:
+	        scripts_dir = Path(app.config['SCRIPTS_FOLDER'])
+	        for p in sorted(scripts_dir.glob('*')):
+	            if p.is_file():
+	                files.append({'name': p.name, 'size': p.stat().st_size, 'modified': datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
+	    except Exception as e:
+	        return jsonify({'ok': False, 'error': str(e)}), 500
+	    return jsonify({'ok': True, 'files': files})
+
+
+	@app.route('/api/ide/load', methods=['POST'])
+	def api_ide_load():
+	    data = request.get_json(silent=True) or (request.form if request.form else {})
+	    filename = data.get('filename') if isinstance(data, dict) else None
+	    if not filename:
+	        return jsonify({'ok': False, 'error': 'filename required'}), 400
+	    path = _safe_script_path(filename)
+	    if not path or not path.exists():
+	        return jsonify({'ok': False, 'error': 'file not found'}), 404
+	    try:
+	        content = path.read_text(encoding='utf-8')
+	        return jsonify({'ok': True, 'content': content})
+	    except Exception as e:
+	        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+	@app.route('/api/ide/save', methods=['POST'])
+	def api_ide_save():
+	    data = request.get_json(silent=True) or (request.form if request.form else {})
+	    filename = data.get('filename') if isinstance(data, dict) else None
+	    content = data.get('content','') if isinstance(data, dict) else (request.form.get('content','') if request.form else '')
+	    if not filename:
+	        return jsonify({'ok': False, 'error': 'filename required'}), 400
+	    try:
+	        script_mgr.add_script(filename, content)
+	        return jsonify({'ok': True, 'filename': filename})
+	    except Exception as e:
+	        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+	@app.route('/api/ide/execute', methods=['POST'])
+	def api_ide_execute():
+	    data = request.get_json(silent=True) or (request.form if request.form else {})
+	    filename = data.get('filename') if isinstance(data, dict) else None
+	    content = data.get('content') if isinstance(data, dict) else None
+	    shell = data.get('shell') if isinstance(data, dict) else None
+	    remote = bool(data.get('remote')) if isinstance(data, dict) else False
+	    if remote:
+	        return jsonify({'ok': False, 'error': 'remote execution not implemented'}), 501
+	    try:
+	        if filename:
+	            path = _safe_script_path(filename)
+	            if not path or not path.exists():
+	                if content:
+	                    script_mgr.add_script(filename, content)
+	                else:
+	                    return jsonify({'ok': False, 'error': 'file not found'}), 404
+	            result = script_mgr.execute_script(filename)
+	            return jsonify({'ok': True, 'stdout': result.get('stdout',''), 'stderr': result.get('stderr',''), 'returncode': result.get('returncode', -1)})
+	        elif content:
+	            ext = '.sh'
+	            if shell == 'python':
+	                ext = '.py'
+	            elif shell in ('powershell','ps1'):
+	                ext = '.ps1'
+	            fd, tmp = tempfile.mkstemp(suffix=ext, prefix='masterchief_exec_', dir=str(app.config['SCRIPTS_FOLDER']))
+	            os.close(fd)
+	            with open(tmp,'w',encoding='utf-8') as f:
+	                f.write(content)
+	            os.chmod(tmp, 0o755)
+	            p = Path(tmp)
+	            if p.suffix == '.py':
+	                cmd = [sys.executable, str(p)]
+	            elif p.suffix == '.ps1':
+	                cmd = ['powershell','-ExecutionPolicy','Bypass','-File', str(p)]
+	            else:
+	                cmd = [str(p)]
+	            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+	            out = proc.stdout
+	            err = proc.stderr
+	            rc = proc.returncode
+	            try:
+	                p.unlink()
+	            except Exception:
+	                pass
+	            return jsonify({'ok': True, 'stdout': out, 'stderr': err, 'returncode': rc})
+	        else:
+	            return jsonify({'ok': False, 'error': 'no filename or content provided'}), 400
+	    except subprocess.TimeoutExpired:
+	        return jsonify({'ok': False, 'error':'execution timed out'}), 500
+	    except Exception as e:
+	        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+	# Remote credential storage for IDE remote execution (basic, stored in data/ide_creds.json)
+	CREDS_FILE = Path(__file__).resolve().parent / 'data' / 'ide_creds.json'
+
+	@app.route('/api/ide/remote/creds', methods=['POST'])
+	def api_ide_remote_creds_save():
+	    data = request.get_json(silent=True) or (request.form if request.form else {})
+	    target = data.get('target') if isinstance(data, dict) else (request.form.get('target') if request.form else None)
+	    username = data.get('username') if isinstance(data, dict) else (request.form.get('username') if request.form else None)
+	    password = data.get('password') if isinstance(data, dict) else (request.form.get('password') if request.form else None)
+	    if not target or not username or not password:
+	        return jsonify({'ok': False, 'error':'target,username,password required'}), 400
+	    try:
+	        d = {}
+	        if CREDS_FILE.exists():
+	            try:
+	                d = json.loads(CREDS_FILE.read_text(encoding='utf-8'))
+	            except Exception:
+	                d = {}
+	        d[target] = {'username': username, 'password': password, 'saved_at': datetime.now().isoformat()}
+	        CREDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+	        CREDS_FILE.write_text(json.dumps(d, indent=2), encoding='utf-8')
+	        return jsonify({'ok': True})
+	    except Exception as e:
+	        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+	@app.route('/api/ide/remote/creds', methods=['GET'])
+	def api_ide_remote_creds_get():
+	    target = request.args.get('target')
+	    if not target:
+	        return jsonify({'ok': False, 'error': 'target required'}), 400
+	    try:
+	        if not CREDS_FILE.exists():
+	            return jsonify({'ok': True, 'cred': None})
+	        d = json.loads(CREDS_FILE.read_text(encoding='utf-8'))
+	        return jsonify({'ok': True, 'cred': d.get(target)})
+	    except Exception as e:
+	        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/scripts/suggest_commit/<b64path>', methods=['GET'])
 @requires_basic_auth
 def scripts_suggest_commit(b64path):
@@ -2016,16 +2640,42 @@ def api_resources_upload():
 		filename = secure_filename(f.filename)
 		cat_dir = RESOURCES_DIR / category
 		cat_dir.mkdir(parents=True, exist_ok=True)
-		filepath = cat_dir / filename
 
-		# Prevent duplicate filenames in same category
+		# Server-side validation: allowed extensions and size limits
+		ALLOWED_EXTS = {'.txt', '.jsonl', '.md', '.pdf', '.json'}
+		TEXT_EXTS = {'.txt', '.jsonl', '.md', '.json'}
+		MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+
+		ext = Path(filename).suffix.lower()
+		if ext not in ALLOWED_EXTS:
+			return jsonify({'error': 'Invalid file type', 'allowed': list(ALLOWED_EXTS)}), 400
+
+		# Prevent duplicate filenames in same category (by logical filename)
 		idx = _load_resources_index()
 		rid = _resource_id_for(category, filename)
 		if rid in idx:
 			return jsonify({'error': 'Resource already exists', 'message': 'Duplicate resource detected'}), 400
 
+		# quick content-length check when available
+		if request.content_length and request.content_length > MAX_BYTES:
+			return jsonify({'error': 'File too large', 'max_bytes': MAX_BYTES}), 400
+
+		# store with a safe unique filename to avoid collisions on disk
+		stored_name = f"{uuid.uuid4().hex}_{filename}"
+		filepath = cat_dir / stored_name
 		f.save(filepath)
+		# verify saved size
+		try:
+			if filepath.stat().st_size > MAX_BYTES:
+				filepath.unlink(missing_ok=True)
+				return jsonify({'error': 'File too large after upload', 'max_bytes': MAX_BYTES}), 400
+		except Exception:
+			pass
 		persona = bool(request.form.get('persona'))
+		# Only treat as persona if upload is in the 'personality' category or file is a text type
+		if persona and ext not in TEXT_EXTS:
+			# reject persona flag for binary types
+			persona = False
 
 		entry = {
 			'id': rid,
@@ -2210,6 +2860,36 @@ def api_resources_load():
 		return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/resources/convert_to_training', methods=['POST'])
+def api_resources_convert_to_training():
+	"""Convert a resource file into a JSONL training file using the dataset helper."""
+	try:
+		data = request.get_json() or request.form.to_dict() or {}
+		rid = data.get('id')
+		if not rid:
+			return jsonify({'error': 'id required'}), 400
+		idx = _load_resources_index()
+		entry = idx.get(rid)
+		if not entry:
+			return jsonify({'error': 'resource not found'}), 404
+		p = Path(entry.get('path'))
+		if not p.exists():
+			return jsonify({'error': 'file missing'}), 500
+		outdir = Path(__file__).parent / 'data' / 'echo_training'
+		outdir.mkdir(parents=True, exist_ok=True)
+		outpath = outdir / (p.stem + '.jsonl')
+		# Use the helper script to generate a JSONL example
+		helper = Path(__file__).parent / 'tools' / 'dataset_helpers.py'
+		cmd = [sys.executable, str(helper), '--resource', str(p), '--out', str(outpath)]
+		proc = subprocess.run(cmd, cwd=str(Path(__file__).parent), capture_output=True, text=True)
+		if proc.returncode != 0:
+			return jsonify({'error': 'conversion failed', 'stderr': proc.stderr}), 500
+		return jsonify({'ok': True, 'training_file': str(outpath.relative_to(Path(__file__).parent))})
+	except Exception as e:
+		app.logger.exception('Conversion failed')
+		return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/personality/status')
 def api_personality_status():
 	try:
@@ -2233,12 +2913,47 @@ def api_echo_chat():
 		session_id = data.get('session_id','default')
 		if not message:
 			return jsonify({'error':'Message is required'}), 400
-
 		storage = get_storage()
 		try:
 			meta = storage.get_session_meta(session_id) or {}
 		except Exception:
 			meta = {}
+
+		# Ensure a persona is applied for this session if none exists
+		try:
+			def _ensure_session_personality(sid: str):
+				try:
+					smeta = storage.get_session_meta(sid) or {}
+					if smeta.get('personality'):
+						return
+					# Look for persona files under echo/data/personality
+					pdir = Path(__file__).resolve().parent / 'echo' / 'data' / 'personality'
+					if not pdir.exists():
+						pdir = Path(__file__).resolve().parent / 'data' / 'personality'
+					if pdir.exists():
+						for p in sorted(pdir.glob('*.txt')):
+							try:
+								text = p.read_text(encoding='utf-8')
+								pname = p.name
+								smeta['personality'] = {'id': pname, 'enabled': True, 'name': pname, 'text': text}
+								storage.set_session_meta(sid, smeta)
+								try:
+									storage.store_message(user='system', message=f'Persona {pname} auto-applied to session', echo_response='', channel=sid)
+								except Exception:
+									pass
+								break
+							except Exception:
+								continue
+				except Exception:
+					app.logger.exception('Failed to ensure session personality')
+			_ensure_session_personality(session_id)
+			# refresh meta after potential change
+			try:
+				meta = storage.get_session_meta(session_id) or {}
+			except Exception:
+				meta = {}
+		except Exception:
+			app.logger.exception('Auto-apply persona step failed')
 
 		um_low = message.lower()
 
@@ -2413,6 +3128,244 @@ def api_echo_preload_model():
 	except Exception as e:
 		app.logger.exception('Preload endpoint failed')
 		return jsonify({'error': str(e)}), 500
+
+
+	@app.route('/api/echo/training_files')
+	def api_echo_training_files():
+		try:
+			base = Path(__file__).parent / 'data' / 'echo_training'
+			files = []
+			if base.exists():
+				for p in sorted(base.glob('*')):
+					if p.is_file():
+						files.append({'name': p.name, 'size': p.stat().st_size, 'modified': datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
+			return jsonify({'files': files})
+		except Exception as e:
+			return jsonify({'error': str(e)}), 500
+
+
+	@app.route('/api/echo/train_model', methods=['POST'])
+	def api_echo_train_model():
+		"""Start a training job (runs tools/finetune_stub.py by default).
+
+		Payload: JSON { model: 'models/..gguf', training_file: 'filename.jsonl', output_name: 'myrun', epochs: 1, batch_size: 8, lr: 1e-4 }
+		"""
+		try:
+			data = request.get_json() or {}
+			model = data.get('model')
+			training_file = data.get('training_file')
+			output_name = data.get('output_name') or f"run_{int(time.time())}"
+			epochs = int(data.get('epochs', 1))
+			batch_size = int(data.get('batch_size', 8))
+			lr = float(data.get('lr', 1e-4))
+
+			engine = data.get('engine', 'stub')
+			# validate basics
+			if not model or not training_file:
+				return jsonify({'error': 'model and training_file are required'}), 400
+
+			model_path = Path(model)
+			if not model_path.is_absolute():
+				model_path = Path.cwd() / model_path
+			if not model_path.exists():
+				return jsonify({'error': 'model not found'}), 404
+
+			tfile = Path(__file__).parent / 'data' / 'echo_training' / training_file
+			if not tfile.exists():
+				return jsonify({'error': 'training file not found'}), 404
+
+			job_id = uuid.uuid4().hex
+			outdir = Path(__file__).parent / 'data' / 'models_output' / job_id
+			outdir.mkdir(parents=True, exist_ok=True)
+
+			# select worker based on engine
+			if engine == 'stub':
+				worker = Path(__file__).parent / 'tools' / 'finetune_stub.py'
+				cmd = [sys.executable, str(worker), '--model', str(model_path), '--data', str(tfile), '--output', str(outdir), '--epochs', str(epochs), '--batch_size', str(batch_size), '--lr', str(lr)]
+			elif engine == 'peft':
+				# prefer a real PEFT/LoRA pipeline; check for dependencies
+				try:
+					import transformers  # type: ignore
+					import peft  # type: ignore
+				except Exception:
+					return jsonify({'error': 'PEFT/transformers not installed', 'install': 'pip install "transformers[sentencepiece]" accelerate peft bitsandbytes --upgrade'}), 400
+				# If you later add a real training script, point to it here.
+				worker = Path(__file__).parent / 'tools' / 'finetune_stub.py'
+				cmd = [sys.executable, str(worker), '--model', str(model_path), '--data', str(tfile), '--output', str(outdir), '--epochs', str(epochs), '--batch_size', str(batch_size), '--lr', str(lr)]
+			else:
+				return jsonify({'error': 'unknown engine', 'allowed': ['stub','peft']}), 400
+
+			TRAIN_JOBS[job_id] = {'id': job_id, 'status': 'queued', 'model': str(model_path), 'training_file': str(tfile), 'output': str(outdir), 'engine': engine, 'pid': None, 'returncode': None, 'started_at': None, 'finished_at': None}
+			_save_train_jobs()
+			_start_train_job(job_id, cmd, cwd=str(Path(__file__).parent))
+
+			return jsonify({'ok': True, 'job_id': job_id})
+		except Exception as e:
+			app.logger.exception('Start train failed')
+			return jsonify({'error': str(e)}), 500
+
+
+	@app.route('/api/echo/train_status')
+	def api_echo_train_status():
+		job_id = request.args.get('job_id')
+		if not job_id:
+			return jsonify({'error': 'job_id required'}), 400
+		job = TRAIN_JOBS.get(job_id)
+		if not job:
+			return jsonify({'error': 'job not found'}), 404
+		outdir = Path(__file__).parent / 'data' / 'models_output' / job_id
+		log_path = outdir / 'train.log'
+		log_tail = ''
+		if log_path.exists():
+			try:
+				with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+					data = f.read()
+					log_tail = data[-8192:]
+			except Exception:
+				log_tail = ''
+		return jsonify({'job': job, 'log_tail': log_tail})
+
+
+
+@app.route('/api/echo/train_list')
+def api_echo_train_list():
+	try:
+		return jsonify({'jobs': list(TRAIN_JOBS.values())})
+	except Exception as e:
+		return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/echo/train_cancel', methods=['POST'])
+def api_echo_train_cancel():
+	try:
+		data = request.get_json() or {}
+		job_id = data.get('job_id')
+		if not job_id:
+			return jsonify({'error': 'job_id required'}), 400
+		job = TRAIN_JOBS.get(job_id)
+		if not job:
+			return jsonify({'error': 'job not found'}), 404
+		pid = job.get('pid')
+		if not pid:
+			job['status'] = 'cancelled'
+			job['finished_at'] = time.time()
+			return jsonify({'ok': True, 'message': 'job marked cancelled (no pid)'} )
+		try:
+			p = psutil.Process(int(pid))
+			p.terminate()
+			time.sleep(1)
+			if p.is_running():
+				p.kill()
+		except Exception:
+			# process may have already exited
+			pass
+		job['status'] = 'cancelled'
+		job['finished_at'] = time.time()
+		return jsonify({'ok': True})
+	except Exception as e:
+		app.logger.exception('Cancel failed')
+		return jsonify({'error': str(e)}), 500
+
+
+
+@app.route('/api/echo/models')
+def api_echo_models():
+    """List discovered local GGUF models under the `models/` directory."""
+    try:
+        base = Path.cwd() / 'models'
+        models = []
+        if base.exists():
+            for p in sorted(base.rglob('*.gguf')):
+                try:
+                    models.append(str(p.relative_to(Path.cwd()).as_posix()))
+                except Exception:
+                    models.append(str(p))
+        return jsonify({'models': models})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/echo-train')
+def echo_train_page():
+	return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ECHO_TRAINING_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')))
+
+
+@app.route('/api/echo/select_model', methods=['POST'])
+def api_echo_select_model():
+    try:
+        data = request.get_json() or {}
+        model = data.get('model')
+        if not model:
+            return jsonify({'error': 'model required'}), 400
+        base = Path.cwd()
+        p = Path(model)
+        if not p.is_absolute():
+            p = base / model
+        if not p.exists():
+            return jsonify({'error': 'model not found'}), 404
+        bot = get_chat_bot()
+        # allow bot to accept new model path
+        if hasattr(bot, 'set_local_model'):
+            try:
+                bot.set_local_model(str(p))
+            except Exception:
+                app.logger.exception('Failed to set model on bot')
+        # persist selection
+        cfg = Path(__file__).parent / 'data' / 'echo_model.json'
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        cfg.write_text(json.dumps({'model': str(p)}), encoding='utf-8')
+        return jsonify({'ok': True, 'model': str(p)})
+    except Exception as e:
+        app.logger.exception('Select model failed')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/echo/upload_ingest', methods=['POST'])
+def api_echo_upload_ingest():
+    """Upload a persona or training file to the data folders and optionally ingest it."""
+    try:
+        typ = request.form.get('type') or 'personality'
+        name = request.form.get('name') or None
+        f = request.files.get('file')
+        if not f:
+            return jsonify({'error': 'file required'}), 400
+        content = f.read().decode('utf-8')
+        saved_path = None
+        if typ == 'personality' or typ == 'persona':
+            pdir = Path(__file__).parent / 'data' / 'personality'
+            pdir.mkdir(parents=True, exist_ok=True)
+            fname = name or f.filename or f'persona_{int(time.time())}.txt'
+            target = pdir / secure_filename(fname)
+            target.write_text(content, encoding='utf-8')
+            saved_path = str(target)
+        else:
+            tdir = Path(__file__).parent / 'data' / 'echo_training'
+            tdir.mkdir(parents=True, exist_ok=True)
+            fname = name or f.filename or f'train_{int(time.time())}.jsonl'
+            target = tdir / fname
+            # append raw content
+            with open(str(target), 'a', encoding='utf-8') as fh:
+                if not content.endswith('\n'):
+                    content = content + '\n'
+                fh.write(content)
+            saved_path = str(target)
+
+        # attempt to have bot ingest the content if supported
+        try:
+            bot = get_chat_bot()
+            entry = {'type': typ, 'name': Path(saved_path).name}
+            if hasattr(bot, 'ingest_resource'):
+                try:
+                    bot.ingest_resource('default', entry, content)
+                except Exception:
+                    app.logger.exception('Bot ingest failed')
+        except Exception:
+            app.logger.exception('Failed to call bot.ingest_resource')
+
+        return jsonify({'ok': True, 'saved': saved_path})
+    except Exception as e:
+        app.logger.exception('Upload ingest failed')
+        return jsonify({'error': str(e)}), 500
 @app.route('/api/echo/search')
 def api_echo_search():
 	try:
@@ -2595,6 +3548,24 @@ def personality_save():
 	except Exception as e:
 		app.logger.exception('Failed to save personality')
 		return jsonify({'error': str(e)}), 500
+
+
+@app.route('/web_ide')
+def web_ide():
+	"""Serve a local `web_ide.html` file if present to restore the Web IDE quickly.
+	Falls back to the root index if the file is missing.
+	"""
+	try:
+		p = Path(__file__).resolve().parent / 'web_ide.html'
+		if p.exists():
+			return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+	except Exception:
+		app.logger.exception('Failed to serve web_ide.html')
+	# Fall back to main index route if available
+	try:
+		return redirect(url_for('index'))
+	except Exception:
+		return ('Web IDE not available', 404)
 if __name__=='__main__':
 	import argparse
 	parser=argparse.ArgumentParser(description='MasterChief DevOps Platform')

@@ -1,0 +1,586 @@
+<!doctype html>
+<html>
+	<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>MasterChief - DevOps Platform</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;line-height:1.6;}
+header{background:#2d2d2d;padding:20px;margin-bottom:30px;border-bottom:3px solid #4CAF50;}
+h1{color:#4CAF50;font-size:2.5em;margin-bottom:10px;}
+.subtitle{color:#888;font-size:1.1em;}
+nav{background:#252525;padding:15px;margin-bottom:30px;border-radius:8px;}
+nav a{color:#4CAF50;text-decoration:none;margin-right:20px;padding:8px 15px;border-radius:5px;display:inline-block;transition:all 0.3s;}
+nav a:hover,nav a.active{background:#4CAF50;color:#fff;}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-bottom:30px;}
+.card{background:#2d2d2d;padding:25px;border-radius:10px;border-left:4px solid #4CAF50;box-shadow:0 4px 6px rgba(0,0,0,0.3);}
+.card h3{color:#4CAF50;margin-bottom:15px;font-size:1.4em;}
+.stat-value{font-size:2.5em;font-weight:bold;color:#fff;margin:10px 0;}
+.stat-label{color:#888;font-size:0.9em;text-transform:uppercase;}
+.progress-bar{background:#1a1a1a;height:20px;border-radius:10px;overflow:hidden;margin:10px 0;}
+.progress-fill{background:linear-gradient(90deg,#4CAF50,#8BC34A);height:100%;transition:width 0.3s;}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #3a3a3a;}
+th{background:#252525;color:#4CAF50;font-weight:bold;}
+tr:hover{background:#333;}
+.btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;transition:all 0.3s;}
+.btn:hover{background:#45a049;transform:translateY(-2px);}
+.btn-danger{background:#f44336;}
+.btn-danger:hover{background:#da190b;}
+.btn-warning{background:#ff9800;}
+.btn-warning:hover{background:#e68900;}
+.btn-info{background:#2196F3;}
+.btn-info:hover{background:#0b7dda;}
+.form-group{margin-bottom:20px;}
+label{display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;}
+input,textarea,select{width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#4CAF50;}
+.section{background:#2d2d2d;padding:25px;border-radius:10px;margin-bottom:25px;}
+.status-badge{padding:5px 12px;border-radius:15px;font-size:0.85em;font-weight:bold;}
+.status-running{background:#4CAF50;color:#fff;}
+.status-stopped{background:#f44336;color:#fff;}
+.alert{padding:15px;margin-bottom:20px;border-radius:5px;border-left:4px solid;}
+.alert-success{background:#1b5e20;border-color:#4CAF50;color:#c8e6c9;}
+.alert-error{background:#b71c1c;border-color:#f44336;color:#ffcdd2;}
+.alert-info{background:#0d47a1;border-color:#2196F3;color:#bbdefb;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;}
+.modal-content{background:#2d2d2d;margin:50px auto;padding:30px;border-radius:10px;max-width:600px;position:relative;}
+.close{position:absolute;top:15px;right:20px;font-size:30px;cursor:pointer;color:#888;}
+.close:hover{color:#4CAF50;}
+pre{background:#1a1a1a;padding:15px;border-radius:5px;overflow-x:auto;border-left:3px solid #4CAF50;}
+code{color:#4CAF50;}
+.file-upload{border:2px dashed #4CAF50;padding:40px;text-align:center;border-radius:10px;cursor:pointer;transition:all 0.3s;}
+.file-upload:hover{background:#252525;border-color:#8BC34A;}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>⚡ MasterChief</h1>
+<p class="subtitle">DevOps Automation Platform</p>
+</header>
+<nav>
+<a href="/" class="">Dashboard</a>
+<a href="/echo-chat" class="">🌙 Echo Chat</a>
+<a href="/api/v1/chat/db" class="">Chat DB</a>
+<a href="/jamroom" class="">Jamroom Sites</a>
+<a href="/shoutcast" class="">Shoutcast/Icecast</a>
+<a href="/scripts" class="">Scripts</a>
+<a href="/processes" class="">Processes</a>
+<a href="/services" class="">Services</a>
+<a href="/addons" class="">Addons</a>
+<a href="/demo/azure-ui" class="">Demo: Azure</a>
+<a href="/demo/ado-ui" class="">Demo: ADO</a>
+<a href="/ide/ado_admin" class="">ADO Admin</a>
+</nav>
+
+
+
+
+
+<h3>Web IDE / Script Manager</h3>
+<div style="display:flex;gap:12px;align-items:flex-start;">
+	<div style="width:280px;border:1px solid #ccc;padding:8px;">
+		<h4>Files</h4>
+		<div id="ideFiles">(loading...)</div>
+		<div style="margin-top:8px;">
+			<button onclick="loadTree('')" class="btn">Refresh Tree</button>
+		</div>
+		<hr>
+		<div style="margin-top:8px;">
+			<label>CLI / Run (command or script path relative to scripts/):</label>
+			<input id="cliCommand" placeholder="python my_script.py or ./deploy.sh" style="width:100%;margin-top:6px">
+			<div style="margin-top:6px;display:flex;gap:6px;"><button onclick="runAsync()" class="btn">Run Async</button><button onclick="runSync()" class="btn btn-warning">Run Sync</button></div>
+			<div id="jobList" style="margin-top:8px;max-height:200px;overflow:auto;background:#0b0b0b;padding:6px;border-radius:6px;"></div>
+		</div>
+		<hr>
+		<input id="newName" placeholder="new-file.sh" style="width:100%;margin-bottom:6px"><button onclick="createNew()">New</button>
+		<div style="margin-top:8px;">
+			<label>Shell: <select id="ideShell"><option value="bash">bash</option><option value="powershell">powershell</option><option value="python">python</option></select></label>
+		</div>
+		<div style="margin-top:8px;">
+			<label><input type="checkbox" id="ideVerbose"> Verbose output</label><br>
+			<label><input type="checkbox" id="ideRemote"> Remote exec</label><br>
+			<label>Remote method: <select id="ideRemoteMethod"><option value="ssh">ssh</option><option value="psremoting">psremoting</option></select></label><br>
+			<input id="ideRemoteTarget" placeholder="host (for ssh use user@host)" style="width:100%"><br>
+			<input id="ideRemoteUser" placeholder="remote username" style="width:100%;margin-top:6px"><br>
+			<input id="ideRemotePass" placeholder="remote password" type="password" style="width:100%;margin-top:6px"><br>
+			<button onclick="saveRemoteCreds()">Save Creds</button>
+			<button onclick="loadRemoteCreds()">Load Creds</button>
+		</div>
+		<hr>
+		<button onclick="ideSave()">Save</button>
+		<button onclick="ideRun()">Run</button>
+		<button onclick="ideUpload()">Upload</button>
+		<button onclick="ideRefresh()">Refresh</button>
+	</div>
+	<div style="flex:1;display:flex;flex-direction:column;">
+		<textarea id="ideEditor" style="width:100%;height:420px;font-family:monospace;padding:8px;"></textarea>
+		<div style="margin-top:6px;display:flex;gap:8px;align-items:center;">
+			<button onclick="copyOutput()">Copy Output</button>
+			<button onclick="clearOutput()">Clear</button>
+			<button onclick="toggleVerboseUI()">Toggle Verbose</button>
+			<span id="ideStatus" style="color:#6c6;margin-left:8px"></span>
+		</div>
+		<div style="margin-top:8px;border:1px solid #333;padding:8px;height:220px;overflow:auto;background:#111;color:#eee;">
+			<pre id="ideOutput" style="white-space:pre-wrap;word-break:break-word;margin:0;font-family:monospace;"></pre>
+		</div>
+	</div>
+	<div style="width:360px;border:1px solid #ccc;padding:8px;">
+		<h4>Azure Module</h4>
+		<div style="display:flex;gap:6px;">
+			<button onclick="azLogin(true)">AZ Login (device)</button>
+			<button onclick="azCheck()">Check Account</button>
+			<button onclick="azResources()">List Resources</button>
+			<button onclick="azArmResources()">ARM Resources</button>
+			<button onclick="azArmTable()">ARM Table</button>
+			<hr>
+			<div style="margin-top:8px;padding:6px;border-top:1px dashed #ccc;">
+				<h5>Azure DevOps (ADO)</h5>
+				<label>Organization / URL: <input id="ado_org" placeholder="https://dev.azure.com/yourorg" style="width:240px"></label><br>
+				<label>Pipeline ID: <input id="ado_pipeline_id" placeholder="pipeline id" style="width:120px"></label>
+				<div style="margin-top:6px;display:flex;gap:6px;align-items:center;">
+					<button onclick="adoListProjects()">List Projects</button>
+					<button onclick="adoListPipelines()">List Pipelines</button>
+					<button onclick="adoTriggerPipeline()">Trigger Pipeline</button>
+					<button onclick="openAddons()">Open Addons</button>
+					<button onclick="triggerWithTemplate()">Trigger w/ Template</button>
+					<button onclick="adoWizardCreate()">Pipeline Wizard</button>
+					<button onclick="installAz()">Install az CLI</button>
+				</div>
+			</div>
+		</div>
+		<div id="azStatus" style="margin-top:8px;color:#8f8"></div>
+		<div id="azResources" style="margin-top:8px;max-height:240px;overflow:auto;background:#fff;color:#000;padding:6px;"></div>
+		<div style="margin-top:8px;">
+			<table id="az_table" style="width:100%;border-collapse:collapse;background:#fff;color:#000;"></table>
+		</div>
+	</div>
+</div>
+<script>
+async function ideRefresh(){
+	const el = document.getElementById('ideFiles');
+	try{
+		el.textContent = 'Loading...';
+		const r = await fetch('/api/ide/scripts');
+		if(!r.ok){ el.textContent = 'Failed to load scripts: HTTP '+r.status; return }
+		const j = await r.json();
+		if(!j || !j.files){ el.textContent = 'No scripts found'; }
+		el.innerHTML = '';
+		(j.files||[]).forEach(f=>{
+			const d = document.createElement('div'); d.style.padding='4px'; d.style.borderBottom='1px dashed #ccc';
+			d.innerHTML = `<a href="#" onclick="loadFile('${encodeURIComponent(f.name)}');return false">${f.name}</a>`;
+			el.appendChild(d);
+		});
+		// also refresh tree
+		loadTree('');
+	}catch(e){
+		console.error(e);
+		el.textContent = 'Failed to load scripts: '+e;
+	}
+}
+
+async function loadTree(path){
+	try{
+		const r = await fetch('/api/ide/tree?path='+encodeURIComponent(path||''));
+		const j = await r.json();
+		const el = document.getElementById('ideFiles');
+		// render simple tree
+		const tree = document.createElement('div');
+		tree.style.maxHeight='280px'; tree.style.overflow='auto';
+		if(!j.ok) { el.appendChild(document.createTextNode('Failed to load tree')); return }
+		j.nodes.forEach(n=>{
+			const row = document.createElement('div'); row.style.padding='4px'; row.style.borderBottom='1px dashed #222';
+			if(n.type==='dir'){
+				row.innerHTML = `<strong>${n.name}/</strong> <button onclick="loadTree('${encodeURIComponent(n.path)}')">Open</button>`;
+			} else {
+				row.innerHTML = `<a href='#' onclick="loadFile('${encodeURIComponent(n.path)}');return false">${n.name}</a> <small style='color:#999'>${n.size} bytes</small>`;
+			}
+			tree.appendChild(row);
+		});
+		// replace ideFiles content but keep top controls
+		// keep first child (existing header) then append tree
+		el.innerHTML='';
+		el.appendChild(tree);
+	}catch(e){ console.error(e); }
+}
+
+async function runAsync(){
+	const cmd = document.getElementById('cliCommand').value || '';
+	if(!cmd){ appendOutput('\n[error] Enter command or script path\n'); return }
+	try{
+		const r = await fetch('/api/ide/exec_async',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})});
+		if(!r.ok){ appendOutput('\n[error] Failed to start: HTTP '+r.status+'\n'); return }
+		const j = await r.json();
+		if(!j.ok){ appendOutput('\n[error] Failed to start: '+(j.error||JSON.stringify(j))+'\n'); return }
+		addJobToList(j.exec_id);
+		appendOutput('\n[info] Started async job '+j.exec_id+'\n');
+	}catch(e){ appendOutput('\n[error] Exec async failed: '+e+'\n'); }
+}
+
+async function runSync(){
+	const cmd = document.getElementById('cliCommand').value || '';
+	if(!cmd){ appendOutput('\n[error] Enter command or script path\n'); return }
+	appendOutput('\n--- Running (sync) '+cmd+' ---\n');
+	const r = await fetch('/api/ide/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:cmd})});
+	const j = await r.json();
+	if(j.ok){ appendOutput(j.stdout||''); if(j.stderr) appendOutput('\n[stderr]\n'+j.stderr); appendOutput('\n--- EXIT '+j.returncode+' ---\n'); }
+	else appendOutput('\n[error] '+(j.error||JSON.stringify(j))+'\n');
+}
+
+function addJobToList(exec_id){
+	const list = document.getElementById('jobList');
+	const row = document.createElement('div'); row.id = 'job-'+exec_id; row.style.borderBottom='1px dashed #222'; row.style.padding='6px';
+	row.innerHTML = `<div><strong>${exec_id}</strong> <span id="job-status-${exec_id}">queued</span> <button onclick="viewJob('${exec_id}')">View</button></div><pre id="job-out-${exec_id}" style="white-space:pre-wrap;max-height:120px;overflow:auto;"></pre>`;
+	list.prepend(row);
+	// start polling
+	const iv = setInterval(async ()=>{
+		try{
+			const r = await fetch('/api/ide/exec_status?exec_id='+encodeURIComponent(exec_id));
+			if(!r.ok){ document.getElementById('job-status-'+exec_id).textContent = 'error'; appendOutput('\n[job error] HTTP '+r.status+' for '+exec_id+'\n'); clearInterval(iv); return }
+			const j = await r.json();
+			if(!j.ok){ document.getElementById('job-status-'+exec_id).textContent = 'error'; appendOutput('\n[job error] '+(j.error||'unknown')+'\n'); clearInterval(iv); return }
+			document.getElementById('job-status-'+exec_id).textContent = j.job.status;
+			document.getElementById('job-out-'+exec_id).textContent = (j.job.stdout||'') + (j.job.stderr?('\n[stderr]\n'+j.job.stderr):'');
+			if(j.job.status==='finished' || j.job.status==='error') clearInterval(iv);
+		}catch(e){ document.getElementById('job-status-'+exec_id).textContent = 'error'; appendOutput('\n[job poll error] '+e+'\n'); clearInterval(iv); }
+	}, 1500);
+}
+
+async function viewJob(exec_id){
+	try{
+		const r = await fetch('/api/ide/exec_status?exec_id='+encodeURIComponent(exec_id));
+		if(!r.ok){ appendOutput('\n[error] Job not found (HTTP '+r.status+')\n'); return }
+		const j = await r.json();
+		if(!j.ok){ appendOutput('\n[error] Job not found: '+(j.error||'')+'\n'); return }
+		const out = j.job.stdout||'';
+		const err = j.job.stderr||'';
+		appendOutput('\n--- Job '+exec_id+' ---\n'+out+'\n'+(err?('\n[stderr]\n'+err):'')+'\n');
+	}catch(e){ appendOutput('\n[error] viewJob failed: '+e+'\n'); }
+}
+async function loadFile(name){
+	name = decodeURIComponent(name);
+	try{
+		const r = await fetch('/api/ide/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})});
+		if(!r.ok){ appendOutput('\n[error] Load failed: HTTP '+r.status+'\n'); return }
+		const j = await r.json();
+		if(j.ok){ document.getElementById('ideEditor').value = j.content; document.getElementById('ideStatus').textContent = name; appendOutput('\n[info] Loaded '+name+'\n'); }
+		else appendOutput('\n[error] Load failed: '+(j.error||JSON.stringify(j))+'\n');
+	}catch(e){ appendOutput('\n[error] loadFile failed: '+e+'\n'); }
+}
+
+async function ideSave(){
+	let name = document.getElementById('ideStatus').textContent || '';
+	if(!name) name = prompt('Filename to save as');
+	if(!name) return appendOutput('\n[error] Save cancelled\n');
+	const content = document.getElementById('ideEditor').value;
+	try{
+		const r = await fetch('/api/ide/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name,content})});
+		if(!r.ok){ appendOutput('\n[error] Save failed: HTTP '+r.status+'\n'); return }
+		const j = await r.json();
+		if(j.ok){ ideRefresh(); document.getElementById('ideStatus').textContent = name; appendOutput('\n[info] Saved '+name+'\n'); }
+		else appendOutput('\n[error] Save failed: '+(j.error||JSON.stringify(j))+'\n');
+	}catch(e){ appendOutput('\n[error] ideSave failed: '+e+'\n'); }
+}
+'); const r=await fetch('/api/ide/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json(); if(j.ok){ appendOutput(j.stdout||''); if(j.stderr) appendOutput('
+[stderr]
+'+j.stderr); appendOutput('
+'); } else { appendOutput('
+[error] '+(j.error||JSON.stringify(j))+'
+'); }
+async function ideRun(){
+	const name = document.getElementById('ideStatus').textContent || '';
+	const content = document.getElementById('ideEditor').value;
+	const shell = document.getElementById('ideShell').value;
+	const verbose = document.getElementById('ideVerbose').checked;
+	const remote = document.getElementById('ideRemote').checked;
+	const target = document.getElementById('ideRemoteTarget').value;
+	const payload = {shell, verbose, remote, remote_target: target};
+	if (name) payload.filename = name;
+	payload.content = content;
+	appendOutput('\n--- Executing ---\n');
+	const r = await fetch('/api/ide/execute', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+	const j = await r.json();
+	if (j.ok) {
+		appendOutput(j.stdout || '');
+		if (j.stderr) appendOutput('\n[stderr]\n' + j.stderr);
+		appendOutput('\n--- EXIT ' + j.returncode + ' ---\n');
+	} else {
+		appendOutput('\n[error] ' + (j.error || JSON.stringify(j)) + '\n');
+	}
+}
+async function saveRemoteCreds(){
+	const target=document.getElementById('ideRemoteTarget').value; const user=document.getElementById('ideRemoteUser').value; const pw=document.getElementById('ideRemotePass').value;
+	if(!target||!user||!pw){ appendOutput('\n[error] target,user,password required\n'); return; }
+	try{
+		const r = await fetch('/api/ide/remote/creds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,username:user,password:pw})});
+		if(!r.ok){ appendOutput('\n[error] Save creds failed: HTTP '+r.status+'\n'); return }
+		const j = await r.json();
+		if(j.ok) appendOutput('\n[info] Saved remote creds for '+target+'\n'); else appendOutput('\n[error] Save failed: '+(j.error||JSON.stringify(j))+'\n');
+	}catch(e){ appendOutput('\n[error] saveRemoteCreds failed: '+e+'\n'); }
+}
+
+async function loadRemoteCreds(){
+	const target=document.getElementById('ideRemoteTarget').value;
+	if(!target){ appendOutput('\n[error] enter target host to load\n'); return; }
+	try{
+		const r = await fetch('/api/ide/remote/creds?target='+encodeURIComponent(target));
+		if(!r.ok){ appendOutput('\n[error] Load creds failed: HTTP '+r.status+'\n'); return }
+		const j = await r.json();
+		if(j.ok && j.cred){ document.getElementById('ideRemoteUser').value = j.cred.username||''; document.getElementById('ideRemotePass').value = j.cred.password||''; appendOutput('\n[info] Loaded creds for '+target+'\n'); }
+		else appendOutput('\n[info] No creds found for '+target+'\n');
+	}catch(e){ appendOutput('\n[error] loadRemoteCreds failed: '+e+'\n'); }
+}
+async function azArmResources(){ document.getElementById('azResources').textContent='loading...'; const r=await fetch('/api/ide/azure/arm_resources'); const j=await r.json(); if(j.ok){ document.getElementById('azResources').textContent = JSON.stringify(j.resources, null, 2); } else { document.getElementById('azResources').textContent = 'Error: '+(j.error||JSON.stringify(j)); } }
+function appendOutput(s){ const o=document.getElementById('ideOutput'); o.textContent += s; o.parentElement.scrollTop = o.parentElement.scrollHeight; }
+function clearOutput(){ document.getElementById('ideOutput').textContent=''; }
+function copyOutput(){ const t=document.getElementById('ideOutput').textContent; if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>appendOutput('\n[info] Copied output to clipboard\n')).catch(e=>appendOutput('\n[error] Clipboard copy failed: '+e+'\n')); } else { appendOutput('\n[error] Clipboard API not available\n'); } }
+function createNew(){ const n=document.getElementById('newName').value || prompt('Filename'); if(!n) return appendOutput('\n[info] Create cancelled\n'); document.getElementById('ideStatus').textContent = n; document.getElementById('ideEditor').value = ''; appendOutput('\n[info] New file: '+n+'\n'); }
+async function ideUpload(){ appendOutput('\n[info] Use Save to write into scripts folder on the server\n'); }
+function toggleVerboseUI(){ const v = document.getElementById('ideVerbose'); v.checked = !v.checked; }
+async function azLogin(device=false){ const r=await fetch('/api/ide/azure/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({use_device_code:device})}); const j=await r.json(); document.getElementById('azStatus').textContent = j.message || JSON.stringify(j); }
+async function azCheck(){ const r=await fetch('/api/ide/azure/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({check:true})}); const j=await r.json(); document.getElementById('azStatus').textContent = j.message || JSON.stringify(j); }
+async function azResources(){ document.getElementById('azResources').textContent='loading...'; const r=await fetch('/api/ide/azure/resources'); const j=await r.json(); document.getElementById('azResources').textContent = JSON.stringify(j, null, 2); }
+async function installAz(){ if(!confirm('Attempt to install Azure CLI on this host? This may require admin privileges. Continue?')) return; document.getElementById('azStatus').textContent='Installing az CLI...'; const r = await fetch('/api/addons/install_ado',{method:'POST'}); const j = await r.json(); document.getElementById('azStatus').textContent = j.message || JSON.stringify(j); }
+function renderArmTable(resources) {
+	const table = document.getElementById('az_table')
+	table.innerHTML = ''
+	const header = document.createElement('tr')
+	['Type','Name','ResourceGroup','Location','Details'].forEach(h=>{
+		const th = document.createElement('th'); th.textContent = h; th.style.border='1px solid #ddd'; th.style.padding='6px'; header.appendChild(th)
+	})
+	table.appendChild(header)
+	(resources||[]).forEach(r => {
+		const tr = document.createElement('tr')
+		const type = document.createElement('td'); type.textContent = r.type || r.kind || ''
+		const name = document.createElement('td'); name.textContent = r.name || ''
+		const rg = document.createElement('td'); rg.textContent = r.resourceGroup || r.resource_group || ''
+		const loc = document.createElement('td'); loc.textContent = r.location || ''
+		const details = document.createElement('td'); details.textContent = JSON.stringify(r, null, 0)
+		[type,name,rg,loc,details].forEach(td=>{ td.style.border='1px solid #eee'; td.style.padding='6px'; tr.appendChild(td) })
+		table.appendChild(tr)
+	})
+}
+
+function azArmTable() {
+	document.getElementById('azResources').textContent='loading...';
+	fetch('/api/ide/azure/arm_resources').then(r=>r.json()).then(j=>{
+		if(j.ok && j.resources){
+			// aggregate arrays from j.resources (subscriptions, resource_groups, vnets, storage_accounts)
+			const aggregate=[]
+			Object.values(j.resources).forEach(val=>{
+				if(Array.isArray(val)) aggregate.push(...val)
+				else if(typeof val === 'object'){
+					Object.values(val).forEach(v=>{ if(Array.isArray(v)) aggregate.push(...v) })
+				}
+			})
+			renderArmTable(aggregate)
+			document.getElementById('azResources').textContent = ''
+		} else {
+			document.getElementById('azResources').textContent = JSON.stringify(j, null, 2)
+		}
+	}).catch(e=>{ document.getElementById('azResources').textContent = 'Error: '+e })
+}
+
+// ADO integration helpers
+async function adoListProjects(){ document.getElementById('azResources').textContent='loading...'; const org = document.getElementById('ado_org').value || ''; const r = await fetch('/api/ide/ado/projects?org='+encodeURIComponent(org)); const j = await r.json(); document.getElementById('azResources').textContent = JSON.stringify(j, null, 2); }
+
+async function adoListPipelines(){ document.getElementById('azResources').textContent='loading...'; const org = document.getElementById('ado_org').value || ''; const r = await fetch('/api/ide/ado/pipelines?org='+encodeURIComponent(org)); const j = await r.json(); document.getElementById('azResources').textContent = JSON.stringify(j, null, 2); }
+
+async function adoTriggerPipeline(){ const org = document.getElementById('ado_org').value || ''; const id = document.getElementById('ado_pipeline_id').value || ''; if(!id){ appendOutput('\n[error] enter pipeline id\n'); return } const r = await fetch('/api/ide/ado/trigger',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({org,id})}); const j = await r.json(); document.getElementById('azResources').textContent = JSON.stringify(j, null, 2); }
+
+async function openAddons(){
+	// render modal container if missing
+	if(!document.getElementById('addonsModal')){
+		const modal = document.createElement('div');
+		modal.id = 'addonsModal';
+		modal.style.position = 'fixed';
+		modal.style.left = '0'; modal.style.top = '0'; modal.style.width = '100%'; modal.style.height = '100%';
+		modal.style.background = 'rgba(0,0,0,0.6)'; modal.style.zIndex = 9999; modal.style.display = 'flex';
+		modal.style.alignItems = 'center'; modal.style.justifyContent = 'center';
+		modal.innerHTML = `<div id="addonsModalContent" style="width:900px;max-width:95%;background:#111;color:#eee;padding:12px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.8);">
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><h3 style="margin:0">Addons Explorer</h3><button id="addonsCloseBtn" style="background:#333;color:#fff;border:none;padding:6px 10px;cursor:pointer">Close</button></div>
+			<div style="display:flex;gap:12px;">
+				<div style="width:260px;border-right:1px solid #333;padding-right:8px;max-height:60vh;overflow:auto;" id="addonsList">Loading...</div>
+				<div style="flex:1;padding-left:8px;max-height:60vh;overflow:auto;" id="addonsDetail">Select an addon to view files</div>
+			</div>
+			</div>`;
+		document.body.appendChild(modal);
+		document.getElementById('addonsCloseBtn').onclick = ()=>{ document.getElementById('addonsModal').remove(); };
+	}
+	document.getElementById('addonsModal').style.display = 'flex';
+	await loadAddonsList();
+}
+
+async function loadAddonsList(){
+	const el = document.getElementById('addonsList'); el.innerHTML = 'Loading...';
+	try{
+		const r = await fetch('/api/addons/list'); const j = await r.json();
+		if(!j.ok) return el.textContent = 'Failed to load';
+		el.innerHTML = '';
+		(j.addons||[]).forEach(a=>{
+			const d = document.createElement('div'); d.style.padding='6px'; d.style.borderBottom='1px solid #222';
+			d.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;"><strong>${a.name}</strong><button data-name="${a.name}" style="padding:4px 6px">Browse</button></div><div style="font-size:0.85em;color:#9aa;">${a.description||''}</div>`;
+			d.querySelector('button').onclick = async function(){ const name=this.getAttribute('data-name'); await loadAddonFiles(name); };
+			el.appendChild(d);
+		});
+	}catch(e){ el.textContent = 'Error: '+e }
+}
+
+async function loadAddonFiles(addon){
+	const det = document.getElementById('addonsDetail'); det.innerHTML = 'Loading files...';
+	try{
+		const r = await fetch('/api/addons/browse?addon='+encodeURIComponent(addon)); const j = await r.json();
+		if(!j.ok) return det.textContent = 'Failed to list files';
+		const list = j.files||[];
+		det.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><strong>Files for ${addon}</strong><button id="applyParamsBtn" style="margin-left:auto;padding:6px">Apply Params (selected)</button></div><div id="filesList" style="max-height:48vh;overflow:auto;border-top:1px solid #222;padding-top:6px"></div><div id="fileContent" style="margin-top:8px;white-space:pre-wrap;font-family:monospace;background:#0b0b0b;padding:8px;border-radius:6px;max-height:30vh;overflow:auto"></div>`;
+		const filesEl = document.getElementById('filesList');
+		list.forEach(f=>{
+			const row = document.createElement('div'); row.style.padding='6px'; row.style.borderBottom='1px dashed #222';
+			row.innerHTML = `<div style="display:flex;gap:8px;align-items:center;"><input type="radio" name="addon_file" value="${f.path}"><div style="flex:1">${f.path}</div><button data-path="${f.path}">View</button></div>`;
+			row.querySelector('button').onclick = async function(){ const p=this.getAttribute('data-path'); const rr = await fetch('/api/addons/get_file?addon='+encodeURIComponent(addon)+'&path='+encodeURIComponent(p)); const jj = await rr.json(); if(jj.ok){ document.getElementById('fileContent').textContent = jj.content; } else { document.getElementById('fileContent').textContent = 'Error loading file: '+(jj.error||'') } };
+			filesEl.appendChild(row);
+		});
+			document.getElementById('applyParamsBtn').onclick = async function(){
+				const sel = document.querySelector('input[name=addon_file]:checked');
+				if(!sel){ appendOutput('\n[error] Select a file first\n'); return }
+				const p = sel.value;
+				try{
+					const ap = await fetch('/api/ide/addons/apply_params',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({addon:addon,path:p})});
+					const ar = await ap.json();
+					appendOutput('\n[info] Apply result: '+JSON.stringify(ar)+'\n');
+				}catch(e){ appendOutput('\n[error] Apply params failed: '+e+'\n'); }
+			}
+	}catch(e){ det.textContent = 'Error: '+e }
+}
+
+async function triggerWithTemplate(){
+	const id = document.getElementById('ado_pipeline_id').value || '';
+	if(!id){ appendOutput('\n[error] enter pipeline id\n'); return }
+	// load modified templates for first addon available
+	const list = await (await fetch('/api/addons/list')).json();
+	const addon = (list.addons && list.addons[0] && list.addons[0].name) ? list.addons[0].name : null;
+	if(!addon){ appendOutput('\n[error] no addons installed\n'); return }
+	const mods = await (await fetch('/api/addons/modified_list?addon='+encodeURIComponent(addon))).json();
+	const file = (mods.files && mods.files[0] && mods.files[0].name) ? mods.files[0].name : null;
+	if(!file){ appendOutput('\n[error] no modified templates for addon '+addon+'\n'); return }
+	// fetch saved file content
+	const r = await fetch('/api/addons/get_file?addon='+encodeURIComponent(addon)+'&path='+encodeURIComponent(file));
+	const j = await r.json();
+	if(!j.ok){ appendOutput('\n[error] failed to load template\n'); return }
+	let doc; try{ doc = JSON.parse(j.content); }catch(e){ appendOutput('\n[error] invalid json in saved template\n'); return }
+	const params = doc.parameters || {};
+	const values = {};
+	for(const k in params){ values[k] = params[k].defaultValue !== undefined ? params[k].defaultValue : '' }
+	// confirm parameters with user (basic)
+	if(!confirm('Trigger pipeline '+id+' with template '+file+' (parameters will be used as defaults). Continue?')) return;
+	const res = await fetch('/api/ide/ado/trigger',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id,parameters: values})});
+	const jr = await res.json(); document.getElementById('azResources').textContent = JSON.stringify(jr, null, 2);
+}
+
+async function adoWizardCreate(){ const org = document.getElementById('ado_org').value || ''; const name = prompt('Pipeline name?'); if(!name) return; const repo = prompt('Repository (name)'); if(!repo) return; const branch = prompt('Branch','main') || 'main'; const yml = prompt('YAML path in repo','/azure-pipelines.yml') || '/azure-pipelines.yml'; const r = await fetch('/api/ide/ado/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({org,name,repository:repo,branch,yml_path:yml})}); const j = await r.json(); document.getElementById('azResources').textContent = JSON.stringify(j, null, 2); }
+// Ensure refresh runs after DOM is ready
+window.addEventListener('DOMContentLoaded', ideRefresh);
+ideRefresh();
+</script>
+
+</div>
+<script>
+function confirmDelete(item){return confirm('Are you sure you want to delete '+item+'?');}
+function openModal(modalId){document.getElementById(modalId).style.display='block';}
+function closeModal(modalId){document.getElementById(modalId).style.display='none';}
+function refreshStats(){
+	fetch('/api/stats').then(r=>r.json()).then(data=>{
+		try{
+			const cpuValue = document.getElementById('cpu-value'); if(cpuValue) cpuValue.textContent = data.cpu.percent.toFixed(1)+'%';
+			const cpuProg = document.getElementById('cpu-progress'); if(cpuProg) cpuProg.style.width = data.cpu.percent+'%';
+			const memValue = document.getElementById('mem-value'); if(memValue) memValue.textContent = data.memory.percent.toFixed(1)+'%';
+			const memProg = document.getElementById('mem-progress'); if(memProg) memProg.style.width = data.memory.percent+'%';
+			const diskValue = document.getElementById('disk-value'); if(diskValue) diskValue.textContent = data.disk.percent.toFixed(1)+'%';
+			const diskProg = document.getElementById('disk-progress'); if(diskProg) diskProg.style.width = data.disk.percent+'%';
+		}catch(e){
+			console.error('Failed to apply stats to DOM:', e);
+			appendOutput('\n[stats error] '+e+'\n');
+		}
+	}).catch(err=>{ console.error('Failed to refresh stats:',err); appendOutput('\n[stats fetch error] '+err+'\n'); });
+}
+setInterval(refreshStats,5000);
+function refreshIndex(){
+	fetch('/scripts/refresh_index',{method:'POST'}).then(async r=>{
+		if(r.status===401){
+			// server requires admin token
+			let token = prompt('Admin token required to refresh index:');
+			if(!token){ appendOutput('\n[info] Refresh cancelled\n'); return }
+			try{
+				const r2 = await fetch('/scripts/refresh_index',{method:'POST',headers:{'X-ADMIN-TOKEN':token}});
+				const j2 = await r2.json();
+				if(j2.ok) location.reload(); else appendOutput('\n[error] Refresh failed: '+(j2.error||'unknown')+'\n');
+			}catch(e){ appendOutput('\n[error] Refresh error: '+e+'\n'); }
+		} else {
+			const j = await r.json();
+			if(j.ok){ location.reload(); } else { appendOutput('\n[error] Refresh failed: '+(j.error||'unknown')+'\n'); }
+		}
+	}).catch(e=>{ appendOutput('\n[error] Refresh error: '+e+'\n'); });
+}
+</script>
+<!-- Floating Action Buttons -->
+<div id="fabContainer" style="position:fixed;right:20px;bottom:20px;z-index:2000;display:flex;flex-direction:column;gap:10px;">
+		<button title="New" onclick="openModal('ideWizardModal')" style="border-radius:50%;width:56px;height:56px;font-size:20px;padding:0;display:flex;align-items:center;justify-content:center;background:#4CAF50;color:#fff;border:none;">+</button>
+		<button title="Save" onclick="ideSave()" style="border-radius:50%;width:48px;height:48px;background:#4CAF50;color:#fff;border:none;">💾</button>
+		<button title="Run" onclick="ideRun()" style="border-radius:50%;width:48px;height:48px;background:#4CAF50;color:#fff;border:none;">▶</button>
+		<button title="Files" onclick="ideRefresh()" style="border-radius:50%;width:48px;height:48px;background:#4CAF50;color:#fff;border:none;">📁</button>
+</div>
+
+<!-- IDE Wizard Modal -->
+<div id="ideWizardModal" class="modal">
+	<div class="modal-content">
+		<span class="close" onclick="closeModal('ideWizardModal')">&times;</span>
+		<h3>IDE Wizard</h3>
+		<div style="margin-top:8px;">
+			<label>Script name: <input id="wizard_name" placeholder="new-script.sh" style="width:100%;margin-top:6px"></label>
+		</div>
+		<div style="margin-top:8px;">
+			<label>Template:
+				<select id="wizard_template" style="width:100%;margin-top:6px">
+					<option value="bash">Bash: Hello</option>
+					<option value="powershell">PowerShell: Hello</option>
+					<option value="python">Python: Hello</option>
+					<option value="tf">Terraform: basic main.tf</option>
+					<option value="arm">ARM Template: skeleton</option>
+					<option value="js">Node.js: console</option>
+					<option value="csharp">C#: Console App</option>
+				</select>
+			</label>
+		</div>
+		<div style="margin-top:12px;display:flex;gap:8px;">
+			<button class="btn" onclick="applyWizard()">Create</button>
+			<button class="btn btn-warning" onclick="closeModal('ideWizardModal')">Cancel</button>
+		</div>
+	</div>
+</div>
+
+<script>
+function applyWizard(){
+	const name = document.getElementById('wizard_name').value || 'new-script.sh';
+	const tmpl = document.getElementById('wizard_template').value;
+	let content = '';
+	if(tmpl=='bash') content = '#!/bin/bash\n\necho "Hello from MasterChief"\n';
+	else if(tmpl=='powershell') content = '# PowerShell script\nWrite-Host "Hello from MasterChief"\n';
+	else if(tmpl=='python') content = '#!/usr/bin/env python3\nprint("Hello from MasterChief")\n';
+	else if(tmpl=='tf') content = 'terraform {\n  required_providers {\n    null = {\n      source = "hashicorp/null"\n    }\n  }\n}\n\nprovider "null" {}\n\nresource "null_resource" "example" {\n  provisioner "local-exec" {\n    command = "echo Hello from MasterChief"\n  }\n}\n';
+	else if(tmpl=='arm') content = '{\n  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",\n  "contentVersion": "1.0.0.0",\n  "resources": [\n    {\n      "type": "Microsoft.Resources/deployments",\n      "apiVersion": "2021-04-01",\n      "name": "example",\n      "properties": {\n        "mode": "Incremental",\n        "template": {\n          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",\n          "contentVersion": "1.0.0.0",\n          "resources": []\n        }\n      }\n    }\n  ]\n}\n';
+	else if(tmpl=='js') content = 'console.log("Hello from MasterChief");\n';
+	else if(tmpl=='csharp') content = 'using System;\nclass Program {\n  static void Main(string[] args) {\n    Console.WriteLine("Hello from MasterChief");\n  }\n}\n';
+	// ensure extension matches template if not provided
+	const extMap = {bash:'.sh', powershell:'.ps1', python:'.py', tf:'.tf', arm:'.json', js:'.js', csharp:'.cs'};
+	let finalName = name;
+	const sel = tmpl;
+	if(!finalName.includes('.') && extMap[sel]) finalName = finalName + extMap[sel];
+	document.getElementById('ideEditor').value = content;
+	document.getElementById('ideStatus').textContent = finalName;
+	closeModal('ideWizardModal');
+}
+</script>
+</body>
+</html>

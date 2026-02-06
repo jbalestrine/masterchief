@@ -17,6 +17,10 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 import os
 import re
+import subprocess
+import sys
+import glob
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +262,15 @@ class EchoChatBot:
         }
         
         logger.info("EchoChatBot initialized")
+
+        # Try to discover a local GGUF model for optional LLM-backed responses.
+        self._local_model_path = None
+        try:
+            self._local_model_path = self._find_local_model()
+            if self._local_model_path:
+                logger.info(f"Discovered local model: {self._local_model_path}")
+        except Exception:
+            self._local_model_path = None
     
     def chat(self, user_message: str, session_id: str = "default") -> Dict[str, Any]:
         """
@@ -339,10 +352,90 @@ class EchoChatBot:
         
         # DevOps related queries
         if self._is_devops_query(msg_lower):
+            # Prefer LLM-generated response for DevOps queries when available
+            try:
+                if self._local_model_path:
+                    llm_out = self._generate_with_local_llm(user_message, max_tokens=256, temperature=0.2)
+                    if llm_out:
+                        return llm_out
+            except Exception:
+                logger.exception('Local LLM generation failed, falling back to rule-based')
             return self._handle_devops_query(user_message)
         
         # Default unknown response
+        # Try LLM fallback for complex queries when a local model is available
+        if self._local_model_path:
+            try:
+                out = self._generate_with_local_llm(user_message, max_tokens=200, temperature=0.7)
+                if out:
+                    return out
+            except Exception:
+                logger.exception('Local LLM fallback failed')
+
         return self._random_choice(self.default_responses['unknown'])
+
+    def _find_local_model(self) -> Optional[str]:
+        """Attempt to locate a local GGUF model file.
+
+        Search order:
+        - Environment variable `ECHO_MODEL_PATH`
+        - `models/*.gguf` under project root
+        Returns absolute path or None.
+        """
+        # 1) Env var
+        path = os.environ.get('ECHO_MODEL_PATH') or os.environ.get('ECHO_GGUF')
+        if path:
+            if os.path.isabs(path):
+                if os.path.exists(path):
+                    return path
+            else:
+                p = os.path.join(os.getcwd(), path)
+                if os.path.exists(p):
+                    return p
+
+        # 2) common models directory
+        base = os.path.join(os.getcwd(), 'models')
+        try:
+            matches = glob.glob(os.path.join(base, '**', '*.gguf'), recursive=True)
+            if matches:
+                # prefer the first (sorted) match
+                matches = sorted(matches)
+                return os.path.abspath(matches[0])
+        except Exception:
+            pass
+
+        return None
+
+    def _generate_with_local_llm(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> Optional[str]:
+        """Generate text using the bundled `echo/llm_worker.py` subprocess.
+
+        This avoids importing native bindings into the web process and keeps
+        the model runtime isolated. Returns generated text or None on failure.
+        """
+        if not self._local_model_path:
+            return None
+
+        worker = os.path.join(os.path.dirname(__file__), 'llm_worker.py')
+        if not os.path.exists(worker):
+            return None
+
+        try:
+            cmd = [sys.executable, worker, '--model', self._local_model_path, '--max_tokens', str(int(max_tokens)), '--temperature', str(float(temperature))]
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout, stderr = proc.communicate(prompt, timeout=60)
+            if stderr:
+                logger.debug(f"LLM worker stderr: {stderr}")
+            if not stdout:
+                return None
+            try:
+                data = json.loads(stdout)
+                return data.get('text') or None
+            except Exception:
+                # If worker printed raw text, return it
+                return stdout.strip()
+        except Exception as e:
+            logger.exception('LLM worker invocation failed')
+            return None
     
     def _check_learned_patterns(self, message: str) -> Optional[str]:
         """
@@ -493,6 +586,70 @@ class EchoChatBot:
     def get_training_stats(self) -> Dict[str, Any]:
         """Get training statistics."""
         return self.training_store.get_stats()
+# Additional management methods
+    def set_local_model(self, path: str) -> bool:
+        """Set the local GGUF model path used by the LLM worker."""
+        try:
+            if path:
+                self._local_model_path = str(path)
+                logger.info(f"Local model path set to: {self._local_model_path}")
+                return True
+        except Exception:
+            logger.exception('Failed to set local model')
+        return False
+
+    def ingest_resource(self, session_id: str, entry: dict, content: str) -> bool:
+        """Ingest a resource uploaded via the UI into appropriate data stores.
+
+        entry: dict with at least {'type': 'personality'|'training', 'name': '...'}
+        """
+        try:
+            typ = (entry.get('type') if isinstance(entry, dict) else 'personality') or 'personality'
+            name = entry.get('name') if isinstance(entry, dict) else None
+            base = Path(__file__).parent / 'data'
+            if typ in ('personality', 'persona'):
+                pdir = base / 'personality'
+                pdir.mkdir(parents=True, exist_ok=True)
+                fname = name or f'{session_id}_{int(time.time())}.txt'
+                target = pdir / os.path.basename(fname)
+                target.write_text(content, encoding='utf-8')
+                logger.info(f'Persona saved: {target}')
+                return True
+
+            # training data
+            tdir = base / 'echo_training'
+            tdir.mkdir(parents=True, exist_ok=True)
+            fname = name or f'train_{int(time.time())}.jsonl'
+            target = tdir / os.path.basename(fname)
+            # Append content as-is; if JSON lines, preserve them
+            with open(str(target), 'a', encoding='utf-8') as fh:
+                if not content.endswith('\n'):
+                    content = content + '\n'
+                fh.write(content)
+
+            # Try to parse lines as JSON training examples and add to training store
+            try:
+                for line in content.splitlines():
+                    if not line.strip():
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        um = obj.get('user_message') or obj.get('input') or obj.get('prompt') or ''
+                        br = obj.get('bot_response') or obj.get('response') or ''
+                        if um:
+                            ex = TrainingExample(user_message=um, bot_response=br)
+                            self.training_store.add_example(ex)
+                    except Exception:
+                        # not JSON, skip
+                        pass
+            except Exception:
+                pass
+
+            logger.info(f'Training data appended: {target}')
+            return True
+        except Exception:
+            logger.exception('Ingest resource failed')
+            return False
 
 
 # Singleton instance
@@ -504,4 +661,12 @@ def get_chat_bot() -> EchoChatBot:
     global _chat_bot_instance
     if _chat_bot_instance is None:
         _chat_bot_instance = EchoChatBot()
+        # Apply a preferred default GGUF model if present in the models folder
+        try:
+            preferred = os.path.join(os.getcwd(), 'models', 'qwen2.5-7b-instruct-q4_k_m.gguf')
+            if os.path.exists(preferred):
+                _chat_bot_instance.set_local_model(preferred)
+                logger.info(f"Default model set to preferred model: {preferred}")
+        except Exception:
+            logger.exception('Failed to set preferred default model')
     return _chat_bot_instance

@@ -1,0 +1,9 @@
+{
+  "app": "inspircd",
+  "container": "inspircd",
+  "image": "inspircd/inspircd-docker:latest",
+  "ports": ["6667/tcp", "6697/tcp", "7000-7001/tcp"],
+  "host_ports": [6667, 6697],
+  "note": "Container recreated with host port mappings published (6667, 6697).",
+  "updated_at": "2026-01-20T00:00:00Z"
+}
