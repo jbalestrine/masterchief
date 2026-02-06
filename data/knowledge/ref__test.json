@@ -1,0 +1,11 @@
+{
+  "resource": {
+    "id": "ref:test",
+    "filename": "verify-ingest.txt",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\verify-ingest.txt"
+  },
+  "session_id": "manual_session",
+  "ingested_at": "2026-01-17T23:23:58.607667",
+  "text": "manual ingest content",
+  "summary": "manual ingest content"
+}

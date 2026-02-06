@@ -1,0 +1,31 @@
+/* Echo chat styles extracted from templates */
+:root{--bg:#0b0b0b;--muted:#eaeaea;--accent:#6a3bd6;--panel:#111;--muted-2:#2d2d2d}
+html,body{height:100%;margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--muted)}
+.container{max-width:1200px;margin:12px auto;padding:12px}
+nav.site-nav{display:flex;gap:12px;align-items:center;padding:10px;border-radius:6px;background:#0f0f0f;margin-bottom:12px;border:1px solid #111}
+nav.site-nav a{color:#9ec2ff;text-decoration:none;padding:6px 10px;border-radius:6px}
+nav.site-nav a:hover{background:#141414}
+nav.site-nav .brand{font-weight:700;color:#fff;margin-right:8px}
+/* Echo layout */
+.echo-container{display:flex;gap:12px;align-items:flex-start}
+.echo-sidebar{width:260px;background:var(--muted-2);padding:12px;border-radius:8px;color:#cfc}
+.echo-main{flex:1;display:flex;flex-direction:column;gap:8px;background:transparent}
+.chat-header{font-size:1.05em;margin-bottom:4px}
+#clientJsStatus{display:none;padding:8px;margin:8px 0;border-radius:6px;font-family:monospace;font-size:0.9em}
+.chat-messages{flex:1;overflow-y:auto;padding:12px;background:var(--panel);border-radius:8px;min-height:240px}
+.chat-message{display:flex;gap:8px;margin-bottom:8px;align-items:flex-start}
+.chat-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.chat-bubble{background:#1e1e1e;padding:10px 12px;border-radius:12px;color:#fff;max-width:80%}
+.chat-input-area{margin-top:8px}
+.chat-input-form{display:flex;gap:8px;align-items:center}
+.chat-input{flex:1;padding:10px;border-radius:20px;border:1px solid #444;background:#111;color:#fff}
+.send-btn{padding:10px 16px;border-radius:20px;border:none;background:var(--accent);color:#fff;cursor:pointer}
+.send-btn.clear{background:#444}
+.status-badge{padding:4px 8px;border-radius:6px;background:#333;color:#fff;font-size:0.9em}
+.echo-art img,.echo-art svg{max-width:100%;height:auto;display:block}
+@media(max-width:800px){.echo-container{flex-direction:column}.echo-sidebar{width:auto}}
+
+/* Conversation tabs */
+.conv-tabs{display:flex;gap:6px;align-items:center}
+.conv-tab{background:#141414;color:#ddd;border:1px solid #222;padding:6px 10px;border-radius:6px;cursor:pointer}
+.conv-tab.active{background:var(--accent);color:#fff}

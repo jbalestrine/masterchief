@@ -1,0 +1,11 @@
+<!-- Inspircd link/services example fragment
+Place this content into your inspircd conf (or mount it via docker) so InspIRCd will link to the services container.
+Adjust host, port and passwords to match Anope configuration.
+-->
+
+<link name="anope" sendpass="changeme" recvpass="changeme" host="127.0.0.1" port="6669" />
+
+<!-- If using local container networking, set host to the services container name or container IP. -->
+
+<!-- Optionally enable services module and config -->
+<module name="m_services" />

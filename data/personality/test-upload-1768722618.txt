@@ -1,0 +1,2 @@
+This is a test upload for training and ingestion.
+Verify ingest content for bot knowledge

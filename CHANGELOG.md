@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Training orchestration and UI (versioned release 1.2.1)
+  - `/echo-train` web UI to start, monitor, and cancel training jobs.
+  - Server-side training orchestration with stub and PEFT engine selection.
+  - `tools/peft_train.py` minimal PEFT/LoRA training wrapper (template).
+  - `tools/dataset_helpers.py` to convert resources into JSONL training examples.
+  - `/api/resources/convert_to_training` to generate training files from resources.
+  - Persistent training job metadata stored in `data/models_output/train_jobs.json`.
+  - Background cleanup/archiving for old training artifacts.
+
+### Changed
+- Upload/resource handling
+  - Server-side validation for resource uploads (allowed types, size limits, safe filenames).
+  - Resources index improvements and UI preview fixes.
+
+### Fixed
+- Several resource endpoint NameError issues and improved error handling for resource preview.
+
+## [1.2.1] - 2026-02-06
+
+### Added
+- Training orchestration (stub) and UI.
+- Dataset helpers for JSONL conversion.
+- Secure upload validation for resources.
+
+### Notes
+- The PEFT/LoRA training wrapper is a template; for efficient fine-tuning, GPU and additional dependencies are recommended. The default `stub` engine is suitable for CPU-only testing.
+
+
+### Added
 - **All-Inclusive Data Ingestion System for IRC Bot**
   - Comprehensive ingestion framework with base classes and manager
   - Webhook ingestion with support for:

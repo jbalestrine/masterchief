@@ -1,0 +1,101 @@
+{
+  "reference:verify-ingest.txt": {
+    "id": "reference:verify-ingest.txt",
+    "filename": "verify-ingest.txt",
+    "category": "reference",
+    "path": "c:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\verify-ingest.txt",
+    "for_training": false,
+    "for_ingestion": true,
+    "uploaded_at": "2026-01-17T23:23:38.929015",
+    "persona": false
+  },
+  "reference:verify-ingest-2.txt": {
+    "id": "reference:verify-ingest-2.txt",
+    "filename": "verify-ingest-2.txt",
+    "category": "reference",
+    "path": "c:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\verify-ingest-2.txt",
+    "for_training": false,
+    "for_ingestion": true,
+    "uploaded_at": "2026-01-17T23:24:13.591996"
+  },
+  "reference:test-upload-1768722618.txt": {
+    "id": "reference:test-upload-1768722618.txt",
+    "filename": "test-upload-1768722618.txt",
+    "category": "reference",
+    "path": "C:\\users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\test-upload-1768722618.txt",
+    "persona": true,
+    "for_training": true,
+    "for_ingestion": true,
+    "uploaded_at": "2026-01-17T23:50:18.846153"
+  },
+  "reference:echojson1_20260116_034529.txt": {
+    "id": "reference:echojson1_20260116_034529.txt",
+    "filename": "echojson1_20260116_034529.txt",
+    "category": "reference",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\echojson1_20260116_034529.txt",
+    "for_training": false,
+    "for_ingestion": true,
+    "persona": false,
+    "uploaded_at": "2026-01-18T01:51:44.550073"
+  },
+  "reference:echojson1_20260116_034529.txt.json": {
+    "id": "reference:echojson1_20260116_034529.txt.json",
+    "filename": "echojson1_20260116_034529.txt.json",
+    "category": "reference",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\echojson1_20260116_034529.txt.json",
+    "for_training": false,
+    "for_ingestion": true,
+    "persona": true,
+    "uploaded_at": "2026-01-18T01:51:44.550177"
+  },
+  "reference:echojson2_20260116_034548.json": {
+    "id": "reference:echojson2_20260116_034548.json",
+    "filename": "echojson2_20260116_034548.json",
+    "category": "reference",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\echojson2_20260116_034548.json",
+    "for_training": false,
+    "for_ingestion": true,
+    "persona": true,
+    "uploaded_at": "2026-01-18T01:51:44.550271"
+  },
+  "reference:echojson3_20260116_034603.json": {
+    "id": "reference:echojson3_20260116_034603.json",
+    "filename": "echojson3_20260116_034603.json",
+    "category": "reference",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\echojson3_20260116_034603.json",
+    "for_training": false,
+    "for_ingestion": true,
+    "persona": false,
+    "uploaded_at": "2026-01-18T01:51:44.550361"
+  },
+  "reference:echojson4_20260116_034621.json": {
+    "id": "reference:echojson4_20260116_034621.json",
+    "filename": "echojson4_20260116_034621.json",
+    "category": "reference",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\echojson4_20260116_034621.json",
+    "for_training": false,
+    "for_ingestion": true,
+    "persona": true,
+    "uploaded_at": "2026-01-18T01:51:44.550448"
+  },
+  "reference:echojson5_20260116_034639.json": {
+    "id": "reference:echojson5_20260116_034639.json",
+    "filename": "echojson5_20260116_034639.json",
+    "category": "reference",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\echojson5_20260116_034639.json",
+    "for_training": false,
+    "for_ingestion": true,
+    "persona": false,
+    "uploaded_at": "2026-01-18T01:51:44.550583"
+  },
+  "reference:master_ingestion_20260116_034222.json": {
+    "id": "reference:master_ingestion_20260116_034222.json",
+    "filename": "master_ingestion_20260116_034222.json",
+    "category": "reference",
+    "path": "C:\\Users\\Echo\\masterchief\\data\\uploads\\resources\\reference\\master_ingestion_20260116_034222.json",
+    "for_training": false,
+    "for_ingestion": true,
+    "persona": true,
+    "uploaded_at": "2026-01-18T01:51:44.550883"
+  }
+}
