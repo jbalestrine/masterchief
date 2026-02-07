@@ -511,10 +511,9 @@
     "bot_name": "the"
   },
   "testsession": {
-    "user_name": "joe",
     "session_id": "testsession",
-    "updated": "2026-01-18T08:58:25.233204+00:00",
-    "bot_name": "not"
+    "updated": 1770445906.5689282,
+    "topic_state": null
   },
   "web_1768727686043": {
     "loaded_resources": {
@@ -688,17 +687,9 @@
     }
   },
   "test_session": {
-    "ingestions": {
-      "task_1768732850232": {
-        "resource_id": "reference:echojson1_20260116_034529.txt",
-        "status": "done",
-        "bot_ingested": true,
-        "ingested_at": "2026-01-18T02:40:50.811365",
-        "preview": "{\n  \"segment\": 1,\n  \"range\": \"messages_001_050\",\n  \"conversation\": [\n    {\"timestamp\":\"2026-01-16T10"
-      }
-    },
     "session_id": "test_session",
-    "updated": "2026-01-18T10:40:50.812348+00:00"
+    "updated": 1770414246.6198165,
+    "topic_state": null
   },
   "web_1768751458482": {
     "loaded_resources": {
@@ -1111,5 +1102,210 @@
     "bot_name": "Echo",
     "session_id": "web_1769809501405",
     "updated": "2026-01-30T21:57:26.944618+00:00"
+  },
+  "default": {
+    "session_id": "default",
+    "updated": 1770445850.5278115,
+    "topic_state": null
+  },
+  "web_1770409488934": {
+    "session_id": "web_1770409488934",
+    "updated": 1770409629.633182,
+    "topic_state": null
+  },
+  "web_1770409877399": {
+    "session_id": "web_1770409877399",
+    "updated": 1770409999.1740403,
+    "topic_state": null
+  },
+  "web_1770410041931": {
+    "session_id": "web_1770410041931",
+    "updated": 1770410212.5464928,
+    "topic_state": null
+  },
+  "web_1770410219746": {
+    "session_id": "web_1770410219746",
+    "updated": 1770410313.2495162,
+    "topic_state": null
+  },
+  "web_1770410316547": {
+    "session_id": "web_1770410316547",
+    "updated": 1770410379.1390593,
+    "topic_state": null
+  },
+  "web_1770410387532": {
+    "session_id": "web_1770410387532",
+    "updated": 1770410387.5579722,
+    "topic_state": null
+  },
+  "web_1770410389914": {
+    "session_id": "web_1770410389914",
+    "updated": 1770410501.9030495,
+    "topic_state": null
+  },
+  "web_1770410570366": {
+    "session_id": "web_1770410570366",
+    "updated": 1770410654.9137592,
+    "topic_state": null
+  },
+  "web_1770410677317": {
+    "session_id": "web_1770410677317",
+    "updated": 1770410677.3574607,
+    "topic_state": null
+  },
+  "web_1770410680194": {
+    "session_id": "web_1770410680194",
+    "updated": 1770410686.1671736,
+    "topic_state": null
+  },
+  "web_1770410832109": {
+    "session_id": "web_1770410832109",
+    "updated": 1770410875.2450058,
+    "topic_state": null
+  },
+  "diag_1770410982": {
+    "session_id": "diag_1770410982",
+    "updated": 1770410982.820815,
+    "topic_state": null
+  },
+  "diag_1770411082": {
+    "session_id": "diag_1770411082",
+    "updated": 1770411082.6418998,
+    "topic_state": null
+  },
+  "web_1770411094043": {
+    "session_id": "web_1770411094043",
+    "updated": 1770411094.0878944,
+    "topic_state": null
+  },
+  "your_session": {
+    "session_id": "your_session",
+    "updated": 1770411158.6842165,
+    "topic_state": null
+  },
+  "web_1770411240682": {
+    "session_id": "web_1770411240682",
+    "updated": 1770411240.7065156,
+    "topic_state": null
+  },
+  "web_1770411242829": {
+    "session_id": "web_1770411242829",
+    "updated": 1770411313.5994513,
+    "topic_state": null
+  },
+  "web_1770411449591": {
+    "session_id": "web_1770411449591",
+    "updated": 1770411458.4170523,
+    "topic_state": null
+  },
+  "web_1770411480583": {
+    "session_id": "web_1770411480583",
+    "updated": 1770411770.7296875,
+    "topic_state": null
+  },
+  "web_1770412113613": {
+    "session_id": "web_1770412113613",
+    "updated": 1770412234.5736132,
+    "topic_state": null
+  },
+  "web_1770412287630": {
+    "session_id": "web_1770412287630",
+    "updated": 1770412465.5041869,
+    "topic_state": null
+  },
+  "web_1770412421789": {
+    "session_id": "web_1770412421789",
+    "updated": 1770412488.7115927,
+    "topic_state": null
+  },
+  "web_1770412494291": {
+    "session_id": "web_1770412494291",
+    "updated": 1770412650.8203497,
+    "topic_state": null
+  },
+  "web_1770413028375": {
+    "session_id": "web_1770413028375",
+    "updated": 1770413683.5659115,
+    "topic_state": null
+  },
+  "test_restore": {
+    "session_id": "test_restore",
+    "updated": 1770445876.2089157,
+    "topic_state": null
+  },
+  "web_1770429403683": {
+    "session_id": "web_1770429403683",
+    "updated": 1770429619.204007,
+    "topic_state": null
+  },
+  "web_1770429803903": {
+    "session_id": "web_1770429803903",
+    "updated": 1770430098.6554348,
+    "topic_state": null
+  },
+  "web_1770430201333": {
+    "session_id": "web_1770430201333",
+    "updated": 1770430267.0781858,
+    "topic_state": null
+  },
+  "web_1770430387643": {
+    "session_id": "web_1770430387643",
+    "updated": 1770430598.9381154,
+    "topic_state": null
+  },
+  "web_1770431573148": {
+    "session_id": "web_1770431573148",
+    "updated": 1770431911.2945273,
+    "topic_state": null
+  },
+  "agent_test": {
+    "session_id": "agent_test",
+    "updated": 1770431647.6971757,
+    "topic_state": null
+  },
+  "web_1770432490635": {
+    "session_id": "web_1770432490635",
+    "updated": 1770432583.4154274,
+    "topic_state": null
+  },
+  "web_1770434016139": {
+    "session_id": "web_1770434016139",
+    "updated": 1770434026.1347315,
+    "topic_state": null
+  },
+  "web_1770434114826": {
+    "session_id": "web_1770434114826",
+    "updated": 1770434140.984803,
+    "topic_state": null
+  },
+  "web_1770434998694": {
+    "session_id": "web_1770434998694",
+    "updated": 1770435003.6308663,
+    "topic_state": null
+  },
+  "web_1770435007447": {
+    "session_id": "web_1770435007447",
+    "updated": 1770435016.7028565,
+    "topic_state": null
+  },
+  "web_1770435216143": {
+    "session_id": "web_1770435216143",
+    "updated": 1770435233.19798,
+    "topic_state": null
+  },
+  "web_1770435425472": {
+    "session_id": "web_1770435425472",
+    "updated": 1770435637.2779665,
+    "topic_state": null
+  },
+  "web_1770476153463": {
+    "session_id": "web_1770476153463",
+    "updated": 1770476158.4341388,
+    "topic_state": null
+  },
+  "web_1770476204739": {
+    "session_id": "web_1770476204739",
+    "updated": 1770476227.641177,
+    "topic_state": null
   }
 }

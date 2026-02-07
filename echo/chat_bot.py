@@ -263,14 +263,10 @@ class EchoChatBot:
         
         logger.info("EchoChatBot initialized")
 
-        # Try to discover a local GGUF model for optional LLM-backed responses.
+        # Do not load or import LLM bindings at import time.
+        # The model path may be set later; loading must occur at runtime
+        # via the dedicated runtime loader in `echo.runtime.model_runtime`.
         self._local_model_path = None
-        try:
-            self._local_model_path = self._find_local_model()
-            if self._local_model_path:
-                logger.info(f"Discovered local model: {self._local_model_path}")
-        except Exception:
-            self._local_model_path = None
     
     def chat(self, user_message: str, session_id: str = "default") -> Dict[str, Any]:
         """
@@ -358,19 +354,27 @@ class EchoChatBot:
                     llm_out = self._generate_with_local_llm(user_message, max_tokens=256, temperature=0.2)
                     if llm_out:
                         return llm_out
+                    # try remote fallback if configured
+                    remote_out = self._generate_with_remote_llm(user_message, max_tokens=256, temperature=0.2)
+                    if remote_out:
+                        return remote_out
             except Exception:
-                logger.exception('Local LLM generation failed, falling back to rule-based')
+                logger.exception('LLM generation failed, falling back to rule-based')
             return self._handle_devops_query(user_message)
         
         # Default unknown response
         # Try LLM fallback for complex queries when a local model is available
-        if self._local_model_path:
-            try:
+        # Try local then remote LLM fallbacks before returning unknown response
+        try:
+            if self._local_model_path:
                 out = self._generate_with_local_llm(user_message, max_tokens=200, temperature=0.7)
                 if out:
                     return out
-            except Exception:
-                logger.exception('Local LLM fallback failed')
+            remote_out = self._generate_with_remote_llm(user_message, max_tokens=200, temperature=0.7)
+            if remote_out:
+                return remote_out
+        except Exception:
+            logger.exception('LLM fallback failed')
 
         return self._random_choice(self.default_responses['unknown'])
 
@@ -406,36 +410,245 @@ class EchoChatBot:
 
         return None
 
-    def _generate_with_local_llm(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> Optional[str]:
+    def _generate_with_local_llm(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7, _retry: bool = False) -> Optional[str]:
         """Generate text using the bundled `echo/llm_worker.py` subprocess.
 
         This avoids importing native bindings into the web process and keeps
         the model runtime isolated. Returns generated text or None on failure.
         """
+        # Ensure we have a current model path set. If not, try persisted config
+        if not self._local_model_path:
+            try:
+                cfg = Path(__file__).parent.parent / 'data' / 'echo_model.json'
+                if cfg.exists():
+                    try:
+                        j = json.loads(cfg.read_text(encoding='utf-8'))
+                        p = j.get('model')
+                        if p:
+                            self.set_local_model(p)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        if not self._local_model_path:
+            # final attempt: discover automatically
+            try:
+                found = self._find_local_model()
+                if found:
+                    self.set_local_model(found)
+            except Exception:
+                pass
         if not self._local_model_path:
             return None
+        # sanitize whitespace in path
+        try:
+            self._local_model_path = str(self._local_model_path).strip()
+        except Exception:
+            pass
+
+        # Allow forcing subprocess worker for stability via env var.
+        # Default to in-process runtime to avoid intermittent subprocess failures.
+        prefer_subprocess = os.environ.get('ECHO_PREFER_SUBPROCESS', '0') == '1'
+        # Prefer using an in-process runtime-loaded model if available and not forced to subprocess.
+        try:
+            if not prefer_subprocess:
+                from echo.runtime import model_runtime
+                llm = model_runtime.get_model()
+                if llm is not None:
+                    # Try several invocation styles used by different bindings
+                    try:
+                        if hasattr(llm, 'create'):
+                            resp = llm.create(prompt=prompt, max_tokens=int(max_tokens), temperature=float(temperature))
+                            if isinstance(resp, dict):
+                                choices = resp.get('choices') or []
+                                if choices:
+                                    return choices[0].get('text') or choices[0].get('content') or None
+                            if hasattr(resp, 'text'):
+                                return str(resp.text)
+                        if callable(llm):
+                            out = llm(prompt, max_tokens=int(max_tokens), temperature=float(temperature))
+                            if isinstance(out, dict):
+                                choices = out.get('choices') or []
+                                if choices:
+                                    return choices[0].get('text') or choices[0].get('content') or None
+                            if isinstance(out, str):
+                                return out
+                    except Exception:
+                        # fall through to subprocess fallback
+                        pass
+        except Exception:
+            pass
 
         worker = os.path.join(os.path.dirname(__file__), 'llm_worker.py')
         if not os.path.exists(worker):
             return None
 
+        # Allow configurable timeout via env var, default to 600s to accommodate slow cold starts
+        timeout = int(os.environ.get('ECHO_LLM_TIMEOUT', '600'))
         try:
             cmd = [sys.executable, worker, '--model', self._local_model_path, '--max_tokens', str(int(max_tokens)), '--temperature', str(float(temperature))]
+
+            # Some GGUF chat models (for example Qwen) expect chat-formatted
+            # input using special tokens. If the model filename suggests a
+            # Qwen-style chat model, wrap the prompt into a minimal chat
+            # template so generation is more likely to be coherent.
+            worker_input = prompt
+            try:
+                model_name = os.path.basename(self._local_model_path or '').lower()
+                if 'qwen' in model_name or 'qwen2' in model_name:
+                    # Minimal chat-format wrapper understood by many GGUF chat
+                    # templates. We include a brief system instruction then the
+                    # user turn and open the assistant turn for generation.
+                    worker_input = (
+                        "<|im_start|>system\nYou are a helpful assistant.\n<|im_end|>\n"
+                        "<|im_start|>user\n" + prompt + "\n<|im_end|>\n"
+                        "<|im_start|>assistant\n"
+                    )
+            except Exception:
+                worker_input = prompt
+
             proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            stdout, stderr = proc.communicate(prompt, timeout=60)
+            try:
+                stdout, stderr = proc.communicate(worker_input, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    out, err = proc.communicate(timeout=5)
+                except Exception:
+                    out, err = '', ''
+                logger.warning(f'LLM worker timed out after {timeout}s')
+                try:
+                    self._last_llm_debug = {'cmd': cmd, 'timeout': timeout, 'stdout_partial': out, 'stderr_partial': err}
+                except Exception:
+                    pass
+                # Return any partial stdout if available to aid debugging
+                return out.strip() or None
+
+            # record debug info for later inspection
+            # Always record debug info
+            try:
+                self._last_llm_debug = {'cmd': cmd, 'stdout': stdout, 'stderr': stderr}
+            except Exception:
+                pass
             if stderr:
                 logger.debug(f"LLM worker stderr: {stderr}")
             if not stdout:
+                # No stdout produced; return None so caller may fallback
                 return None
             try:
                 data = json.loads(stdout)
-                return data.get('text') or None
+                try:
+                    self._last_llm_debug['parsed'] = data
+                except Exception:
+                    pass
+                # Worker may return structured error (e.g., {'error':'No model available'})
+                if isinstance(data, dict) and data.get('error'):
+                    err = data.get('error')
+                    # If in-process model is available, try that as a fallback
+                    try:
+                        from echo.runtime import model_runtime
+                        llm = model_runtime.get_model()
+                        if llm is not None:
+                            try:
+                                # attempt in-process generation as a fallback
+                                return self._generate_with_local_llm(prompt, max_tokens=max_tokens, temperature=temperature, _retry=_retry)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                    text = None
+                else:
+                    text = data.get('text') or None
+                # sanitize garbled outputs
+                try:
+                    if text and self._looks_garbled_text(text):
+                        logger.warning('LLM produced garbled text; retrying with safer params')
+                        # retry once with lower temperature and a clarifying prefix
+                        if not _retry:
+                            alt_prompt = "Please answer concisely and avoid repeating characters or gibberish. " + prompt
+                            try:
+                                alt = self._generate_with_local_llm(alt_prompt, max_tokens=max_tokens, temperature=0.1, _retry=True)
+                                if alt and not self._looks_garbled_text(alt):
+                                    return alt
+                            except Exception:
+                                pass
+                        return None
+                except Exception:
+                    pass
+                return text
             except Exception:
                 # If worker printed raw text, return it
-                return stdout.strip()
+                try:
+                    self._last_llm_debug['parsed'] = {'text_raw': stdout}
+                except Exception:
+                    pass
+                raw = stdout.strip()
+                try:
+                    if raw and self._looks_garbled_text(raw):
+                        logger.warning('LLM printed raw garbled text; discarding')
+                        # try retry via safer params
+                        if not _retry:
+                            alt_prompt = "Please answer concisely and avoid repeating characters or gibberish. " + prompt
+                            try:
+                                alt = self._generate_with_local_llm(alt_prompt, max_tokens=max_tokens, temperature=0.1, _retry=True)
+                                if alt and not self._looks_garbled_text(alt):
+                                    return alt
+                            except Exception:
+                                pass
+                        return None
+                except Exception:
+                    pass
+                return raw
         except Exception as e:
             logger.exception('LLM worker invocation failed')
+            try:
+                self._last_llm_debug = {'error': str(e)}
+            except Exception:
+                pass
             return None
+
+    def _looks_garbled_text(self, t: str) -> bool:
+        """Heuristic to detect garbled LLM output (repeated chars, control chars, extreme concentration).
+
+        Returns True when the text looks like garbage and should be rejected.
+        """
+        try:
+            if not t or not isinstance(t, str):
+                return False
+            # ignore short strings
+            if len(t) < 30:
+                return False
+            # control characters present?
+            if any(ord(ch) < 32 and ch not in '\n\t' for ch in t):
+                return True
+            # very long run of the same character
+            import re
+            m = re.search(r"(.)\1{30,}", t)
+            if m:
+                return True
+            # remove whitespace for concentration checks
+            no_ws = ''.join(t.split())
+            if not no_ws:
+                return False
+            from collections import Counter
+            ctr = Counter(no_ws)
+            most_char, most_count = ctr.most_common(1)[0]
+            # too concentrated on a single non-alphanumeric char
+            if most_count / max(1, len(no_ws)) > 0.6 and most_count > 30 and not most_char.isalnum():
+                return True
+            # too many repeated single-character tokens (like "A A A A")
+            tokens = t.split()
+            if len(tokens) > 10:
+                tk_ctr = Counter(tokens)
+                tk_most, tk_count = tk_ctr.most_common(1)[0]
+                if tk_count / len(tokens) > 0.6 and len(tk_most) == 1:
+                    return True
+            return False
+        except Exception:
+            return False
     
     def _check_learned_patterns(self, message: str) -> Optional[str]:
         """
@@ -459,6 +672,36 @@ class EchoChatBot:
                 return response
         
         return None
+
+    def _generate_with_remote_llm(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> Optional[str]:
+        """Optional remote HTTP LLM fallback.
+
+        Use environment variable `ECHO_REMOTE_API_URL` to point to a JSON API that
+        accepts {prompt,max_tokens,temperature} and returns JSON with `text` or
+        `response` fields. `ECHO_REMOTE_API_KEY` may be used for Bearer auth.
+        """
+        url = os.environ.get('ECHO_REMOTE_API_URL')
+        if not url:
+            return None
+        try:
+            import requests
+            headers = {'Content-Type': 'application/json'}
+            key = os.environ.get('ECHO_REMOTE_API_KEY')
+            if key:
+                headers['Authorization'] = f'Bearer {key}'
+            payload = {'prompt': prompt, 'max_tokens': int(max_tokens), 'temperature': float(temperature)}
+            resp = requests.post(url, json=payload, headers=headers, timeout=30)
+            if resp.status_code != 200:
+                logger.debug(f'Remote LLM returned {resp.status_code}')
+                return None
+            try:
+                j = resp.json()
+            except Exception:
+                return resp.text.strip()
+            return j.get('text') or j.get('response') or j.get('result') or (j.get('choices') and j['choices'][0].get('text'))
+        except Exception:
+            logger.exception('Remote LLM invocation failed')
+            return None
     
     def _pattern_matches(self, pattern: str, message: str) -> bool:
         """
@@ -598,6 +841,53 @@ class EchoChatBot:
             logger.exception('Failed to set local model')
         return False
 
+    def reload_model(self, path: Optional[str] = None) -> bool:
+        """Reload or set a GGUF model path for the chat bot.
+
+        If `path` is provided, set that model; otherwise attempt to rediscover
+        using the same discovery logic as on init.
+        """
+        try:
+            # Unload any currently-loaded runtime model to ensure a clean reload.
+            try:
+                from echo.runtime import model_runtime
+                try:
+                    model_runtime.unload_model()
+                except Exception:
+                    pass
+            except Exception:
+                # runtime loader not available or import failed; ignore
+                pass
+
+            if path:
+                return self.set_local_model(path)
+            # Do not attempt to auto-discover on reload; keep behavior simple.
+            return False
+        except Exception:
+            logger.exception('reload_model failed')
+            return False
+
+    def ensure_model(self):
+        """Ensure the runtime model is loaded and return it.
+
+        This performs a delayed runtime load via `echo.runtime.model_runtime`.
+        Returns the loaded model instance or None on failure.
+        """
+        if not self._local_model_path:
+            return None
+        try:
+            from echo.runtime import model_runtime
+            if model_runtime.get_model() is None:
+                try:
+                    model_runtime.load_model(self._local_model_path)
+                except Exception:
+                    logger.exception('Runtime model load failed')
+                    return None
+            return model_runtime.get_model()
+        except Exception:
+            logger.exception('ensure_model failed')
+            return None
+
     def ingest_resource(self, session_id: str, entry: dict, content: str) -> bool:
         """Ingest a resource uploaded via the UI into appropriate data stores.
 
@@ -663,7 +953,7 @@ def get_chat_bot() -> EchoChatBot:
         _chat_bot_instance = EchoChatBot()
         # Apply a preferred default GGUF model if present in the models folder
         try:
-            preferred = os.path.join(os.getcwd(), 'models', 'qwen2.5-7b-instruct-q4_k_m.gguf')
+            preferred = os.path.join(os.getcwd(), 'models', 'Phi-3-mini-4k-instruct-q4.gguf')
             if os.path.exists(preferred):
                 _chat_bot_instance.set_local_model(preferred)
                 logger.info(f"Default model set to preferred model: {preferred}")

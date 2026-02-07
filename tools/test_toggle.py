@@ -13,3 +13,11 @@ except urllib.error.HTTPError as e:
     print('HTTPError', e.code, body)
 except Exception as e:
     print('ERROR', e)
+
+def main():
+    url = 'http://127.0.0.1:8080/api/admin/toggle_feature?feature=Echo_Chat'
+    with urllib.request.urlopen(url, timeout=5) as r:
+        print(r.read().decode('utf-8'))
+
+if __name__ == '__main__':
+    main()
