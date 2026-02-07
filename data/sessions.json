@@ -212,7 +212,7 @@
   "testsession": {
     "session_id": "testsession",
     "title": "testsession",
-    "last_updated": "2026-01-18T04:10:44.831525",
+    "last_updated": "2026-02-06T22:31:46.552905",
     "created": "2026-01-18T00:58:18.144201",
     "favorite": false
   },
@@ -282,7 +282,7 @@
   "test_session": {
     "session_id": "test_session",
     "title": "test_session",
-    "last_updated": "2026-01-18T04:10:58.092970",
+    "last_updated": "2026-02-06T13:44:06.609871",
     "created": "2026-01-18T03:46:05.226884",
     "favorite": false
   },
@@ -520,8 +520,253 @@
   "test_restore": {
     "session_id": "test_restore",
     "title": "test_restore",
-    "last_updated": "2026-02-05T14:43:12.199489",
+    "last_updated": "2026-02-06T22:31:16.199493",
     "created": "2026-02-05T14:43:12.199489",
+    "favorite": false
+  },
+  "default": {
+    "session_id": "default",
+    "title": "Hello, can you help me with Docker?",
+    "created": "2026-02-06T12:23:02.861216",
+    "last_updated": "2026-02-06T22:30:50.525063",
+    "favorite": false
+  },
+  "web_1770409488934": {
+    "session_id": "web_1770409488934",
+    "created": "2026-02-06T12:24:52.240718",
+    "last_updated": "2026-02-06T12:27:09.611539",
+    "favorite": false
+  },
+  "web_1770409877399": {
+    "session_id": "web_1770409877399",
+    "created": "2026-02-06T12:33:19.166812",
+    "last_updated": "2026-02-06T12:33:19.166812",
+    "favorite": false
+  },
+  "web_1770410041931": {
+    "session_id": "web_1770410041931",
+    "created": "2026-02-06T12:36:37.171674",
+    "last_updated": "2026-02-06T12:36:52.533553",
+    "favorite": false
+  },
+  "web_1770410219746": {
+    "session_id": "web_1770410219746",
+    "created": "2026-02-06T12:37:02.937344",
+    "last_updated": "2026-02-06T12:38:33.230263",
+    "favorite": false
+  },
+  "web_1770410316547": {
+    "session_id": "web_1770410316547",
+    "created": "2026-02-06T12:38:39.530665",
+    "last_updated": "2026-02-06T12:39:39.111462",
+    "favorite": false
+  },
+  "web_1770410387532": {
+    "session_id": "web_1770410387532",
+    "title": "Session web_1770410387532",
+    "created": "2026-02-06T12:39:47.545933",
+    "last_updated": "2026-02-06T12:39:47.545933",
+    "favorite": false
+  },
+  "web_1770410389914": {
+    "session_id": "web_1770410389914",
+    "created": "2026-02-06T12:39:52.156946",
+    "last_updated": "2026-02-06T12:41:41.875804",
+    "favorite": false
+  },
+  "web_1770410570366": {
+    "session_id": "web_1770410570366",
+    "created": "2026-02-06T12:42:54.525586",
+    "last_updated": "2026-02-06T12:44:14.896211",
+    "favorite": false
+  },
+  "web_1770410677317": {
+    "session_id": "web_1770410677317",
+    "title": "Session web_1770410677317",
+    "created": "2026-02-06T12:44:37.332529",
+    "last_updated": "2026-02-06T12:44:37.332529",
+    "favorite": false
+  },
+  "web_1770410680194": {
+    "session_id": "web_1770410680194",
+    "created": "2026-02-06T12:44:46.150761",
+    "last_updated": "2026-02-06T12:44:46.150761",
+    "favorite": false
+  },
+  "web_1770410832109": {
+    "session_id": "web_1770410832109",
+    "created": "2026-02-06T12:47:29.801217",
+    "last_updated": "2026-02-06T12:47:55.233816",
+    "favorite": false
+  },
+  "diag_1770410982": {
+    "session_id": "diag_1770410982",
+    "created": "2026-02-06T12:49:42.801418",
+    "last_updated": "2026-02-06T12:49:42.801418",
+    "favorite": false
+  },
+  "diag_1770411082": {
+    "session_id": "diag_1770411082",
+    "created": "2026-02-06T12:51:22.628645",
+    "last_updated": "2026-02-06T12:51:22.628645",
+    "favorite": false
+  },
+  "web_1770411094043": {
+    "session_id": "web_1770411094043",
+    "title": "Session web_1770411094043",
+    "created": "2026-02-06T12:51:34.065708",
+    "last_updated": "2026-02-06T12:51:34.065708",
+    "favorite": false
+  },
+  "your_session": {
+    "session_id": "your_session",
+    "created": "2026-02-06T12:52:38.671540",
+    "last_updated": "2026-02-06T12:52:38.671540",
+    "favorite": false
+  },
+  "web_1770411240682": {
+    "session_id": "web_1770411240682",
+    "title": "Session web_1770411240682",
+    "created": "2026-02-06T12:54:00.694471",
+    "last_updated": "2026-02-06T12:54:00.694471",
+    "favorite": false
+  },
+  "web_1770411242829": {
+    "session_id": "web_1770411242829",
+    "created": "2026-02-06T12:54:06.211844",
+    "last_updated": "2026-02-06T12:55:13.588347",
+    "favorite": false
+  },
+  "web_1770411449591": {
+    "session_id": "web_1770411449591",
+    "created": "2026-02-06T12:57:38.406636",
+    "last_updated": "2026-02-06T12:57:38.406636",
+    "favorite": false
+  },
+  "web_1770411480583": {
+    "session_id": "web_1770411480583",
+    "created": "2026-02-06T12:58:03.943156",
+    "last_updated": "2026-02-06T13:02:50.716684",
+    "favorite": false
+  },
+  "web_1770412113613": {
+    "session_id": "web_1770412113613",
+    "created": "2026-02-06T13:08:38.088283",
+    "last_updated": "2026-02-06T13:10:34.555329",
+    "favorite": false
+  },
+  "web_1770412287630": {
+    "session_id": "web_1770412287630",
+    "created": "2026-02-06T13:11:38.716959",
+    "last_updated": "2026-02-06T13:14:25.388941",
+    "favorite": false
+  },
+  "web_1770412421789": {
+    "session_id": "web_1770412421789",
+    "created": "2026-02-06T13:14:48.676062",
+    "last_updated": "2026-02-06T13:14:48.676062",
+    "favorite": false
+  },
+  "web_1770412494291": {
+    "session_id": "web_1770412494291",
+    "created": "2026-02-06T13:16:01.688830",
+    "last_updated": "2026-02-06T13:17:30.612728",
+    "favorite": false
+  },
+  "web_1770413028375": {
+    "session_id": "web_1770413028375",
+    "created": "2026-02-06T13:24:36.508909",
+    "last_updated": "2026-02-06T13:34:43.553922",
+    "favorite": false
+  },
+  "web_1770429403683": {
+    "session_id": "web_1770429403683",
+    "created": "2026-02-06T17:56:59.292172",
+    "last_updated": "2026-02-06T18:00:19.148527",
+    "favorite": false
+  },
+  "web_1770429803903": {
+    "session_id": "web_1770429803903",
+    "created": "2026-02-06T18:04:36.242885",
+    "last_updated": "2026-02-06T18:08:18.595338",
+    "favorite": false
+  },
+  "web_1770430201333": {
+    "session_id": "web_1770430201333",
+    "created": "2026-02-06T18:11:07.018392",
+    "last_updated": "2026-02-06T18:11:07.018392",
+    "favorite": false
+  },
+  "web_1770430387643": {
+    "session_id": "web_1770430387643",
+    "created": "2026-02-06T18:13:12.324978",
+    "last_updated": "2026-02-06T18:16:38.902814",
+    "favorite": false
+  },
+  "web_1770431573148": {
+    "session_id": "web_1770431573148",
+    "created": "2026-02-06T18:32:58.579028",
+    "last_updated": "2026-02-06T18:38:31.271566",
+    "favorite": false
+  },
+  "agent_test": {
+    "session_id": "agent_test",
+    "created": "2026-02-06T18:34:07.685671",
+    "last_updated": "2026-02-06T18:34:07.685671",
+    "favorite": false
+  },
+  "web_1770432490635": {
+    "session_id": "web_1770432490635",
+    "created": "2026-02-06T18:49:43.399972",
+    "last_updated": "2026-02-06T18:49:43.399972",
+    "favorite": false
+  },
+  "web_1770434016139": {
+    "session_id": "web_1770434016139",
+    "created": "2026-02-06T19:13:46.131710",
+    "last_updated": "2026-02-06T19:13:46.131710",
+    "favorite": false
+  },
+  "web_1770434114826": {
+    "session_id": "web_1770434114826",
+    "created": "2026-02-06T19:15:40.972093",
+    "last_updated": "2026-02-06T19:15:40.972093",
+    "favorite": false
+  },
+  "web_1770434998694": {
+    "session_id": "web_1770434998694",
+    "created": "2026-02-06T19:30:03.610577",
+    "last_updated": "2026-02-06T19:30:03.610577",
+    "favorite": false
+  },
+  "web_1770435007447": {
+    "session_id": "web_1770435007447",
+    "created": "2026-02-06T19:30:16.686477",
+    "last_updated": "2026-02-06T19:30:16.686477",
+    "favorite": false
+  },
+  "web_1770435216143": {
+    "session_id": "web_1770435216143",
+    "created": "2026-02-06T19:33:42.424778",
+    "last_updated": "2026-02-06T19:33:53.186562",
+    "favorite": false
+  },
+  "web_1770435425472": {
+    "session_id": "web_1770435425472",
+    "created": "2026-02-06T19:37:24.790987",
+    "last_updated": "2026-02-06T19:40:37.253337",
+    "favorite": false
+  },
+  "web_1770476153463": {
+    "session_id": "web_1770476153463",
+    "created": "2026-02-07T06:55:58.414791",
+    "last_updated": "2026-02-07T06:55:58.414791",
+    "favorite": false
+  },
+  "web_1770476204739": {
+    "session_id": "web_1770476204739",
+    "created": "2026-02-07T06:56:55.749484",
+    "last_updated": "2026-02-07T06:57:07.620358",
     "favorite": false
   }
 }

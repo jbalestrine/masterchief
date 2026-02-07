@@ -19,7 +19,7 @@ import os
 import sys
 import time
 
-MODEL_DEFAULT = r"C:\Users\Echo\masterchief\models\Qwen-7b\qwen2.5-7b-instruct-q4_k_m.gguf"
+MODEL_DEFAULT = r"C:\Users\Echo\masterchief\models\Phi-3-mini-4k-instruct-q4.gguf"
 SERVER_URL = os.environ.get('MC_SERVER_URL', 'http://127.0.0.1:8080')
 
 try:

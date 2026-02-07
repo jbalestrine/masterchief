@@ -294,6 +294,28 @@
             </div>
         </div>
         
+        <h3>Fine-tune</h3>
+        <div style="margin-top:10px;">
+            <select id="trainingFileSelect" style="width:100%;padding:6px;border-radius:6px;margin-top:6px;"></select>
+            <div style="display:flex;gap:6px;margin-top:6px;">
+                <button id="refreshTrainingFiles" style="padding:6px 8px;border-radius:6px;" onclick="fetchTrainingFiles()">Refresh</button>
+                <button id="startTrainingBtn" style="padding:6px 8px;border-radius:6px;" onclick="startTraining()">Start Training</button>
+            </div>
+        </div>
+        
+        <h3>Personality</h3>
+        <div style="margin-top:10px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <input type="checkbox" id="selectAllPersonas" onclick="toggleSelectAllPersonas(this)"> <label for="selectAllPersonas">Select All</label>
+                <button id="refreshPersonasBtn" style="padding:6px 8px;border-radius:6px;" onclick="fetchPersonaFiles()">Refresh</button>
+            </div>
+            <div id="personaList" style="max-height:160px;overflow:auto;border:1px solid #eee;padding:8px;border-radius:6px;background:#fafafa"></div>
+            <div style="display:flex;gap:6px;margin-top:8px;">
+                <button id="applyPersonasBtn" style="padding:6px 8px;border-radius:6px;" onclick="applySelectedPersonas()">Apply Selected to Session</button>
+                <button id="removePersonasBtn" style="padding:6px 8px;border-radius:6px;" onclick="removeSelectedPersonas()">Remove Selected Files</button>
+            </div>
+        </div>
+        
         <h3>Rate Last Response</h3>
         <div style="margin-top: 10px;">
             <button onclick="rateResponse('excellent')" style="margin: 5px; padding: 8px 12px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">Excellent</button>
@@ -337,6 +359,9 @@
             statusDiv.textContent = 'Connected';
             socket.emit('chat_join', { session_id: sessionId });
             loadStats();
+            // populate training file dropdown and persona list in the training panel
+            try { fetchTrainingFiles(); } catch(e){console.error('fetchTrainingFiles error',e);} 
+            try { fetchPersonaFiles(); } catch(e){console.error('fetchPersonaFiles error',e);} 
         });
         
         socket.on('disconnect', () => {
@@ -447,6 +472,88 @@
                 console.error('Training error:', error);
                 alert('Failed to submit training data');
             }
+        }
+
+        // Fetch available training files from server and populate select
+        async function fetchTrainingFiles(){
+            try{
+                const res = await fetch(`${API_BASE}/api/echo/training_files`);
+                const j = await res.json();
+                const sel = document.getElementById('trainingFileSelect');
+                if(!sel) return;
+                sel.innerHTML='';
+                (j.files||[]).forEach(f=>{
+                    const opt = document.createElement('option'); opt.value = f.name; opt.textContent = f.name; sel.appendChild(opt);
+                });
+            }catch(e){ console.error('Failed to fetch training files',e); }
+        }
+
+        // Start a training job using the selected training file
+        async function startTraining(){
+            const sel = document.getElementById('trainingFileSelect');
+            if(!sel || !sel.value){ alert('Select a training file first'); return; }
+            try{
+                const body = { training_file: sel.value, epochs: 1, batch_size: 8, lr: '1e-4', output_name: '' };
+                const r = await fetch(`${API_BASE}/api/echo/train_model`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+                const j = await r.json();
+                if(r.ok && j.ok){ alert('Started training job: '+j.job_id); }
+                else { alert('Failed to start training: '+(j.error||JSON.stringify(j))); }
+            }catch(e){ console.error('Start training failed',e); alert('Start training request failed'); }
+        }
+
+        // Persona management
+        function toggleSelectAllPersonas(cb){
+            const checks = document.querySelectorAll('#personaList input[type="checkbox"]');
+            checks.forEach(c=>c.checked = cb.checked);
+        }
+
+        async function fetchPersonaFiles(){
+            try{
+                const res = await fetch(`${API_BASE}/api/personality/list`);
+                const j = await res.json();
+                const container = document.getElementById('personaList');
+                if(!container) return;
+                container.innerHTML = '';
+                (j.files||[]).forEach(f=>{
+                    const id = 'persona_'+f.name.replace(/[^a-z0-9]/gi,'_');
+                    const row = document.createElement('div');
+                    row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='4px 0';
+                    const left = document.createElement('div');
+                    left.style.display='flex'; left.style.alignItems='center'; left.style.gap='8px';
+                    const cb = document.createElement('input'); cb.type='checkbox'; cb.id = id; cb.dataset.name = f.name;
+                    const lbl = document.createElement('label'); lbl.htmlFor = id; lbl.textContent = f.name;
+                    left.appendChild(cb); left.appendChild(lbl);
+                    const right = document.createElement('div'); right.style.color='#666'; right.style.fontSize='0.85em'; right.textContent = (f.size?Math.round(f.size/1024)+'KB':'');
+                    row.appendChild(left); row.appendChild(right);
+                    container.appendChild(row);
+                });
+            }catch(e){ console.error('Failed to fetch persona files',e); alert('Failed to fetch persona files'); }
+        }
+
+        async function applySelectedPersonas(){
+            const checks = Array.from(document.querySelectorAll('#personaList input[type="checkbox"]')).filter(c=>c.checked);
+            if(!checks.length){ alert('Select one or more persona files to apply'); return; }
+            const files = checks.map(c=>c.dataset.name);
+            const session = sessionId; // use current session
+            try{
+                const r = await fetch(`${API_BASE}/api/personality/apply`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: session, files: files }) });
+                const j = await r.json();
+                if(r.ok && j.ok){ alert('Personality applied to session '+j.session_id); }
+                else alert('Apply failed: '+(j.error||JSON.stringify(j)));
+            }catch(e){ console.error('Apply failed',e); alert('Apply request failed'); }
+        }
+
+        async function removeSelectedPersonas(){
+            const checks = Array.from(document.querySelectorAll('#personaList input[type="checkbox"]')).filter(c=>c.checked);
+            if(!checks.length){ alert('Select one or more persona files to remove'); return; }
+            if(!confirm('Remove selected persona files? This cannot be undone.')) return;
+            const files = checks.map(c=>c.dataset.name);
+            try{
+                const r = await fetch(`${API_BASE}/api/personality/delete`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ files: files }) });
+                const j = await r.json();
+                if(r.ok && j.ok){ alert('Removed: '+(j.removed||[]).join(', ')); fetchPersonaFiles(); }
+                else alert('Remove failed: '+(j.error||JSON.stringify(j)));
+            }catch(e){ console.error('Remove failed',e); alert('Remove request failed'); }
         }
         
         async function loadStats() {

@@ -12,7 +12,7 @@ import sys
 
 from echo.chat_bot import get_chat_bot
 
-MODEL_NAME = 'qwen2.5-7b-instruct-q4_k_m.gguf'
+MODEL_NAME = 'Phi-3-mini-4k-instruct-q4.gguf'
 
 if __name__ == '__main__':
     print(f"Reloading model: {MODEL_NAME}")
