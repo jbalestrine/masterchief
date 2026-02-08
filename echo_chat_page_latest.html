@@ -1197,24 +1197,22 @@ function refreshIndex(){
 }
 </script>
 <script>
+// Keep exactly one label for a small set of known duplicated controls.
 document.addEventListener('DOMContentLoaded', ()=>{
 	try{
-		const dedupeLabels = new Set(['Auto-continue','Auto continue','Save to file','Save to file']);
-		const seen = new Set();
-		document.querySelectorAll('label').forEach(lbl=>{
-			const txt = lbl.textContent && lbl.textContent.trim();
-			if(!txt) return;
-			if(dedupeLabels.has(txt)){
-				if(seen.has(txt)){
-					const inp = lbl.querySelector('input') || document.querySelector('#'+(lbl.getAttribute('for')||''));
+		const targets = ['Auto-continue','Auto continue','Save to file'];
+		targets.forEach(target => {
+			const matches = Array.from(document.querySelectorAll('label')).filter(l => (l.textContent||'').trim() === target);
+			if(matches.length > 1){
+				// remove all except the first occurrence
+				matches.slice(1).forEach(lbl => {
+					const inp = lbl.querySelector('input') || document.getElementById(lbl.getAttribute('for')||'');
 					if(inp && inp.parentElement) inp.parentElement.removeChild(inp);
 					if(lbl.parentElement) lbl.parentElement.removeChild(lbl);
-				} else {
-					seen.add(txt);
-				}
+				});
 			}
 		});
-	}catch(e){console.error('dedupe script error',e)}
+	}catch(err){ console.error('dedupe cleanup failed', err); }
 });
 </script>
 </body>

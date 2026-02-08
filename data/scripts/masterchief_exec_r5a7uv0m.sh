@@ -1,1 +1,0 @@
-echo web_ide_health

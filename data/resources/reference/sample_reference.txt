@@ -1,5 +1,0 @@
-Sample Reference
-
-This is a small sample reference file added for testing the Resources UI and preview functionality.
-
-Use it to verify `/api/resources/list` and `/resources/preview` render correctly.

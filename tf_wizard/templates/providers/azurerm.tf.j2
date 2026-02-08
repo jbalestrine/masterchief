@@ -2,3 +2,44 @@
 provider "azurerm" {
   features = {}
 }
+
+{# If CAF options are provided, emit simple CAF-aligned resources: resource group, network, and optional identity #}
+{% if caf and caf.get('landing_zone') %}
+resource "azurerm_resource_group" "rg" {
+  name     = "${var.module_name}-rg"
+  location = var.location != null ? var.location : "eastus"
+}
+{% endif %}
+
+{% if caf and caf.get('network_topology') %}
+  {% if caf.network_topology == 'hub-spoke' %}
+resource "azurerm_virtual_network" "hub" {
+  name                = "${var.module_name}-hub-vnet"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+resource "azurerm_subnet" "hub_subnet" {
+  name                 = "hub-subnet"
+  resource_group_name  = azurerm_resource_group.rg.name
+  virtual_network_name = azurerm_virtual_network.hub.name
+  address_prefixes     = ["10.0.1.0/24"]
+}
+  {% elif caf.network_topology == 'single' %}
+resource "azurerm_virtual_network" "vnet" {
+  name                = "${var.module_name}-vnet"
+  address_space       = ["10.1.0.0/16"]
+  location            = azurerm_resource_group.rg.location
+  resource_group_name = azurerm_resource_group.rg.name
+}
+  {% endif %}
+{% endif %}
+
+{% if caf and caf.get('identity') and caf.identity != 'none' %}
+resource "azurerm_user_assigned_identity" "uai" {
+  name                = "${var.module_name}-identity"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+}
+{% endif %}
