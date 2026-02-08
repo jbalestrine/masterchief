@@ -1,0 +1,39 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TF Wizard - MasterChief</title>
+<style>
+body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;margin:0}
+.header{background:#2d2d2d;padding:14px 20px;border-bottom:3px solid #4CAF50;display:flex;align-items:center;justify-content:space-between}
+.header a{color:#4CAF50;text-decoration:none}
+.container{padding:12px}
+.notice{background:#111;padding:12px;border-radius:6px;margin-bottom:12px}
+.iframe-wrap{width:100%;height:calc(100vh - 140px);border:0}
+</style>
+</head>
+<body>
+<div class="header">
+  <div><strong>Terraform Wizard</strong> — MasterChief</div>
+  <div><a href="/web_ide">Back to Web IDE</a></div>
+</div>
+<div class="container">
+  <div class="notice">
+    This page embeds the standalone TF Wizard service. Ensure the TF Wizard server is running (default: <code>uvicorn tf_wizard.app:app --port 8000</code>).
+    If the iframe below is blank or shows an error, start the TF Wizard with your venv Python and then reload this page.
+  </div>
+  <iframe id="tfWizardFrame" class="iframe-wrap" src="http://127.0.0.1:8000/" title="TF Wizard"></iframe>
+</div>
+<script>
+// try to detect if iframe is reachable and show hint
+const iframe = document.getElementById('tfWizardFrame');
+iframe.addEventListener('load', ()=>{
+  try{
+    // no-cross-origin check; best-effort
+    console.log('TF Wizard iframe loaded');
+  }catch(e){ console.warn('iframe load event', e); }
+});
+</script>
+</body>
+</html>
