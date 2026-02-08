@@ -1,2 +1,0 @@
-$body = '{"app":"inspircd","choco_package":"inspircd"}'
-Invoke-RestMethod -Uri 'http://127.0.0.1:8080/feature/run/app_installer.feature_install_windows' -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 120

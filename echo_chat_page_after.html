@@ -60,27 +60,25 @@ code{color:#4CAF50;}
 <header>
 <h1>⚡ MasterChief</h1>
 <p class="subtitle">DevOps Automation Platform</p>
-</header>
-<!-- Global floating toolbar for quick access -->
-<div id="globalToolbar" style="position:fixed;top:18px;right:18px;z-index:2000;display:flex;flex-direction:column;gap:8px;">
-	<a href="/addons" class="btn" style="padding:8px 12px;text-decoration:none;">Open Addons</a>
-	<a href="/resources" class="btn btn-info" style="padding:8px 12px;text-decoration:none;">Resources</a>
-	<a href="/features" class="btn" style="padding:8px 12px;text-decoration:none;background:#6a1b9a;color:#fff;">Features</a>
-	<a href="/web_ide" class="btn btn-warning" style="padding:8px 12px;text-decoration:none;">Web IDE</a>
-</div>
-<!-- Feature run result container (left side) -->
-<div id="featureResult" style="position:fixed;top:18px;left:18px;z-index:2001;max-width:40%;display:none;"></div>
-<nav>
-<a href="/" class="">Dashboard</a>
-<a href="/echo-chat" class="active">🌙 Echo Chat</a>
-<a href="/jamroom" class="">Jamroom Sites</a>
-<a href="/shoutcast" class="">Shoutcast/Icecast</a>
-<a href="/scripts" class="">Scripts</a>
-<a href="/processes" class="">Processes</a>
-<a href="/services" class="">Services</a>
-<a href="/addons" class="">Addons</a>
-<a href="/demo/azure-ui" class="">Demo: Azure</a>
-<a href="/demo/ado-ui" class="">Demo: ADO</a>
+<script>
+// Keep exactly one label for a small set of known duplicated controls.
+document.addEventListener('DOMContentLoaded', ()=>{
+	try{
+		const targets = ['Auto-continue','Auto continue','Save to file'];
+		targets.forEach(target => {
+			const matches = Array.from(document.querySelectorAll('label')).filter(l => (l.textContent||'').trim() === target);
+			if(matches.length > 1){
+				// remove all except the first occurrence
+				matches.slice(1).forEach(lbl => {
+					const inp = lbl.querySelector('input') || document.getElementById(lbl.getAttribute('for')||'');
+					if(inp && inp.parentElement) inp.parentElement.removeChild(inp);
+					if(lbl.parentElement) lbl.parentElement.removeChild(lbl);
+				});
+			}
+		});
+	}catch(err){ console.error('dedupe cleanup failed', err); }
+});
+</script>
 <a href="/ide/ado_admin" class="">ADO Admin</a>
 </nav>
 

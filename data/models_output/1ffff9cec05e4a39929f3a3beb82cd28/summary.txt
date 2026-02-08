@@ -1,5 +1,0 @@
-epochs=7
-batch_size=8
-lr=0.0001
-model=C:\Users\Echo\masterchief\models\Phi-3-mini-4k-instruct-q4.gguf
-data=C:\Users\Echo\masterchief\data\echo_training\tf_train1.txt
