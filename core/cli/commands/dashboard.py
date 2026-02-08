@@ -33,7 +33,7 @@ def dashboard_start(ctx, port, host, dev):
         return
     
     env = {
-        "FLASK_APP": "platform.app",
+        "FLASK_APP": "mc_platform.app",
         "FLASK_ENV": "development" if dev else "production",
         "DASHBOARD_PORT": str(port),
         "DASHBOARD_HOST": host

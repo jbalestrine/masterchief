@@ -51,22 +51,22 @@ def init_extensions(app):
     app.extensions['redis'] = redis_client
     
     # Initialize SocketIO
-    from platform.realtime import init_socketio
+    from mc_platform.realtime import init_socketio
     socketio = init_socketio(app)
     app.extensions['socketio'] = socketio
     
     # Initialize state store
-    from platform.state import get_state_store
+    from mc_platform.state import get_state_store
     state_store = get_state_store(redis_client=redis_client)
     app.extensions['state_store'] = state_store
     
     # Initialize log storage
-    from platform.logs import LogStorage
+    from mc_platform.logs import LogStorage
     log_storage = LogStorage(redis_client=redis_client)
     app.extensions['log_storage'] = log_storage
     
     # Initialize log API
-    from platform.logs.api import init_logs_api
+    from mc_platform.logs.api import init_logs_api
     init_logs_api(log_storage)
     
     logger.info("Extensions initialized")
@@ -90,28 +90,28 @@ def init_redis(app):
 def register_blueprints(app):
     """Register Flask blueprints."""
     # API Gateway
-    from platform.gateway import gateway_bp, health_bp
+    from mc_platform.gateway import gateway_bp, health_bp
     app.register_blueprint(gateway_bp, url_prefix='/api/v1')
     app.register_blueprint(health_bp)
     
     # Logs API
-    from platform.logs import logs_bp
+    from mc_platform.logs import logs_bp
     app.register_blueprint(logs_bp, url_prefix='/api/v1')
     
     # Data Upload API
-    from platform.data import data_bp
+    from mc_platform.data import data_bp
     app.register_blueprint(data_bp, url_prefix='/api/v1/data')
     
     # Platform API (existing)
     try:
-        from platform.api import api_bp
+        from mc_platform.api import api_bp
         app.register_blueprint(api_bp, url_prefix='/api')
     except ImportError:
         logger.warning("Platform API blueprint not found")
     
     # Chat API
     try:
-        from platform.chat import init_chat_api
+        from mc_platform.chat import init_chat_api
         socketio = app.extensions.get('socketio')
         if socketio:
             init_chat_api(app, socketio)
@@ -125,7 +125,7 @@ def register_blueprints(app):
 def setup_event_bus(app):
     """Setup event bus and integrate with WebSocket."""
     from core.event_bus import get_event_bus
-    from platform.realtime import register_handlers
+    from mc_platform.realtime import register_handlers
     
     event_bus = get_event_bus()
     socketio = app.extensions.get('socketio')

@@ -528,7 +528,7 @@
     "session_id": "default",
     "title": "Hello, can you help me with Docker?",
     "created": "2026-02-06T12:23:02.861216",
-    "last_updated": "2026-02-06T22:30:50.525063",
+    "last_updated": "2026-02-07T21:11:14.678157",
     "favorite": false
   },
   "web_1770409488934": {
@@ -790,7 +790,169 @@
   "web_1770510154596": {
     "session_id": "web_1770510154596",
     "created": "2026-02-07T16:23:21.786239",
-    "last_updated": "2026-02-07T16:39:00.274160",
+    "last_updated": "2026-02-07T16:48:52.980820",
+    "favorite": false
+  },
+  "web_1770512996856": {
+    "session_id": "web_1770512996856",
+    "created": "2026-02-07T17:10:18.441025",
+    "last_updated": "2026-02-07T17:18:57.197636",
+    "favorite": false
+  },
+  "web_1770514705225": {
+    "session_id": "web_1770514705225",
+    "created": "2026-02-07T17:38:37.959787",
+    "last_updated": "2026-02-07T17:38:37.959787",
+    "favorite": false
+  },
+  "web_1770515104295": {
+    "session_id": "web_1770515104295",
+    "created": "2026-02-07T17:47:02.360516",
+    "last_updated": "2026-02-07T18:34:31.550094",
+    "favorite": false
+  },
+  "web_1770530490577": {
+    "session_id": "web_1770530490577",
+    "created": "2026-02-07T22:04:21.109195",
+    "last_updated": "2026-02-07T22:04:21.109195",
+    "favorite": false
+  },
+  "web_1770540468118": {
+    "session_id": "web_1770540468118",
+    "created": "2026-02-08T00:48:06.434127",
+    "last_updated": "2026-02-08T00:53:50.899039",
+    "favorite": false
+  },
+  "web_1770540809600": {
+    "session_id": "web_1770540809600",
+    "created": "2026-02-08T00:54:13.534970",
+    "last_updated": "2026-02-08T00:54:13.534970",
+    "favorite": false
+  },
+  "web_1770540955096": {
+    "session_id": "web_1770540955096",
+    "created": "2026-02-08T01:00:00.741061",
+    "last_updated": "2026-02-08T01:00:00.741061",
+    "favorite": false
+  },
+  "web_1770541541669": {
+    "session_id": "web_1770541541669",
+    "created": "2026-02-08T01:07:30.391617",
+    "last_updated": "2026-02-08T01:07:30.391617",
+    "favorite": false
+  },
+  "web_1770542049386": {
+    "session_id": "web_1770542049386",
+    "created": "2026-02-08T01:16:07.473032",
+    "last_updated": "2026-02-08T01:16:07.473032",
+    "favorite": false
+  },
+  "web_1770542319467": {
+    "session_id": "web_1770542319467",
+    "created": "2026-02-08T01:20:47.198392",
+    "last_updated": "2026-02-08T01:20:47.198392",
+    "favorite": false
+  },
+  "web_1770542539859": {
+    "session_id": "web_1770542539859",
+    "created": "2026-02-08T01:22:33.209157",
+    "last_updated": "2026-02-08T01:23:03.952638",
+    "favorite": false
+  },
+  "web_1770542868261": {
+    "session_id": "web_1770542868261",
+    "created": "2026-02-08T01:29:19.636686",
+    "last_updated": "2026-02-08T01:29:19.636686",
+    "favorite": false
+  },
+  "web_1770543269905": {
+    "session_id": "web_1770543269905",
+    "created": "2026-02-08T01:36:22.306997",
+    "last_updated": "2026-02-08T01:36:22.306997",
+    "favorite": false
+  },
+  "web_1770547508633": {
+    "session_id": "web_1770547508633",
+    "created": "2026-02-08T02:48:03.173457",
+    "last_updated": "2026-02-08T03:00:26.580183",
+    "favorite": false
+  },
+  "web_1770550525539": {
+    "session_id": "web_1770550525539",
+    "created": "2026-02-08T03:35:39.884489",
+    "last_updated": "2026-02-08T03:40:43.934739",
+    "favorite": false
+  },
+  "web_1770553843225": {
+    "session_id": "web_1770553843225",
+    "created": "2026-02-08T04:32:40.713299",
+    "last_updated": "2026-02-08T04:32:40.713299",
+    "favorite": false
+  },
+  "web_1770554308949": {
+    "session_id": "web_1770554308949",
+    "created": "2026-02-08T04:38:33.518282",
+    "last_updated": "2026-02-08T04:38:39.483651",
+    "favorite": false
+  },
+  "web_1770554646408": {
+    "session_id": "web_1770554646408",
+    "created": "2026-02-08T04:44:12.488348",
+    "last_updated": "2026-02-08T04:44:12.488348",
+    "favorite": false
+  },
+  "web_1770554981292": {
+    "session_id": "web_1770554981292",
+    "created": "2026-02-08T04:49:49.158578",
+    "last_updated": "2026-02-08T04:54:18.955561",
+    "favorite": false
+  },
+  "web_1770555632138": {
+    "session_id": "web_1770555632138",
+    "created": "2026-02-08T05:00:39.371163",
+    "last_updated": "2026-02-08T05:00:39.371163",
+    "favorite": false
+  },
+  "web_1770555943777": {
+    "session_id": "web_1770555943777",
+    "created": "2026-02-08T05:16:49.824117",
+    "last_updated": "2026-02-08T05:19:06.122786",
+    "favorite": false
+  },
+  "web_1770556915122": {
+    "session_id": "web_1770556915122",
+    "created": "2026-02-08T05:21:59.487407",
+    "last_updated": "2026-02-08T05:22:03.045828",
+    "favorite": false
+  },
+  "web_1770557180396": {
+    "session_id": "web_1770557180396",
+    "created": "2026-02-08T05:26:25.186027",
+    "last_updated": "2026-02-08T05:26:25.186027",
+    "favorite": false
+  },
+  "web_1770557764591": {
+    "session_id": "web_1770557764591",
+    "created": "2026-02-08T05:36:08.643923",
+    "last_updated": "2026-02-08T05:36:08.643923",
+    "favorite": false
+  },
+  "web_1770557910020": {
+    "session_id": "web_1770557910020",
+    "created": "2026-02-08T05:40:58.168230",
+    "last_updated": "2026-02-08T05:44:39.406075",
+    "favorite": false
+  },
+  "web_1770559654324": {
+    "session_id": "web_1770559654324",
+    "created": "2026-02-08T06:09:18.192117",
+    "last_updated": "2026-02-08T06:12:52.912909",
+    "favorite": false
+  },
+  "web_1770560128304": {
+    "session_id": "web_1770560128304",
+    "created": "2026-02-08T06:16:24.453635",
+    "last_updated": "2026-02-08T06:16:24.453635",
     "favorite": false
   }
 }
