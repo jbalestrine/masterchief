@@ -3328,10 +3328,14 @@ function refreshIndex(){
             if(!token) return alert('Cancelled');
 
             try{
-
                 const r2 = await fetch('/scripts/refresh_index',{method:'POST',headers:{'X-ADMIN-TOKEN':token}});
 
                 const j2 = await r2.json();
+
+
+                
+
+            # --- Manager Portal (external, module-level definitions) --------------------
 
                 if(j2.ok) location.reload(); else alert('Refresh failed: '+(j2.error||'unknown'));
 
@@ -10153,6 +10157,18 @@ def api_manager_run_tests_status():
         app.logger.exception('Failed to read test status')
 
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/web_tf_wizard')
+def web_tf_wizard():
+    """Serve the TF Wizard static page if present (append-only safe route)."""
+    try:
+        p = Path(__file__).resolve().parent / 'web_tf_wizard.html'
+        if p.exists():
+            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception:
+        app.logger.exception('Failed to serve web_tf_wizard.html')
+    return redirect(url_for('web_ide'))
 
 
 
