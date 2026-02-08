@@ -125,11 +125,20 @@ document.getElementById('add-output').addEventListener('click', () => addRow('ou
 document.getElementById('generate').addEventListener('click', async () => {
   const module_name = document.getElementById('module_name').value || 'module';
   const provider = document.getElementById('provider').value;
+  // collect CAF options
+  const caf = {
+    naming_convention: (document.getElementById('naming_convention') && document.getElementById('naming_convention').value) || null,
+    landing_zone: (document.getElementById('landing_zone') && document.getElementById('landing_zone').value) || null,
+    network_topology: (document.getElementById('network_topology') && document.getElementById('network_topology').value) || null,
+    identity: (document.getElementById('identity') && document.getElementById('identity').value) || null,
+    enable_monitoring: !!(document.getElementById('enable_monitoring') && document.getElementById('enable_monitoring').checked),
+    enable_policy: !!(document.getElementById('enable_policy') && document.getElementById('enable_policy').checked),
+  };
   const variables = collectRows('vars').filter(x=>x.name);
   const resources = collectRows('res').filter(x=>x.type);
   resources.forEach(r => { try { if (typeof r.args === 'string') r.args = JSON.parse(r.args); } catch(e){} });
   const outputs = collectRows('outs').filter(x=>x.name);
-  const payload = {module_name, provider, variables, resources, outputs};
+  const payload = {module_name, provider, variables, resources, outputs, caf};
   document.getElementById('status').textContent = 'Generating...';
   try {
     const resp = await fetch('/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});

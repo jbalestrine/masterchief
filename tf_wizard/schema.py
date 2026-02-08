@@ -26,6 +26,7 @@ class ModuleSpec(BaseModel):
     variables: List[VariableSpec] = Field(default_factory=list)
     resources: List[ResourceSpec] = Field(default_factory=list)
     outputs: List[OutputSpec] = Field(default_factory=list)
+    caf: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
     @model_validator(mode='after')
     def check_provider(self):

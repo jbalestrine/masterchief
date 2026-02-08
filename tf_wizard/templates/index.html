@@ -25,6 +25,46 @@
       </select>
     </div>
     <div class="row">
+      <label>CAF Options (Azure Enterprise)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:0.9em;color:#444;margin-bottom:6px;">Naming convention</div>
+          <select id="naming_convention">
+            <option value="caf">CAF (Microsoft CAF)</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:0.9em;color:#444;margin-bottom:6px;">Landing zone</div>
+          <select id="landing_zone">
+            <option value="foundation">Foundation (management & security)</option>
+            <option value="workload">Workload</option>
+            <option value="shared">Shared services</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:0.9em;color:#444;margin-bottom:6px;">Network topology</div>
+          <select id="network_topology">
+            <option value="hub-spoke">Hub-Spoke</option>
+            <option value="mesh">Mesh</option>
+            <option value="single">Single VNet</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:0.9em;color:#444;margin-bottom:6px;">Identity</div>
+          <select id="identity">
+            <option value="system">System Assigned Managed Identity</option>
+            <option value="user">User Assigned Managed Identity</option>
+            <option value="none">None</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+          <label style="font-weight:normal;"><input type="checkbox" id="enable_monitoring"> Enable Monitoring & Diagnostics</label>
+          <label style="font-weight:normal;"><input type="checkbox" id="enable_policy"> Attach Baseline Policies</label>
+        </div>
+      </div>
+    </div>
+    <div class="row">
       <label>Variables</label>
       <div id="vars"></div>
       <div><button id="add-variable">Add variable</button></div>
