@@ -1,0 +1,14 @@
+{
+  "module_name": "gcp_bucket_module",
+  "provider": "google",
+  "variables": [
+    {"name": "project", "type": "string", "description": "GCP project"},
+    {"name": "region", "type": "string", "default": "us-central1"}
+  ],
+  "resources": [
+    {"type": "google_storage_bucket", "name": "bucket", "args": {"name": "${var.module_name}-bucket", "location":"${var.region}"}}
+  ],
+  "outputs": [
+    {"name": "bucket_self_link", "value": "google_storage_bucket.bucket.self_link"}
+  ]
+}
