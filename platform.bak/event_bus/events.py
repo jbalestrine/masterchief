@@ -52,7 +52,7 @@ import json
 
 
 class EventType(Enum):
-    """Standard event types for the platform."""
+    """Standard event types for the mc_platform."""
     
     # Module events
     MODULE_LOADED = "module.loaded"

@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+import os, re
+root='.'
+count=0
+for dirpath,_,files in os.walk(root):
+    for f in files:
+        if not f.endswith('.py'): continue
+        p=os.path.join(dirpath,f)
+        try:
+            with open(p,'r',encoding='utf-8') as fh:
+                s=fh.read()
+        except Exception:
+            continue
+        s2 = s
+        s2 = re.sub(r"from\s+platform\.", "from mc_platform.", s2)
+        s2 = re.sub(r"from\s+platform\s+import", "from mc_platform import", s2)
+        s2 = re.sub(r"import\s+platform(\s|$)", r"import mc_platform\1", s2)
+        if s2!=s:
+            with open(p,'w',encoding='utf-8') as fh:
+                fh.write(s2)
+            print('Updated',p)
+            count+=1
+print('Total files updated:',count)

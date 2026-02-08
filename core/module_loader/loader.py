@@ -1,4 +1,4 @@
-"""Core module loader for MasterChief platform."""
+"""Core module loader for MasterChief mc_platform."""
 import importlib
 import json
 import logging

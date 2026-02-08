@@ -571,5 +571,26 @@
         // Load stats periodically
         setInterval(loadStats, 30000); // Every 30 seconds
     </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', ()=>{
+        try{
+            const dedupeLabels = new Set(['Auto-continue','Auto continue','Save to file']);
+            const seen = new Set();
+            document.querySelectorAll('label').forEach(lbl=>{
+                const txt = lbl.textContent && lbl.textContent.trim();
+                if(!txt) return;
+                if(dedupeLabels.has(txt)){
+                    if(seen.has(txt)){
+                        const inp = lbl.querySelector('input') || document.querySelector('#'+(lbl.getAttribute('for')||''));
+                        if(inp && inp.parentElement) inp.parentElement.removeChild(inp);
+                        if(lbl.parentElement) lbl.parentElement.removeChild(lbl);
+                    } else {
+                        seen.add(txt);
+                    }
+                }
+            });
+        }catch(e){console.error('dedupe script error',e)}
+    });
+    </script>
 </body>
 </html>

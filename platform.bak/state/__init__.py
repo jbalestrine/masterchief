@@ -11,7 +11,7 @@ __all__ = [
     "StateSynchronizer",
     "CacheManager"
 ]
-"""State management for the platform."""
+"""State management for the mc_platform."""
 from .store import StateStore, create_state_store
 from .models import StateEntry
 

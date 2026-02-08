@@ -1,0 +1,7 @@
+angle with center (0,0) and sides 5 and 12
+
+**response:** To draw a rectangle with center at (0,0) and sides of lengths 5 and 12, we first need to understand that a rectangle centered at the origin (0,0) will have its sides parallel to the coordinate axes. The lengths of the sides will determine how far the rectangle extends in each direction from the center.
+
+Given a rectangle centered at the origin with sides of lengths 5 and 12, one side will be 5 units long, and the other will be 12 units long. However, to have a rectangle centered at the origin, we need to adjust these lengths slightly because the rectangle's vertices won't be at the origin.
+
+The length of the shorter side (5 units) determines how far from the origin the rectangle's vertices on the x-axis will be, and the length of

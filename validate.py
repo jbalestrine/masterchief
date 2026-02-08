@@ -109,7 +109,7 @@ def main():
         ("os/iso-builder/packages/base.list", "Base packages"),
         ("os/iso-builder/packages/devops.list", "DevOps packages"),
         ("os/iso-builder/scripts/customize.sh", "Customization script"),
-        ("os/iso-builder/scripts/install-platform.sh", "Platform installer"),
+        ("os/iso-builder/scripts/install-mc_platform.sh", "Platform installer"),
         ("os/iso-builder/preseed/preseed.cfg", "Debian preseed"),
         ("os/iso-builder/preseed/kickstart.cfg", "RHEL kickstart"),
         ("os/usb-creator/create-usb.sh", "USB creator"),

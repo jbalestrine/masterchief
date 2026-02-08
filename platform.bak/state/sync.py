@@ -2,7 +2,7 @@
 import logging
 import asyncio
 from typing import Callable, Dict, Any, List
-from platform.event_bus import Event, get_event_bus
+from mc_platform.event_bus import Event, get_event_bus
 
 logger = logging.getLogger(__name__)
 

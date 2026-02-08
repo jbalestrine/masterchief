@@ -24,12 +24,12 @@ from core.echo import Echo, echo_full_display, echo_image_path
 
 def open_image(image_path):
     """Try to open the image in the default viewer."""
-    import platform
+    import mc_platform
     import subprocess
     import logging
     
     try:
-        system = platform.system()
+        system = mc_platform.system()
         if system == 'Darwin':  # macOS
             subprocess.run(['open', image_path], check=True)
         elif system == 'Windows':
