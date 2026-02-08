@@ -53,11 +53,25 @@ code{color:#4CAF50;}
 .file-upload{border:2px dashed #4CAF50;padding:40px;text-align:center;border-radius:10px;cursor:pointer;transition:all 0.3s;}
 .file-upload:hover{background:#252525;border-color:#8BC34A;}
 </style>
+<!-- Libraries for ZIP download used by the Terraform wizard -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 </head>
 <body>
 <div class="container">
 <header>
 </div>
+<script>
+// Lightweight safety wrappers to avoid uncaught errors before full scripts load
+window.ideSave = window.ideSave || (async function(){ console.warn('ideSave not yet available'); alert('Save function not loaded yet'); });
+window.ideRun = window.ideRun || (async function(){ console.warn('ideRun not yet available'); alert('Run function not loaded yet'); });
+window.ideRunAuto = window.ideRunAuto || (async function(){ console.warn('ideRunAuto not yet available'); alert('Run (auto) not loaded yet'); });
+window.ideRefresh = window.ideRefresh || (async function(){ console.warn('ideRefresh not yet available'); });
+window.saveRemoteCreds = window.saveRemoteCreds || (async function(){ console.warn('saveRemoteCreds not yet available'); alert('Save Creds not loaded yet'); });
+window.loadRemoteCreds = window.loadRemoteCreds || (async function(){ console.warn('loadRemoteCreds not yet available'); alert('Load Creds not loaded yet'); });
+function _safeOpenModal(id){ const el = document.getElementById(id); if(!el){ console.warn('Modal element not found:', id); return; } el.style.display='block'; }
+function _safeCloseModal(id){ const el = document.getElementById(id); if(!el){ console.warn('Modal element not found:', id); return; } el.style.display='none'; }
+</script>
 
 <!-- Minimal IDE UI: file tree, editor, controls, output, and jobs -->
 <div style="display:flex;gap:12px;padding:20px;">
@@ -114,6 +128,7 @@ async function ideRefresh(){
 async function loadTree(path){
 	try{ path = decodeURIComponent(path||''); }catch(e){}
 	const r = await fetch('/api/ide/tree?path='+encodeURIComponent(path||''));
+	if(!r.ok){ console.error('Failed to load tree', r.status); return {ok:false}; }
 	const j = await r.json();
 	const el = document.getElementById('ideFiles');
 	const tree = document.createElement('div'); tree.style.maxHeight='280px'; tree.style.overflow='auto';
@@ -129,53 +144,67 @@ async function loadTree(path){
 	});
 	el.innerHTML = '';
 	el.appendChild(tree);
+	return {ok:true};
 }
-
-function addJobToList(exec_id){
-	const list = document.getElementById('jobList');
-	const row = document.createElement('div'); row.id = 'job-'+exec_id; row.style.borderBottom='1px dashed #222'; row.style.padding='6px';
-	row.innerHTML = `<div><strong>${exec_id}</strong> <span id="job-status-${exec_id}">queued</span> <button id="job-view-${exec_id}">View</button></div><pre id="job-out-${exec_id}" style="white-space:pre-wrap;max-height:120px;overflow:auto;"></pre>`;
-	list.prepend(row);
-	document.getElementById('job-view-'+exec_id).onclick = ()=> viewJob(exec_id);
-	const iv = setInterval(async ()=>{
-		try{
-			const r = await fetch('/api/ide/exec_status?exec_id='+encodeURIComponent(exec_id));
-			if(!r.ok){ document.getElementById('job-status-'+exec_id).textContent = 'error'; appendOutput('\n[job error] HTTP '+r.status+' for '+exec_id+'\n'); clearInterval(iv); return }
-			const j = await r.json();
-			if(!j.ok){ document.getElementById('job-status-'+exec_id).textContent = 'error'; appendOutput('\n[job error] '+(j.error||'unknown')+'\n'); clearInterval(iv); return }
-			document.getElementById('job-status-'+exec_id).textContent = j.job.status;
-			document.getElementById('job-out-'+exec_id).textContent = (j.job.stdout||'') + (j.job.stderr?('\n[stderr]\n'+j.job.stderr):'');
-			if(j.job.status==='finished' || j.job.status==='error') clearInterval(iv);
-		}catch(e){ document.getElementById('job-status-'+exec_id).textContent = 'error'; appendOutput('\n[job poll error] '+e+'\n'); clearInterval(iv); }
-	},1500);
+// Load a file into the IDE editor (used by the file tree links)
+async function loadFile(filenameEncoded){
+	try{
+		const filename = decodeURIComponent(filenameEncoded||'');
+		const r = await fetch('/api/ide/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})});
+		const j = await r.json();
+		if(j.ok){
+			document.getElementById('ideEditor').value = j.content;
+			document.getElementById('ideStatus').textContent = filename;
+			appendOutput('\n[info] Loaded '+filename+'\n');
+		} else {
+			appendOutput('\n[error] Load failed: '+(j.error||JSON.stringify(j))+'\n');
+		}
+	}catch(e){ appendOutput('\n[error] loadFile failed: '+e+'\n'); }
 }
-
-async function runAsync(){
-	const cmd = document.getElementById('cliCommand').value || '';
-	if(!cmd){ appendOutput('\n[error] Enter command or script path\n'); return }
-	try{ const r = await fetch('/api/ide/exec_async',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:cmd})}); if(!r.ok){ appendOutput('\n[error] Failed to start: HTTP '+r.status+'\n'); return } const j = await r.json(); if(!j.ok){ appendOutput('\n[error] Failed to start: '+(j.error||JSON.stringify(j))+'\n'); return } addJobToList(j.exec_id); appendOutput('\n[info] Started async job '+j.exec_id+'\n'); }catch(e){ appendOutput('\n[error] Exec async failed: '+e+'\n'); }
-}
-
-async function runSync(){
-	const cmd = document.getElementById('cliCommand').value || '';
-	if(!cmd){ appendOutput('\n[error] Enter command or script path\n'); return }
-	appendOutput('\n--- Running (sync) '+cmd+' ---\n');
-	try{ const r = await fetch('/api/ide/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:cmd})}); const j = await r.json(); if(j.ok){ appendOutput(j.stdout||''); if(j.stderr) appendOutput('\n[stderr]\n'+j.stderr); appendOutput('\n--- EXIT '+j.returncode+' ---\n'); } else appendOutput('\n[error] '+(j.error||JSON.stringify(j))+'\n'); }catch(e){ appendOutput('\n[error] Exec failed: '+e+'\n'); }
-}
-
-async function viewJob(exec_id){ try{ const r = await fetch('/api/ide/exec_status?exec_id='+encodeURIComponent(exec_id)); if(!r.ok){ appendOutput('\n[error] Job not found (HTTP '+r.status+')\n'); return } const j = await r.json(); if(!j.ok){ appendOutput('\n[error] Job not found: '+(j.error||'')+'\n'); return } appendOutput('\n--- Job '+exec_id+' ---\n'+(j.job.stdout||'')+'\n'+(j.job.stderr?('\n[stderr]\n'+j.job.stderr):'')+'\n'); }catch(e){ appendOutput('\n[error] viewJob failed: '+e+'\n'); } }
-
-async function loadFile(name){ try{ name = decodeURIComponent(name); const r = await fetch('/api/ide/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name})}); if(!r.ok){ appendOutput('\n[error] Load failed: HTTP '+r.status+'\n'); return } const j = await r.json(); if(j.ok){ document.getElementById('ideEditor').value = j.content; document.getElementById('ideStatus').textContent = name; appendOutput('\n[info] Loaded '+name+'\n'); } else appendOutput('\n[error] Load failed: '+(j.error||JSON.stringify(j))+'\n'); }catch(e){ appendOutput('\n[error] loadFile failed: '+e+'\n'); } }
-
 async function ideSave(){ try{ let name = document.getElementById('ideStatus').textContent || ''; if(!name) name = prompt('Filename to save as'); if(!name) return appendOutput('\n[error] Save cancelled\n'); const content = document.getElementById('ideEditor').value; const r = await fetch('/api/ide/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:name,content})}); if(!r.ok){ appendOutput('\n[error] Save failed: HTTP '+r.status+'\n'); return } const j = await r.json(); if(j.ok){ ideRefresh(); document.getElementById('ideStatus').textContent = name; appendOutput('\n[info] Saved '+name+'\n'); } else appendOutput('\n[error] Save failed: '+(j.error||JSON.stringify(j))+'\n'); }catch(e){ appendOutput('\n[error] ideSave failed: '+e+'\n'); } }
 
 async function ideRun(){ try{ const name = document.getElementById('ideStatus').textContent || ''; const content = document.getElementById('ideEditor').value; const shell = document.getElementById('ideShell').value; const verbose = document.getElementById('ideVerbose').checked; const remote = document.getElementById('ideRemote').checked; const target = document.getElementById('ideRemoteTarget').value; const payload = {shell, verbose, remote, remote_target: target}; if(name) payload.filename = name; payload.content = content; appendOutput('\n--- Executing ---\n'); const r = await fetch('/api/ide/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j = await r.json(); if(j.ok){ appendOutput(j.stdout||''); if(j.stderr) appendOutput('\n[stderr]\n'+j.stderr); appendOutput('\n--- EXIT '+j.returncode+' ---\n'); } else appendOutput('\n[error] '+(j.error||JSON.stringify(j))+'\n'); }catch(e){ appendOutput('\n[error] ideRun failed: '+e+'\n'); } }
 
 async function ideRunAuto(){ try{ const name = document.getElementById('ideStatus').textContent || ''; const content = document.getElementById('ideEditor').value; const verbose = document.getElementById('ideVerbose').checked; const remote = document.getElementById('ideRemote').checked; const target = document.getElementById('ideRemoteTarget').value; const payload = {verbose, remote, remote_target: target}; if(name) payload.filename = name; payload.content = content; appendOutput('\n--- Executing (auto) ---\n'); const r = await fetch('/api/ide/execute',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j = await r.json(); if(j.ok){ appendOutput(j.stdout||''); if(j.stderr) appendOutput('\n[stderr]\n'+j.stderr); appendOutput('\n--- EXIT '+j.returncode+' ---\n'); } else appendOutput('\n[error] '+(j.error||JSON.stringify(j))+'\n'); }catch(e){ appendOutput('\n[error] ideRunAuto failed: '+e+'\n'); } }
 
-async function saveRemoteCreds(){ try{ const target=document.getElementById('ideRemoteTarget').value; const user=document.getElementById('ideRemoteUser').value; const pw=document.getElementById('ideRemotePass').value; if(!target||!user||!pw){ appendOutput('\n[error] target,user,password required\n'); return; } const r = await fetch('/api/ide/remote/creds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,username:user,password:pw})}); if(!r.ok){ appendOutput('\n[error] Save creds failed: HTTP '+r.status+'\n'); return } const j = await r.json(); if(j.ok) appendOutput('\n[info] Saved remote creds for '+target+'\n'); else appendOutput('\n[error] Save failed: '+(j.error||JSON.stringify(j))+'\n'); }catch(e){ appendOutput('\n[error] saveRemoteCreds failed: '+e+'\n'); } }
+async function saveRemoteCreds(){
+	try{
+		const targetEl = document.getElementById('ideRemoteTarget');
+		const target = targetEl ? targetEl.value : (prompt('Remote target (host)')||'');
+		let userEl = document.getElementById('ideRemoteUser');
+		let passEl = document.getElementById('ideRemotePass');
+		let user = userEl ? userEl.value : null;
+		let pw = passEl ? passEl.value : null;
+		if(!user) user = prompt('Remote username');
+		if(!pw) pw = prompt('Remote password');
+		if(!target||!user||!pw){ appendOutput('\n[error] target,user,password required\n'); return; }
+		const r = await fetch('/api/ide/remote/creds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target,username:user,password:pw})});
+		if(!r.ok){ appendOutput('\n[error] Save creds failed: HTTP '+r.status+'\n'); return }
+		const j = await r.json(); if(j.ok) appendOutput('\n[info] Saved remote creds for '+target+'\n'); else appendOutput('\n[error] Save failed: '+(j.error||JSON.stringify(j))+'\n');
+	}catch(e){ appendOutput('\n[error] saveRemoteCreds failed: '+e+'\n'); }
+}
 
-async function loadRemoteCreds(){ try{ const target=document.getElementById('ideRemoteTarget').value; if(!target){ appendOutput('\n[error] enter target host to load\n'); return; } const r = await fetch('/api/ide/remote/creds?target='+encodeURIComponent(target)); if(!r.ok){ appendOutput('\n[error] Load creds failed: HTTP '+r.status+'\n'); return } const j = await r.json(); if(j.ok && j.cred){ document.getElementById('ideRemoteUser').value = j.cred.username||''; document.getElementById('ideRemotePass').value = j.cred.password||''; appendOutput('\n[info] Loaded creds for '+target+'\n'); } else appendOutput('\n[info] No creds found for '+target+'\n'); }catch(e){ appendOutput('\n[error] loadRemoteCreds failed: '+e+'\n'); } }
+async function loadRemoteCreds(){
+	try{
+		const targetEl = document.getElementById('ideRemoteTarget');
+		const target = targetEl ? targetEl.value : (prompt('Remote target (host)')||'');
+		if(!target){ appendOutput('\n[error] enter target host to load\n'); return; }
+		const r = await fetch('/api/ide/remote/creds?target='+encodeURIComponent(target));
+		if(!r.ok){ appendOutput('\n[error] Load creds failed: HTTP '+r.status+'\n'); return }
+		const j = await r.json();
+		if(j.ok && j.cred){
+			const userEl = document.getElementById('ideRemoteUser');
+			const passEl = document.getElementById('ideRemotePass');
+			if(userEl) userEl.value = j.cred.username||'';
+			if(passEl) passEl.value = j.cred.password||'';
+			if(!userEl || !passEl){
+				// show credentials in an alert if inputs not present
+				alert('Loaded credentials for '+target+'\nUser: '+(j.cred.username||'')+'\nPassword: '+(j.cred.password?'<hidden>':'(none)'));
+			}
+			appendOutput('\n[info] Loaded creds for '+target+'\n');
+		} else appendOutput('\n[info] No creds found for '+target+'\n');
+	}catch(e){ appendOutput('\n[error] loadRemoteCreds failed: '+e+'\n'); }
+}
 
 function clearOutput(){ document.getElementById('ideOutput').textContent=''; }
 function copyOutput(){ const t=document.getElementById('ideOutput').textContent; if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(()=>appendOutput('\n[info] Copied output to clipboard\n')).catch(e=>appendOutput('\n[error] Clipboard copy failed: '+e+'\n')); } else { appendOutput('\n[error] Clipboard API not available\n'); } }
@@ -184,13 +213,73 @@ async function ideUpload(){ appendOutput('\n[info] Use Save to write into script
 
 window.addEventListener('DOMContentLoaded', ideRefresh);
 ideRefresh();
+// Azure manager client functions
+async function azListGroups(){
+	const el = document.getElementById('azGroups'); el.textContent='Loading...';
+	try{
+		const r = await fetch('/api/azure/groups');
+		const j = await r.json();
+		if(!j.ok){ el.textContent='Failed: '+(j.error||JSON.stringify(j)); return }
+		el.innerHTML='';
+		j.groups.forEach(g=>{
+			const d = document.createElement('div'); d.style.padding='6px'; d.style.borderBottom='1px dashed #333';
+			const btn = document.createElement('button'); btn.className='btn'; btn.textContent='Open'; btn.style.marginRight='8px'; btn.onclick = ()=> azListResources(g.name);
+			d.appendChild(btn);
+			d.appendChild(document.createTextNode(g.name+' ('+(g.location||g.properties?.location||'')+')'));
+			el.appendChild(d);
+		});
+	}catch(e){ el.textContent='Error: '+e; }
+	azListStorageAccounts(); loadHooks();
+}
+
+async function azListResources(rg){
+	const el = document.getElementById('azResources'); el.textContent='Loading...';
+	try{
+		const r = await fetch('/api/azure/resources?rg='+encodeURIComponent(rg));
+		const j = await r.json();
+		if(!j.ok){ el.textContent='Failed: '+(j.error||JSON.stringify(j)); return }
+		el.innerHTML='';
+		j.resources.forEach(res=>{
+			const d = document.createElement('div'); d.style.padding='6px'; d.style.borderBottom='1px dashed #333';
+			d.innerHTML = '<b>'+res.name+'</b> <small>'+res.type+'</small> <div style="font-size:0.9em;color:#bbb">'+(res.location||res.properties?.location||'')+'</div>';
+			const btn = document.createElement('button'); btn.className='btn'; btn.textContent='Load ARM'; btn.style.marginTop='6px'; btn.onclick = ()=>{ document.getElementById('ideEditor').value = JSON.stringify(res, null, 2); document.getElementById('ideStatus').textContent = 'resource-'+res.name+'.json'; closeModal('azureManagerModal'); };
+			d.appendChild(btn);
+			el.appendChild(d);
+		});
+	}catch(e){ el.textContent='Error: '+e; }
+}
+
+async function azListStorageAccounts(){
+	const sel = document.getElementById('azStorageAccounts'); sel.innerHTML='';
+	try{
+		const r = await fetch('/api/azure/storage/accounts'); const j = await r.json();
+		if(!j.ok){ sel.innerHTML='<option>'+ (j.error||'failed') +'</option>'; return }
+		j.accounts.forEach(a=>{ const opt = document.createElement('option'); opt.value=a.name; opt.text = a.name+' ('+(a.location||'')+')'; sel.appendChild(opt); });
+	}catch(e){ sel.innerHTML='<option>Error</option>'; }
+}
+
+async function azListStorageContainers(){
+	const acc = document.getElementById('azStorageAccounts').value; const out = document.getElementById('azContainers'); out.textContent='Loading...';
+	try{ const r = await fetch('/api/azure/storage/containers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account:acc,action:'list'})}); const j=await r.json(); if(!j.ok){ out.textContent='Failed: '+(j.error||''); return } out.innerHTML=''; (j.containers||[]).forEach(c=>{ const d=document.createElement('div'); d.textContent=c.name; out.appendChild(d); }); }catch(e){ out.textContent='Error: '+e }
+}
+
+async function azCreateContainer(){ const acc=document.getElementById('azStorageAccounts').value; const cname=document.getElementById('newContainerName').value; if(!cname){ alert('Container name required'); return } try{ const r=await fetch('/api/azure/storage/containers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account:acc,action:'create',container:cname})}); const j=await r.json(); if(j.ok){ alert('Created'); azListStorageContainers(); } else alert('Create failed: '+(j.error||JSON.stringify(j))); }catch(e){ alert('Error: '+e); } }
+
+async function azCreateResourceGroup(){ const name=document.getElementById('createRgName').value; const loc=document.getElementById('createRgLocation').value||'eastus'; if(!name){ alert('RG name required'); return } try{ if(!confirm('Create resource group '+name+' in '+loc+'?')) return; const r=await fetch('/api/azure/create_rg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,location:loc})}); const j=await r.json(); if(j.ok){ alert('Created'); azListGroups(); } else alert('Failed: '+(j.error||JSON.stringify(j))); }catch(e){ alert('Error: '+e); } }
+
+async function loadHooks(){ const el=document.getElementById('adoHooksList'); el.textContent='Loading...'; try{ const r=await fetch('/api/ado/hooks'); const j=await r.json(); if(!j.ok){ el.textContent='Failed: '+(j.error||''); return } el.innerHTML=''; const hooks=j.hooks||{}; Object.keys(hooks).forEach(id=>{ const h=hooks[id]; const d=document.createElement('div'); d.style.padding='6px'; d.style.borderBottom='1px dashed #333'; d.innerHTML=`<b>${h.name||'hook'}</b> <div style="font-size:0.9em;color:#bbb">${h.url||''}</div>`; const del=document.createElement('button'); del.className='btn btn-danger'; del.textContent='Delete'; del.onclick=async ()=>{ if(!confirm('Delete hook?')) return; const rr=await fetch('/api/ado/hooks',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}); const jj=await rr.json(); if(jj.ok) loadHooks(); else alert('Delete failed'); }; d.appendChild(del); el.appendChild(d); }); }catch(e){ el.textContent='Error: '+e } }
+
+async function saveHook(){ const name=document.getElementById('hookName').value; const url=document.getElementById('hookUrl').value; if(!name||!url){ alert('name and url required'); return } try{ const r=await fetch('/api/ado/hooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,url})}); const j=await r.json(); if(j.ok) { loadHooks(); alert('Saved'); } else alert('Save failed: '+(j.error||JSON.stringify(j))); }catch(e){ alert('Error: '+e); } }
+
+// initialize when opening modal
+document.addEventListener('click', (e)=>{ if(e.target && e.target.getAttribute && e.target.getAttribute('onclick') && e.target.getAttribute('onclick').includes("openModal('azureManagerModal')")){ azListGroups(); } });
 </script>
 
 </div>
 <script>
 function confirmDelete(item){return confirm('Are you sure you want to delete '+item+'?');}
-function openModal(modalId){document.getElementById(modalId).style.display='block';}
-function closeModal(modalId){document.getElementById(modalId).style.display='none';}
+function openModal(modalId){ const el = document.getElementById(modalId); if(!el){ console.warn('openModal: element not found', modalId); return; } el.style.display='block'; }
+function closeModal(modalId){ const el = document.getElementById(modalId); if(!el){ console.warn('closeModal: element not found', modalId); return; } el.style.display='none'; }
 function refreshStats(){
 	fetch('/api/stats').then(r=>r.json()).then(data=>{
 		try{
@@ -228,9 +317,41 @@ function refreshIndex(){
 <!-- Floating Action Buttons -->
 <div id="fabContainer" style="position:fixed;right:20px;bottom:20px;z-index:2000;display:flex;flex-direction:column;gap:10px;">
 		<button title="New" onclick="openModal('ideWizardModal')" style="border-radius:50%;width:56px;height:56px;font-size:20px;padding:0;display:flex;align-items:center;justify-content:center;background:#4CAF50;color:#fff;border:none;">+</button>
+		<button title="Terraform Wizard" onclick="openModal('tfWizardModal')" style="border-radius:50%;width:56px;height:56px;font-size:16px;padding:0;display:flex;align-items:center;justify-content:center;background:#0b79d0;color:#fff;border:none;">TF</button>
 		<button title="Save" onclick="ideSave()" style="border-radius:50%;width:48px;height:48px;background:#4CAF50;color:#fff;border:none;">💾</button>
 		<button title="Run" onclick="ideRun()" style="border-radius:50%;width:48px;height:48px;background:#4CAF50;color:#fff;border:none;">▶</button>
 		<button title="Files" onclick="ideRefresh()" style="border-radius:50%;width:48px;height:48px;background:#4CAF50;color:#fff;border:none;">📁</button>
+</div>
+
+<!-- Azure Resource Manager Modal -->
+<div id="azureManagerModal" class="modal">
+	<div class="modal-content">
+		<span class="close" onclick="closeModal('azureManagerModal')">&times;</span>
+		<h3>Azure Resource Manager</h3>
+		<div style="display:flex;gap:12px;">
+			<div style="width:45%;">
+				<div style="margin-bottom:8px;"><strong>Resource Groups</strong> <button class="btn" onclick="azListGroups()">Refresh</button></div>
+				<div id="azGroups" style="background:#0b0b0b;padding:8px;border-radius:6px;max-height:200px;overflow:auto"></div>
+				<div style="margin-top:12px;"><strong>Resources</strong> <small>(select a group)</small></div>
+				<div id="azResources" style="background:#0b0b0b;padding:8px;border-radius:6px;max-height:240px;overflow:auto"></div>
+			</div>
+			<div style="flex:1;">
+				<div style="margin-bottom:8px;"><strong>Storage Manager</strong></div>
+				<div style="display:flex;gap:8px;margin-bottom:8px;"><select id="azStorageAccounts" style="flex:1"></select><button class="btn" onclick="azListStorageContainers()">List Containers</button></div>
+				<div id="azContainers" style="background:#0b0b0b;padding:8px;border-radius:6px;max-height:120px;overflow:auto;margin-bottom:8px"></div>
+				<div style="display:flex;gap:8px;margin-bottom:12px;"><input id="newContainerName" placeholder="container-name" style="flex:1"><button class="btn" onclick="azCreateContainer()">Create Container</button></div>
+
+				<div style="margin-top:6px;"><strong>CI / ADO Hooks</strong></div>
+				<div id="adoHooksList" style="background:#0b0b0b;padding:8px;border-radius:6px;max-height:120px;overflow:auto;margin-bottom:8px"></div>
+				<div style="display:flex;gap:8px;margin-bottom:8px;"><input id="hookName" placeholder="hook name" style="flex:1"><input id="hookUrl" placeholder="callback URL" style="flex:1"><button class="btn" onclick="saveHook()">Save Hook</button></div>
+
+				<div style="margin-top:10px;"><strong>Create Resource</strong></div>
+				<div style="display:flex;gap:8px;margin-bottom:6px;"><input id="createRgName" placeholder="rg-name" style="flex:1"><input id="createRgLocation" placeholder="location (eastus)" style="width:140px"></div>
+				<div style="display:flex;gap:8px;"><button class="btn" onclick="azCreateResourceGroup()">Create Resource Group</button></div>
+			</div>
+		</div>
+	</div>
+</div>
 </div>
 
 <!-- IDE Wizard Modal -->
@@ -281,6 +402,168 @@ function applyWizard(){
 	document.getElementById('ideEditor').value = content;
 	document.getElementById('ideStatus').textContent = finalName;
 	closeModal('ideWizardModal');
+}
+</script>
+
+<!-- Terraform Wizard Modal -->
+<div id="tfWizardModal" class="modal">
+	<div class="modal-content">
+		<span class="close" onclick="closeModal('tfWizardModal')">&times;</span>
+		<h3>Terraform & ARM Wizard</h3>
+		<div id="tf-wizard-steps">
+			<div class="tf-step" data-step="1">
+				<div class="form-group"><label>Project name<input id="tf_name" placeholder="myproject" /></label></div>
+				<div class="form-group"><label>Cloud<select id="tf_cloud"><option value="azure">Azure</option><option value="aws">AWS</option><option value="gcp">GCP</option></select></label></div>
+				<div style="display:flex;gap:8px;"><button class="btn" onclick="tfNext()">Next</button><button class="btn btn-warning" onclick="closeModal('tfWizardModal')">Cancel</button></div>
+			</div>
+			<div class="tf-step" data-step="2" style="display:none;">
+				<div class="form-group"><label>Backend<select id="tf_backend"><option value="local">Local</option><option value="azurerm">AzureRM</option><option value="s3">S3</option></select></label></div>
+				<div class="form-group"><label>Region/Location<input id="tf_location" placeholder="eastus / us-east-1" /></label></div>
+				<div style="display:flex;gap:8px;"><button class="btn" onclick="tfPrev()">Back</button><button class="btn" onclick="tfNext()">Next</button></div>
+			</div>
+			<div class="tf-step" data-step="3" style="display:none;">
+				<div class="form-group"><label>Variables (JSON) <textarea id="tf_vars" placeholder='{"env":"dev","replicas":1}' style="height:120px"></textarea></label></div>
+				<div class="form-group"><label>Resources (one per line, simple format)<textarea id="tf_resources" placeholder='type:name:key=value;key2=value' style="height:120px"></textarea></label></div>
+				<div style="display:flex;gap:8px;"><button class="btn" onclick="tfPrev()">Back</button><button class="btn" onclick="tfNext()">Next</button></div>
+			</div>
+			<div class="tf-step" data-step="4" style="display:none;">
+				<div class="section"><strong>Review</strong>
+					<div id="tf_review" style="margin-top:8px;font-family:monospace;white-space:pre-wrap;color:#ddd"></div>
+				</div>
+				<div style="margin-bottom:8px;"><label><input type="checkbox" id="tf_server_create"> Also create project on server</label></div>
+				<div style="margin-bottom:8px;"><label><input type="checkbox" id="tf_mock_create"> Create & start local mock environment</label>
+				<select id="tf_mock_type" style="margin-left:12px;"><option value="docker">Docker</option><option value="hyperv">Hyper-V</option></select>
+				</div>
+				<div style="display:flex;gap:8px;">
+					<button class="btn" onclick="tfPrev()">Back</button>
+					<button class="btn" onclick="tfGenerate()">Generate & Download ZIP</button>
+					<button class="btn btn-info" onclick="mockStartFromUI()">Start Mock</button>
+					<button class="btn btn-warning" onclick="mockStopFromUI()">Stop Mock</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+// Improved multi-step wizard controls and richer resource templates
+function tfNext(){ const steps = document.querySelectorAll('.tf-step'); for(let i=0;i<steps.length;i++){ if(steps[i].style.display !== 'none'){ steps[i].style.display='none'; if(i+1<steps.length) steps[i+1].style.display='block'; if(i+1===2) tfUpdateVisibility(); if(i+1===3) tfRenderReview(); break; } } }
+function tfPrev(){ const steps = document.querySelectorAll('.tf-step'); for(let i=0;i<steps.length;i++){ if(steps[i].style.display !== 'none'){ steps[i].style.display='none'; if(i-1>=0) steps[i-1].style.display='block'; break; } } }
+
+function tfUpdateVisibility(){ const map = [['res_rg','cfg_rg'],['res_vnet','cfg_vnet'],['res_storage','cfg_storage'],['res_k8s','cfg_k8s'],['res_iam','cfg_iam'],['res_fileshare','cfg_fileshare'],['res_db','cfg_db'],['res_custom','cfg_custom']]; map.forEach(([chk,cfg])=>{ const c = document.getElementById(chk); const el = document.getElementById(cfg); if(el) el.style.display = (c && c.checked) ? 'block' : 'none'; }); }
+
+function tfRenderReview(){ const name=document.getElementById('tf_name').value||'myproject'; const cloud=document.getElementById('tf_cloud').value; const backend=document.getElementById('tf_backend').value; const loc=document.getElementById('tf_location').value||''; let vars='{}'; try{ vars = JSON.stringify(JSON.parse(document.getElementById('tf_vars')?document.getElementById('tf_vars').value||'{}':'{}'),null,2); }catch(e){ vars = document.getElementById('tf_vars')?document.getElementById('tf_vars').value||'{}':'{}'; }
+	const sel = []; ['res_rg','res_vnet','res_storage','res_k8s','res_iam','res_fileshare','res_db','res_custom'].forEach(id=>{ const e=document.getElementById(id); if(e && e.checked) sel.push(id); });
+	const cfgs={}; ['rg','vnet','storage','k8s','iam','fileshare','db','custom'].forEach(k=>{ const el=document.getElementById('cfg_'+k); if(!el) return; cfgs[k]={}; Array.from(el.querySelectorAll('input,select,textarea')).forEach(i=>{ if(i.id) cfgs[k][i.id]=i.value; }); });
+	let out = `Project: ${name}\nCloud: ${cloud}\nBackend: ${backend}\nLocation: ${loc}\n\nSelected: \n${sel.join('\n')}\n\nVariables:\n${vars}\n\nSettings:\n${JSON.stringify(cfgs,null,2)}`;
+	document.getElementById('tf_review').textContent = out;
+}
+
+// small generators for common resources (concise best-practice defaults)
+function genAzureRg(name,loc){ return `resource "azurerm_resource_group" "rg" {\n  name = "${name}"\n  location = "${loc}"\n}\n\n`; }
+function genAzureVnet(name,cidr,sub){ return `resource "azurerm_virtual_network" "vnet" {\n  name = "${name}"\n  location = azurerm_resource_group.rg.location\n  resource_group_name = azurerm_resource_group.rg.name\n  address_space = ["${cidr}"]\n}\n\nresource "azurerm_subnet" "subnet" {\n  name = "subnet"\n  resource_group_name = azurerm_resource_group.rg.name\n  virtual_network_name = azurerm_virtual_network.vnet.name\n  address_prefixes = ["${sub}"]\n}\n\n`; }
+function genAzureStorage(name,container){ return `resource "azurerm_storage_account" "sa" {\n  name = "${name}"\n  resource_group_name = azurerm_resource_group.rg.name\n  location = azurerm_resource_group.rg.location\n  account_tier = "Standard"\n  account_replication_type = "LRS"\n}\n\nresource "azurerm_storage_container" "container" {\n  name = "${container}"\n  storage_account_name = azurerm_storage_account.sa.name\n  container_access_type = "private"\n}\n\n`; }
+function genAzureAks(name,count,size){ return `resource "azurerm_kubernetes_cluster" "aks" {\n  name = "${name}"\n  location = azurerm_resource_group.rg.location\n  resource_group_name = azurerm_resource_group.rg.name\n  default_node_pool { name = "default" node_count = ${count} vm_size = "${size}" }\n  dns_prefix = "${name}"\n}\n\n`; }
+function genAzureFileShare(share){ return `resource "azurerm_storage_share" "share" {\n  name = "${share}"\n  storage_account_name = azurerm_storage_account.sa.name\n  quota = 100\n}\n\n`; }
+
+function genAwsVpc(name,cidr,sub){ return `resource "aws_vpc" "vpc" { cidr_block = "${cidr}" tags = { Name = "${name}" } }\nresource "aws_subnet" "subnet" { vpc_id = aws_vpc.vpc.id cidr_block = "${sub}" availability_zone = "us-east-1a" }\n\n`; }
+function genAwsS3(name){ return `resource "aws_s3_bucket" "b" { bucket = "${name}" acl = "private" }\n\n`; }
+function genAwsEfs(name){ return `resource "aws_efs_file_system" "efs" { creation_token = "${name}" }\n\n`; }
+function genAwsIam(name){ return `resource "aws_iam_role" "role" { name = "${name}" assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Action = "sts:AssumeRole", Principal = { Service = ["ec2.amazonaws.com"] }, Effect = "Allow" }] }) }\n\n`; }
+
+async function tfGenerate(){ const name=document.getElementById('tf_name').value||'myproject'; const cloud=document.getElementById('tf_cloud').value; const backend=document.getElementById('tf_backend').value; const loc=document.getElementById('tf_location').value||''; let vars={}; try{ vars = JSON.parse(document.getElementById('tf_vars')?document.getElementById('tf_vars').value||'{}':'{}'); }catch(e){ alert('Variables JSON invalid'); return }
+	const files = {};
+	// backend
+	if(backend==='local') files['backend.tf'] = 'terraform { backend "local" { path = "terraform.tfstate" } }\n';
+	else if(backend==='azurerm') files['backend.tf'] = 'terraform { backend "azurerm" { resource_group_name = "my-rg" storage_account_name = "mystorageacct" container_name = "tfstate" key = "state.tfstate" } }\n';
+	else if(backend==='s3') files['backend.tf'] = 'terraform { backend "s3" { bucket = "my-bucket" key = "state.tf" region = "us-east-1" } }\n';
+
+	// provider
+	let prov = 'terraform { required_version = ">= 1.0.0" required_providers {\n'; if(cloud==='azure') prov += '  azurerm = { source = "hashicorp/azurerm" version = ">= 3.0.0" }\n'; else if(cloud==='aws') prov += '  aws = { source = "hashicorp/aws" version = ">= 4.0.0" }\n'; else prov += '  google = { source = "hashicorp/google" version = ">= 4.0.0" }\n'; prov += '} }\n\n'; if(cloud==='azure') prov += 'provider "azurerm" { features {} }\n'; else if(cloud==='aws') prov += 'provider "aws" { region = var.region }\n'; else prov += 'provider "google" { project = var.project region = var.region }\n'; files['provider.tf'] = prov;
+
+	// variables
+	let vtf=''; if(cloud==='azure') vars.location = vars.location || (loc||'eastus'); else vars.region = vars.region || (loc||'us-east-1'); Object.keys(vars).forEach(k=>{ const v=vars[k]; const t = typeof v; const tf_type = t==='number'?'number':t==='boolean'?'bool':'string'; vtf += `variable "${k}" { type = ${tf_type} default = ${JSON.stringify(v)} }\n\n`; }); files['variables.tf'] = vtf;
+
+	// compose resources
+	let main='';
+	if(document.getElementById('res_rg') && document.getElementById('res_rg').checked){ const rgName=document.getElementById('cfg_rg_name').value||`rg-${name}`; const rgLoc=document.getElementById('cfg_rg_location').value||(vars.location||loc||'eastus'); if(cloud==='azure') main += genAzureRg(rgName,rgLoc); else main += `# Resource grouping for ${cloud} will be applied via tags or projects\n\n`; }
+	if(document.getElementById('res_vnet') && document.getElementById('res_vnet').checked){ const vname=document.getElementById('cfg_vnet_name').value||`vnet-${name}`; const cidr=document.getElementById('cfg_vnet_cidr').value||'10.0.0.0/16'; const subnet=document.getElementById('cfg_vnet_subnet').value||'10.0.1.0/24'; if(cloud==='azure') main += genAzureVnet(vname,cidr,subnet); else if(cloud==='aws') main += genAwsVpc(vname,cidr,subnet); else main += `resource "google_compute_network" "net" { name = "${vname}" auto_create_subnetworks = false }\n\n`; }
+	if(document.getElementById('res_storage') && document.getElementById('res_storage').checked){ const sname=document.getElementById('cfg_storage_name').value||`${name.replace(/[^a-z0-9]/ig,'').toLowerCase()}storage`; const cont=document.getElementById('cfg_storage_container').value||'tfstate'; if(cloud==='azure') main += genAzureStorage(sname,cont); else if(cloud==='aws') main += genAwsS3(sname); else main += `resource "google_storage_bucket" "bucket" { name = "${sname}" location = "${loc||'US'}" }\n\n`; }
+	if(document.getElementById('res_k8s') && document.getElementById('res_k8s').checked){ const kname=document.getElementById('cfg_k8s_name').value||`${name}-k8s`; const count=document.getElementById('cfg_k8s_nodecount').value||3; const size=document.getElementById('cfg_k8s_nodesize').value||'Standard_DS2_v2'; if(cloud==='azure') main += genAzureAks(kname,count,size); else if(cloud==='aws') main += `# AWS EKS minimal placeholder - requires VPC and node groups\nresource "aws_eks_cluster" "eks" { name = "${kname}" role_arn = aws_iam_role.eks_role.arn vpc_config { subnet_ids = [aws_subnet.subnet.id] } }\n\n`; else main += `resource "google_container_cluster" "gke" { name = "${kname}" initial_node_count = ${count} }\n\n`; }
+	if(document.getElementById('res_iam') && document.getElementById('res_iam').checked){ const rn=document.getElementById('cfg_iam_name').value||`${name}-role`; if(cloud==='aws') main += genAwsIam(rn); else main += `# IAM role templates for ${cloud} require provider-specific policy documents\n\n`; }
+	if(document.getElementById('res_fileshare') && document.getElementById('res_fileshare').checked){ const share=document.getElementById('cfg_share_name').value||'fileshare'; const sku=document.getElementById('cfg_share_sku').value||'Standard'; if(cloud==='azure') main += genAzureFileShare(share); else if(cloud==='aws') main += genAwsEfs(share); else main += `# GCP Filestore: add manual template if desired\n\n`; }
+	if(document.getElementById('res_db') && document.getElementById('res_db').checked){ const eng=document.getElementById('cfg_db_engine').value||'postgres'; const size=document.getElementById('cfg_db_size').value||'db.t3.medium'; main += `# Managed DB placeholder (engine=${eng}, size=${size}) - add provider resource\n\n`; }
+	if(document.getElementById('res_custom') && document.getElementById('res_custom').checked){ const h=document.getElementById('cfg_custom_hcl').value||''; main += h + '\n\n'; }
+
+	files['main.tf'] = main;
+	files['outputs.tf'] = '';
+
+	if(cloud==='azure'){ const arm={"$schema":"https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#","contentVersion":"1.0.0.0","parameters":{},"resources":[],"outputs":{}}; arm.resources.push({type:"Microsoft.Resources/resourceGroups",apiVersion:"2021-04-01",name:`rg-${name}`,location:(vars.location||loc||'eastus')}); files['arm_template.json']=JSON.stringify(arm,null,2); files['deploy-arm.ps1']=`param([string]$ResourceGroupName='rg-${name}',[string]$Location='${vars.location||loc||'eastus'}',[string]$TemplateFile='arm_template.json')\nif(-not (Get-Command az -ErrorAction SilentlyContinue)){Write-Error 'Azure CLI required.'; exit 1}\naz group create --name $ResourceGroupName --location $Location\naz deployment group create --resource-group $ResourceGroupName --template-file $TemplateFile\n`; }
+
+	files['config.json'] = JSON.stringify({name,cloud,backend,location:loc,variables:vars},null,2);
+
+	const zip = new JSZip(); Object.keys(files).forEach(p=>zip.file(p, files[p])); const content = await zip.generateAsync({type:'blob'}); saveAs(content, `${name}_terraform.zip`); closeModal('tfWizardModal');
+
+	// Optionally create on server
+	try{
+		const doServer = document.getElementById('tf_server_create') && document.getElementById('tf_server_create').checked;
+		if(doServer){
+			const payload = { name, cloud, backend, location: loc, variables: vars, resources: [] };
+			// build a minimal resources list from generated main.tf entries (server-side wizard can synthesize as well)
+			if(files['main.tf']) payload.resources = [{ type: 'generated_main', content: files['main.tf'] }];
+			const r = await fetch('/api/terraform/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+			const j = await r.json();
+			if(j.ok){ appendOutput('\n[info] Created project on server: '+(j.path||'')+'\n'); } else { appendOutput('\n[error] Server create failed: '+(j.error||JSON.stringify(j))+'\n'); }
+		}
+	}catch(e){ appendOutput('\n[error] Server create request failed: '+e+'\n'); }
+
+	// Optionally create & start a local mock environment
+	try{
+		const doMock = document.getElementById('tf_mock_create') && document.getElementById('tf_mock_create').checked;
+			if(doMock){
+				const mockType = document.getElementById('tf_mock_type') ? document.getElementById('tf_mock_type').value : 'docker';
+			appendOutput('\n[info] Requesting mock environment generation ('+mockType+') on server...\n');
+				const r2 = await fetch('/api/mock/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,cloud,mock_type: mockType})});
+			const j2 = await r2.json();
+			if(j2.ok){ appendOutput('\n[info] Mock generated at: '+(j2.path||'')+'\n');
+				// start it
+				appendOutput('\n[info] Starting mock services...\n');
+					const r3 = await fetch('/api/mock/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path: j2.path, mock_type: mockType})});
+				const j3 = await r3.json();
+				if(j3.ok){ appendOutput('\n[info] Mock started: '+(j3.stdout||'')+'\n'); } else { appendOutput('\n[error] Mock start failed: '+(j3.error||JSON.stringify(j3))+'\n'); }
+			} else {
+				appendOutput('\n[error] Mock generation failed: '+(j2.error||JSON.stringify(j2))+'\n');
+			}
+		}
+	}catch(e){ appendOutput('\n[error] Mock create/start failed: '+e+'\n'); }
+}
+
+async function mockStartFromUI(){
+    try{
+        const name = document.getElementById('tf_name').value||prompt('Project name');
+        if(!name) return;
+        const cloud = document.getElementById('tf_cloud').value||'azure';
+		const mockType = document.getElementById('tf_mock_type') ? document.getElementById('tf_mock_type').value : 'docker';
+		const r = await fetch('/api/mock/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,cloud,mock_type: mockType})});
+        const j = await r.json();
+        if(!j.ok){ appendOutput('\n[error] Mock generate failed: '+(j.error||JSON.stringify(j))+'\n'); return }
+        appendOutput('\n[info] Mock generated at: '+j.path+'\n');
+		const rs = await fetch('/api/mock/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:j.path,mock_type: mockType})});
+        const js = await rs.json();
+        if(js.ok) appendOutput('\n[info] Mock started\n'+(js.stdout||'')+'\n'); else appendOutput('\n[error] Mock start failed: '+(js.error||JSON.stringify(js))+'\n');
+    }catch(e){ appendOutput('\n[error] mockStartFromUI failed: '+e+'\n'); }
+}
+
+async function mockStopFromUI(){
+    try{
+        const name = document.getElementById('tf_name').value||prompt('Project name');
+        if(!name) return;
+		const mockType = document.getElementById('tf_mock_type') ? document.getElementById('tf_mock_type').value : 'docker';
+		const basePath = 'data/terraform_projects/'+encodeURIComponent(name)+'/mock';
+		const r = await fetch('/api/mock/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path: basePath, mock_type: mockType})});
+        const j = await r.json();
+        if(j.ok) appendOutput('\n[info] Mock stopped: '+(j.stdout||'')+'\n'); else appendOutput('\n[error] Mock stop failed: '+(j.error||JSON.stringify(j))+'\n');
+    }catch(e){ appendOutput('\n[error] mockStopFromUI failed: '+e+'\n'); }
 }
 </script>
 

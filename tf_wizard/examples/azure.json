@@ -1,0 +1,14 @@
+{
+  "module_name": "storage_account_module",
+  "provider": "azurerm",
+  "variables": [
+    {"name": "location", "type": "string", "default": "eastus", "description": "Azure location"},
+    {"name": "account_name", "type": "string", "description": "Storage account name"}
+  ],
+  "resources": [
+    {"type": "azurerm_storage_account", "name": "sa", "args": {"name": "${var.account_name}", "location": "${var.location}", "resource_group_name": "example-rg", "account_tier": "Standard", "account_replication_type": "LRS"}}
+  ],
+  "outputs": [
+    {"name": "storage_id", "value": "azurerm_storage_account.sa.id"}
+  ]
+}

@@ -16,6 +16,10 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/jbalestrine/masterchief",
     packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        'tf_wizard': ['templates/**', 'static/**', 'examples/**']
+    },
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -68,6 +72,7 @@ setup(
     entry_points={
         "console_scripts": [
             "masterchief=core.cli.main:cli",
+            "tf_wizard=tf_wizard.cli:main",
         ],
     },
 )

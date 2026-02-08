@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>TF Wizard</title>
+    <style>
+      body{font-family:Segoe UI,Arial;padding:20px;max-width:900px;margin:auto}
+      textarea{width:100%;height:120px}
+      label{font-weight:600}
+      .row{margin-bottom:12px}
+    </style>
+  </head>
+  <body>
+    <h1>Terraform Module Wizard</h1>
+    <div class="row">
+      <label>Module name</label>
+      <input id="module_name" placeholder="my_module" />
+    </div>
+    <div class="row">
+      <label>Provider</label>
+      <select id="provider">
+        <option value="aws">AWS</option>
+        <option value="azurerm">Azure</option>
+        <option value="google">GCP</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Variables</label>
+      <div id="vars"></div>
+      <div><button id="add-variable">Add variable</button></div>
+    </div>
+    <div class="row">
+      <label>Resources</label>
+      <div id="res"></div>
+      <div><button id="add-resource">Add resource</button></div>
+    </div>
+    <div class="row">
+      <label>Outputs</label>
+      <div id="outs"></div>
+      <div><button id="add-output">Add output</button></div>
+    </div>
+    <div class="row">
+      <label>JSON Schema (Advanced)</label>
+      <textarea id="json_schema" placeholder='Paste a JSON Schema here'></textarea>
+      <div>
+        <button id="apply-schema">Apply Schema → Add Variables</button>
+        <button id="validate-schema">Validate Schema</button>
+      </div>
+    </div>
+    <div class="row">
+      <button id="generate">Generate module</button>
+    </div>
+    <div id="status"></div>
+    <script src="/static/script.js"></script>
+  </body>
+  </html>

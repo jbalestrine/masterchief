@@ -1,0 +1,5 @@
+include README.md
+recursive-include tf_wizard/templates *
+recursive-include tf_wizard/static *
+recursive-include tf_wizard/examples *
+recursive-include tf_wizard/tests *
