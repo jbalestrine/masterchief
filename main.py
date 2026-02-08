@@ -222,6 +222,322 @@ def api_ide_scripts():
 				files.append({'name': p.name, 'size': p.stat().st_size, 'modified': datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
 	except Exception as e:
 		return jsonify({'ok': False, 'error': str(e)}), 500
+
+	# success
+	return jsonify({'ok': True, 'files': files})
+
+
+@app.route('/api/terraform/generate', methods=['POST'])
+def api_terraform_generate():
+	"""Generate a Terraform project on the server from a wizard payload.
+	Expects JSON: { name, cloud, backend, provider_settings, variables, resources }
+	Returns: { ok: True, path: <relative path> }
+	"""
+	data = request.get_json(silent=True) or {}
+	name = data.get('name') or (data.get('config') or {}).get('name') or 'tf_project'
+	# sanitize name
+	sf = secure_filename(name) or 'tf_project'
+	try:
+		from tools.terraform_wizard import WizardConfig, create_project
+	except Exception as e:
+		return jsonify({'ok': False, 'error': f'Import error: {e}'}), 500
+	base = Path(__file__).resolve().parent / 'data' / 'terraform_projects'
+	out_dir = base / sf
+	try:
+		cfg = WizardConfig(
+			name=sf,
+			cloud=data.get('cloud', 'azure'),
+			backend=data.get('backend'),
+			provider_settings=data.get('provider_settings'),
+			variables=data.get('variables'),
+			resources=data.get('resources'),
+		)
+		create_project(cfg, out_dir)
+		return jsonify({'ok': True, 'path': str(out_dir.relative_to(Path(__file__).resolve().parent))})
+	except Exception as e:
+		app.logger.exception('Failed to generate terraform project')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mock/generate', methods=['POST'])
+def api_mock_generate():
+	"""Generate a docker-compose mock environment for a given terraform project.
+	Expects JSON: { name: <project_name>, cloud: 'azure'|'aws'|'gcp' }
+	"""
+	data = request.get_json(silent=True) or {}
+	name = data.get('name') or 'tf_project'
+	cloud = data.get('cloud') or 'azure'
+	mock_type = data.get('mock_type') or 'docker'
+	sf = secure_filename(name) or 'tf_project'
+	try:
+		from tools.terraform_wizard import WizardConfig, generate_mock_docker_compose, generate_mock_hyperv
+	except Exception as e:
+		return jsonify({'ok': False, 'error': f'Import error: {e}'}), 500
+	base = Path(__file__).resolve().parent / 'data' / 'terraform_projects'
+	out_dir = base / sf
+	try:
+		out_dir.mkdir(parents=True, exist_ok=True)
+		cfg = WizardConfig(name=sf, cloud=cloud, variables={}, resources=[])
+		if mock_type == 'hyperv':
+			mock_dir = generate_mock_hyperv(cfg, out_dir)
+		else:
+			mock_dir = generate_mock_docker_compose(cfg, out_dir)
+		return jsonify({'ok': True, 'path': str(mock_dir.relative_to(Path(__file__).resolve().parent))})
+	except Exception as e:
+		app.logger.exception('Failed to generate mock environment')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mock/start', methods=['POST'])
+def api_mock_start():
+	data = request.get_json(silent=True) or {}
+	path = data.get('path')
+	mock_type = data.get('mock_type') or 'docker'
+	if not path:
+		return jsonify({'ok': False, 'error': 'path required'}), 400
+	base = Path(__file__).resolve().parent
+	mock_dir = (base / path).resolve()
+	if not str(mock_dir).startswith(str(base)):
+		return jsonify({'ok': False, 'error': 'invalid path'}), 400
+	# choose script based on mock_type
+	try:
+		if mock_type == 'hyperv':
+			start_script = mock_dir / 'start_mock_hyperv.ps1'
+			if not start_script.exists():
+				return jsonify({'ok': False, 'error': 'start script not found'}), 404
+			if not sys.platform.startswith('win'):
+				return jsonify({'ok': False, 'error': 'Hyper-V scripts can only be run on Windows'}), 501
+			cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(start_script)]
+		else:
+			start_script = mock_dir / 'start_mock.sh'
+			if not start_script.exists():
+				return jsonify({'ok': False, 'error': 'start script not found'}), 404
+			# attempt to use docker compose
+			cmd = [str(start_script)]
+		proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+		if proc.returncode != 0:
+			return jsonify({'ok': False, 'error': proc.stderr}), 500
+		return jsonify({'ok': True, 'stdout': proc.stdout})
+	except Exception as e:
+		app.logger.exception('Failed to start mock services')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mock/stop', methods=['POST'])
+def api_mock_stop():
+	data = request.get_json(silent=True) or {}
+	path = data.get('path')
+	mock_type = data.get('mock_type') or 'docker'
+	if not path:
+		return jsonify({'ok': False, 'error': 'path required'}), 400
+	base = Path(__file__).resolve().parent
+	mock_dir = (base / path).resolve()
+	if not str(mock_dir).startswith(str(base)):
+		return jsonify({'ok': False, 'error': 'invalid path'}), 400
+	try:
+		if mock_type == 'hyperv':
+			stop_script = mock_dir / 'stop_mock_hyperv.ps1'
+			if not stop_script.exists():
+				return jsonify({'ok': False, 'error': 'stop script not found'}), 404
+			if not sys.platform.startswith('win'):
+				return jsonify({'ok': False, 'error': 'Hyper-V scripts can only be run on Windows'}), 501
+			cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(stop_script)]
+		else:
+			stop_script = mock_dir / 'stop_mock.sh'
+			if not stop_script.exists():
+				return jsonify({'ok': False, 'error': 'stop script not found'}), 404
+			cmd = [str(stop_script)]
+		proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+		if proc.returncode != 0:
+			return jsonify({'ok': False, 'error': proc.stderr}), 500
+		return jsonify({'ok': True, 'stdout': proc.stdout})
+	except Exception as e:
+		app.logger.exception('Failed to stop mock services')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/terraform/run', methods=['POST'])
+def api_terraform_run():
+	"""Run terraform actions (init|plan|deploy) asynchronously and return exec_id.
+	JSON: { action: 'init'|'plan'|'deploy', dir: '<relative path under data/terraform_projects>', auto_approve: bool }
+	"""
+	data = request.get_json(silent=True) or {}
+	action = data.get('action')
+	rel = data.get('dir')
+	if not action or action not in ('init', 'plan', 'deploy'):
+		return jsonify({'ok': False, 'error': 'action required (init|plan|deploy)'}), 400
+	base = Path(__file__).resolve().parent / 'data' / 'terraform_projects'
+	if not rel:
+		return jsonify({'ok': False, 'error': 'dir required'}), 400
+	target = (base / rel).resolve()
+	try:
+		if not str(target).startswith(str(base.resolve())) or not target.exists():
+			return jsonify({'ok': False, 'error': 'invalid dir'}), 400
+	except Exception:
+		return jsonify({'ok': False, 'error': 'invalid dir'}), 400
+
+	# build command
+	if action == 'init':
+		cmd = ['terraform', 'init', '-input=false']
+	elif action == 'plan':
+		cmd = ['terraform', 'plan', '-out=tfplan', '-input=false']
+	else:
+		# deploy
+		cmd = ['terraform', 'apply', '-auto-approve']
+
+	exec_id = uuid.uuid4().hex
+	EXEC_JOBS[exec_id] = {'id': exec_id, 'status': 'queued', 'cmd': cmd, 'pid': None, 'returncode': None, 'started_at': None, 'finished_at': None, 'cwd': str(target)}
+	_start_job_thread(exec_id, cmd, cwd=str(target))
+	return jsonify({'ok': True, 'exec_id': exec_id})
+
+
+# ---------------- Azure Resource Manager / Storage / ADO hooks ---------------------------------
+def _az_cli_available():
+	return shutil.which('az') is not None
+
+
+@app.route('/api/azure/groups')
+def api_azure_groups():
+	"""List Azure resource groups (uses `az group list` if available)."""
+	if not _az_cli_available():
+		return jsonify({'ok': False, 'error': 'az CLI not available on server'}), 501
+	try:
+		proc = subprocess.run(['az', 'group', 'list', '--output', 'json'], capture_output=True, text=True, timeout=30)
+		if proc.returncode != 0:
+			return jsonify({'ok': False, 'error': proc.stderr}), 500
+		data = json.loads(proc.stdout)
+		return jsonify({'ok': True, 'groups': data})
+	except Exception as e:
+		app.logger.exception('az group list failed')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/azure/resources')
+def api_azure_resources():
+	"""List Azure resources (optionally filter by resource group via ?rg=name)."""
+	rg = request.args.get('rg')
+	if not _az_cli_available():
+		return jsonify({'ok': False, 'error': 'az CLI not available on server'}), 501
+	try:
+		cmd = ['az', 'resource', 'list', '--output', 'json']
+		if rg:
+			cmd.extend(['--resource-group', rg])
+		proc = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
+		if proc.returncode != 0:
+			return jsonify({'ok': False, 'error': proc.stderr}), 500
+		data = json.loads(proc.stdout)
+		return jsonify({'ok': True, 'resources': data})
+	except Exception as e:
+		app.logger.exception('az resource list failed')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/azure/storage/accounts')
+def api_azure_storage_accounts():
+	"""List storage accounts."""
+	if not _az_cli_available():
+		return jsonify({'ok': False, 'error': 'az CLI not available on server'}), 501
+	try:
+		proc = subprocess.run(['az', 'storage', 'account', 'list', '--output', 'json'], capture_output=True, text=True, timeout=30)
+		if proc.returncode != 0:
+			return jsonify({'ok': False, 'error': proc.stderr}), 500
+		data = json.loads(proc.stdout)
+		return jsonify({'ok': True, 'accounts': data})
+	except Exception as e:
+		app.logger.exception('az storage account list failed')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/azure/storage/containers', methods=['POST'])
+def api_azure_storage_containers():
+	"""List or create containers. POST JSON: { account: name, action: 'list'|'create', container: name }
+	Note: requires appropriate az login and RBAC on server or using SAS/key parameters (not implemented).
+	"""
+	data = request.get_json(silent=True) or {}
+	account = data.get('account')
+	action = data.get('action') or 'list'
+	container = data.get('container')
+	if not account:
+		return jsonify({'ok': False, 'error': 'account required'}), 400
+	if not _az_cli_available():
+		return jsonify({'ok': False, 'error': 'az CLI not available on server'}), 501
+	try:
+		if action == 'list':
+			proc = subprocess.run(['az', 'storage', 'container', 'list', '--account-name', account, '--output', 'json'], capture_output=True, text=True, timeout=30)
+			if proc.returncode != 0:
+				return jsonify({'ok': False, 'error': proc.stderr}), 500
+			return jsonify({'ok': True, 'containers': json.loads(proc.stdout)})
+		elif action == 'create':
+			if not container:
+				return jsonify({'ok': False, 'error': 'container required for create'}), 400
+			proc = subprocess.run(['az', 'storage', 'container', 'create', '--account-name', account, '--name', container, '--output', 'json'], capture_output=True, text=True, timeout=30)
+			if proc.returncode != 0:
+				return jsonify({'ok': False, 'error': proc.stderr}), 500
+			return jsonify({'ok': True, 'result': json.loads(proc.stdout)})
+		else:
+			return jsonify({'ok': False, 'error': 'unknown action'}), 400
+	except Exception as e:
+		app.logger.exception('az storage container operation failed')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/azure/create_rg', methods=['POST'])
+def api_azure_create_rg():
+	data = request.get_json(silent=True) or {}
+	name = data.get('name')
+	location = data.get('location') or 'eastus'
+	if not name:
+		return jsonify({'ok': False, 'error': 'name required'}), 400
+	if not _az_cli_available():
+		return jsonify({'ok': False, 'error': 'az CLI not available on server'}), 501
+	try:
+		proc = subprocess.run(['az', 'group', 'create', '--name', name, '--location', location, '--output', 'json'], capture_output=True, text=True, timeout=30)
+		if proc.returncode != 0:
+			return jsonify({'ok': False, 'error': proc.stderr}), 500
+		return jsonify({'ok': True, 'result': json.loads(proc.stdout)})
+	except Exception as e:
+		app.logger.exception('az group create failed')
+		return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# Simple CRUD for 3rd-party service hooks (Azure DevOps) stored locally and optionally executed via az devops
+HOOKS_FILE = Path(__file__).resolve().parent / 'data' / 'azure_hooks.json'
+
+def _load_hooks():
+	try:
+		if HOOKS_FILE.exists():
+			return json.loads(HOOKS_FILE.read_text(encoding='utf-8'))
+	except Exception:
+		app.logger.exception('Failed to read hooks file')
+	return {}
+
+def _save_hooks(h):
+	try:
+		HOOKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+		HOOKS_FILE.write_text(json.dumps(h, indent=2), encoding='utf-8')
+	except Exception:
+		app.logger.exception('Failed to save hooks file')
+
+
+@app.route('/api/ado/hooks', methods=['GET','POST','DELETE'])
+def api_ado_hooks():
+	if request.method == 'GET':
+		return jsonify({'ok': True, 'hooks': _load_hooks()})
+	data = request.get_json(silent=True) or {}
+	hooks = _load_hooks()
+	if request.method == 'POST':
+		# add or update hook
+		hid = data.get('id') or uuid.uuid4().hex
+		hooks[hid] = data
+		_save_hooks(hooks)
+		return jsonify({'ok': True, 'id': hid})
+	if request.method == 'DELETE':
+		hid = data.get('id')
+		if hid and hid in hooks:
+			hooks.pop(hid)
+			_save_hooks(hooks)
+			return jsonify({'ok': True})
+		return jsonify({'ok': False, 'error': 'id not found'}), 404
 	return jsonify({'ok': True, 'files': files})
 
 
