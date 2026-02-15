@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd 7 platform features, enterprise TF wizard, and About page\n\nNew features:\n- Pipeline Orchestrator: visual drag-and-drop CI/CD builder with async execution\n- Multi-Cloud Dashboard: unified Azure/AWS/GCP resource view with cost overview\n- Secrets Vault: Fernet-encrypted secrets with version history and audit\n- Echo Memory: long-term conversation context with topic tagging and search\n- Plugin Marketplace: browse/install/configure plugins with ratings and reviews\n- Notification System: multi-channel alerts \\(Slack/Teams/Discord/Email\\)\n- RBAC Access Control: role-based permissions, sessions, audit log, API keys\n\nEnterprise Terraform Wizard:\n- 7-step wizard: project config, network topology, compute/AKS, security,\n  monitoring/DR, external integrations, review/generate\n- Hub-and-spoke landing zones with CIDR validation\n- AKS, Key Vault, Azure Site Recovery, Akamai CDN modules\n- CI/CD template generation \\(GitHub Actions / Azure Pipelines\\)\n- SVG architecture diagram generation\n- ZIP download of complete Terraform project\n\nAbout page with Coming Soon roadmap \\(Phase 1/2/3\\)\n\nJB\nEOF\n\\)\")",
+      "Bash(git push:*)"
+    ]
+  }
+}

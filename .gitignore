@@ -160,6 +160,9 @@ tmp/
 temp/
 *.tmp
 
+# Ignore models directory
+models/
+
 # Uploaded data files
 data/uploads/
 data/training/
