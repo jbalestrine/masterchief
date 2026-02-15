@@ -1,39 +1,1682 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TF Wizard - MasterChief</title>
+<title>Terraform Enterprise Wizard - MasterChief</title>
 <style>
-body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;margin:0}
-.header{background:#2d2d2d;padding:14px 20px;border-bottom:3px solid #4CAF50;display:flex;align-items:center;justify-content:space-between}
-.header a{color:#4CAF50;text-decoration:none}
-.container{padding:12px}
-.notice{background:#111;padding:12px;border-radius:6px;margin-bottom:12px}
-.iframe-wrap{width:100%;height:calc(100vh - 140px);border:0}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;line-height:1.6;}
+.container{max-width:1400px;margin:0 auto;padding:20px;}
+header{background:#2d2d2d;padding:20px;margin-bottom:30px;border-bottom:3px solid #4CAF50;}
+h1{color:#4CAF50;font-size:2.5em;margin-bottom:10px;}
+.subtitle{color:#888;font-size:1.1em;}
+nav{background:#252525;padding:15px;margin-bottom:30px;border-radius:8px;}
+nav a{color:#4CAF50;text-decoration:none;margin-right:20px;padding:8px 15px;border-radius:5px;display:inline-block;transition:all 0.3s;}
+nav a:hover,nav a.active{background:#4CAF50;color:#fff;}
+.card{background:#2d2d2d;padding:25px;border-radius:10px;border-left:4px solid #4CAF50;box-shadow:0 4px 6px rgba(0,0,0,0.3);}
+.card h3{color:#4CAF50;margin-bottom:15px;font-size:1.4em;}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #3a3a3a;}
+th{background:#252525;color:#4CAF50;font-weight:bold;}
+tr:hover{background:#333;}
+.btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;transition:all 0.3s;font-size:1em;}
+.btn:hover{background:#45a049;transform:translateY(-2px);}
+.btn-danger{background:#f44336;}.btn-danger:hover{background:#da190b;}
+.btn-warning{background:#ff9800;}.btn-warning:hover{background:#e68900;}
+.btn-info{background:#2196F3;}.btn-info:hover{background:#0b7dda;}
+.btn-sm{padding:5px 10px;font-size:0.85em;}
+.form-group{margin-bottom:20px;}
+label{display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;}
+input,textarea,select{width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#4CAF50;}
+.status-badge{padding:5px 12px;border-radius:15px;font-size:0.85em;font-weight:bold;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;}
+.modal-content{background:#2d2d2d;margin:50px auto;padding:30px;border-radius:10px;max-width:900px;position:relative;max-height:80vh;overflow-y:auto;}
+.close{position:absolute;top:15px;right:20px;font-size:30px;cursor:pointer;color:#888;}
+.close:hover{color:#4CAF50;}
+pre{background:#1a1a1a;padding:15px;border-radius:5px;overflow-x:auto;border-left:3px solid #4CAF50;}
+code{color:#4CAF50;}
+
+/* Stepper */
+.stepper{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;position:relative;padding:0 10px;}
+.stepper::before{content:'';position:absolute;top:20px;left:40px;right:40px;height:3px;background:#3a3a3a;z-index:0;}
+.step-item{display:flex;flex-direction:column;align-items:center;position:relative;z-index:1;cursor:pointer;flex:1;}
+.step-circle{width:40px;height:40px;border-radius:50%;background:#3a3a3a;color:#888;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:1em;border:3px solid #3a3a3a;transition:all 0.3s;}
+.step-item.active .step-circle{background:#4CAF50;color:#fff;border-color:#4CAF50;box-shadow:0 0 15px rgba(76,175,80,0.5);}
+.step-item.completed .step-circle{background:#2d2d2d;color:#4CAF50;border-color:#4CAF50;}
+.step-item.completed .step-circle::after{content:'\\2713';}
+.step-label{margin-top:8px;font-size:0.75em;color:#888;text-align:center;max-width:100px;}
+.step-item.active .step-label{color:#4CAF50;font-weight:bold;}
+.step-item.completed .step-label{color:#4CAF50;}
+
+/* Wizard content */
+.wizard-step{display:none;}
+.wizard-step.active{display:block;}
+.wizard-nav{display:flex;justify-content:space-between;margin-top:30px;padding-top:20px;border-top:1px solid #3a3a3a;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;}
+@media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr;}}
+
+/* Subnet rows */
+.subnet-row{display:grid;grid-template-columns:1fr 1fr 60px;gap:10px;align-items:center;margin-bottom:8px;padding:8px;background:#252525;border-radius:5px;}
+.subnet-row input{margin-bottom:0;}
+
+/* Spoke card */
+.spoke-card{background:#252525;padding:20px;border-radius:8px;margin-bottom:15px;border-left:3px solid #2196F3;}
+.spoke-card h4{color:#2196F3;margin-bottom:10px;}
+
+/* CIDR validation */
+.cidr-ok{border-color:#4CAF50 !important;}
+.cidr-err{border-color:#f44336 !important;}
+.cidr-msg{font-size:0.8em;margin-top:4px;}
+.cidr-msg.ok{color:#4CAF50;}
+.cidr-msg.err{color:#f44336;}
+
+/* Toggle switch */
+.toggle-wrap{display:flex;align-items:center;gap:12px;margin-bottom:15px;}
+.toggle{position:relative;width:50px;height:26px;cursor:pointer;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle .slider{position:absolute;top:0;left:0;right:0;bottom:0;background:#3a3a3a;border-radius:26px;transition:0.3s;}
+.toggle .slider::before{content:'';position:absolute;height:20px;width:20px;left:3px;bottom:3px;background:#888;border-radius:50%;transition:0.3s;}
+.toggle input:checked+.slider{background:#4CAF50;}
+.toggle input:checked+.slider::before{transform:translateX(24px);background:#fff;}
+.toggle-label{color:#e0e0e0;font-weight:bold;}
+
+/* Node pool */
+.node-pool-card{background:#1a1a1a;border:1px solid #3a3a3a;padding:15px;border-radius:8px;margin-bottom:10px;}
+.node-pool-card h5{color:#ff9800;margin-bottom:10px;}
+
+/* Collapsible */
+.collapsible-header{background:#252525;padding:15px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.collapsible-header:hover{background:#333;}
+.collapsible-body{display:none;padding:15px;}
+.collapsible-body.open{display:block;}
+.chevron{transition:transform 0.3s;color:#4CAF50;}
+.chevron.open{transform:rotate(180deg);}
+
+/* Review section */
+.review-section{background:#252525;padding:20px;border-radius:8px;margin-bottom:15px;border-left:3px solid #4CAF50;}
+.review-section h4{color:#4CAF50;margin-bottom:10px;}
+.review-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #333;}
+.review-item .lbl{color:#888;}
+.review-item .val{color:#e0e0e0;font-weight:bold;}
+
+/* Validation list */
+.val-list{list-style:none;}
+.val-list li{padding:6px 0;border-bottom:1px solid #333;display:flex;align-items:center;gap:8px;}
+.val-icon{font-size:1.1em;}
+.val-pass{color:#4CAF50;}
+.val-fail{color:#f44336;}
+
+/* SVG diagram */
+#architectureDiagram{background:#1a1a1a;border:1px solid #3a3a3a;border-radius:8px;margin:15px 0;}
+
+/* Code preview */
+.code-tabs{display:flex;gap:5px;margin-bottom:0;}
+.code-tab{padding:8px 16px;background:#252525;color:#888;border:none;border-radius:5px 5px 0 0;cursor:pointer;font-size:0.9em;}
+.code-tab.active{background:#1a1a1a;color:#4CAF50;border:1px solid #3a3a3a;border-bottom:none;}
+.code-panel{display:none;}
+.code-panel.active{display:block;}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:8px;}
+::-webkit-scrollbar-track{background:#1a1a1a;}
+::-webkit-scrollbar-thumb{background:#3a3a3a;border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:#4a4a4a;}
+
+/* Assignment table */
+.assignment-table td{vertical-align:middle;}
+.inline-select{width:auto;display:inline-block;padding:6px 10px;}
+
+/* Toast notification */
+.toast{position:fixed;bottom:30px;right:30px;padding:15px 25px;border-radius:8px;color:#fff;font-weight:bold;z-index:2000;transform:translateX(400px);transition:transform 0.4s;box-shadow:0 4px 15px rgba(0,0,0,0.4);}
+.toast.show{transform:translateX(0);}
+.toast-success{background:#4CAF50;}
+.toast-error{background:#f44336;}
+.toast-info{background:#2196F3;}
 </style>
 </head>
 <body>
-<div class="header">
-  <div><strong>Terraform Wizard</strong> — MasterChief</div>
-  <div><a href="/web_ide">Back to Web IDE</a></div>
-</div>
+
+<header>
 <div class="container">
-  <div class="notice">
-    This page embeds the standalone TF Wizard service. Ensure the TF Wizard server is running (default: <code>uvicorn tf_wizard.app:app --port 8000</code>).
-    If the iframe below is blank or shows an error, start the TF Wizard with your venv Python and then reload this page.
-  </div>
-  <iframe id="tfWizardFrame" class="iframe-wrap" src="http://127.0.0.1:8000/" title="TF Wizard"></iframe>
+<h1>Terraform Enterprise Wizard</h1>
+<p class="subtitle">Infrastructure-as-Code generation for Azure cloud environments</p>
 </div>
+</header>
+
+<div class="container">
+<nav>
+<a href="/">Dashboard</a>
+<a href="/echo-chat">Echo Chat</a>
+<a href="/scripts">Scripts</a>
+<a href="/processes">Processes</a>
+<a href="/services">Services</a>
+<a href="/addons">Addons</a>
+<a href="/echo-train">Training</a>
+<a href="/pipelines">Pipelines</a>
+<a href="/cloud">Cloud</a>
+<a href="/secrets">Secrets</a>
+<a href="/echo-memory">Memory</a>
+<a href="/marketplace">Marketplace</a>
+<a href="/notifications">Alerts</a>
+<a href="/rbac">Access</a>
+<a href="/about">About</a>
+<a href="/web_tf_wizard" class="active">TF Wizard</a>
+</nav>
+
+<!-- STEPPER -->
+<div class="stepper" id="stepper"></div>
+
+<!-- STEP 1: Project Configuration -->
+<div class="wizard-step active" id="step-1">
+<div class="card">
+<h3>Step 1: Project Configuration</h3>
+<p style="color:#888;margin-bottom:20px;">Define the foundational settings for your Terraform project.</p>
+<div class="grid-2">
+<div class="form-group">
+<label>Project Name</label>
+<input type="text" id="projectName" placeholder="e.g. contoso-platform" oninput="onProjectNameChange(this.value)">
+</div>
+<div class="form-group">
+<label>Environment</label>
+<select id="environment">
+<option value="dev">Development (dev)</option>
+<option value="test">Test (test)</option>
+<option value="staging">Staging (staging)</option>
+<option value="prod">Production (prod)</option>
+</select>
+</div>
+<div class="form-group">
+<label>Azure Region</label>
+<select id="azureRegion"></select>
+</div>
+<div class="form-group">
+<label>Subscription ID</label>
+<input type="text" id="subscriptionId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+</div>
+<div class="form-group">
+<label>Tenant ID</label>
+<input type="text" id="tenantId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+</div>
+<div class="form-group">
+<label>Naming Prefix</label>
+<input type="text" id="namingPrefix" placeholder="Auto-populated from project name">
+</div>
+<div class="form-group">
+<label>Naming Convention</label>
+<select id="namingConvention">
+<option value="caf">Cloud Adoption Framework (CAF)</option>
+<option value="custom">Custom</option>
+</select>
+</div>
+</div>
+</div>
+<div class="wizard-nav">
+<div></div>
+<button class="btn" onclick="goToStep(2)">Next: Network Topology &rarr;</button>
+</div>
+</div>
+
+<!-- STEP 2: Network Topology -->
+<div class="wizard-step" id="step-2">
+<div class="card">
+<h3>Step 2: Network Topology</h3>
+<p style="color:#888;margin-bottom:20px;">Design your Azure virtual network architecture.</p>
+
+<div class="grid-2" style="margin-bottom:20px;">
+<div class="form-group">
+<label>Topology</label>
+<select id="topology" onchange="onTopologyChange()">
+<option value="hub-spoke">Hub-and-Spoke</option>
+<option value="flat">Flat</option>
+</select>
+</div>
+<div class="form-group">
+<label>Hub VNET CIDR</label>
+<input type="text" id="hubCidr" value="10.0.0.0/16" oninput="validateCIDRField(this)">
+<div class="cidr-msg" id="hubCidrMsg"></div>
+</div>
+</div>
+
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableFirewall" checked><span class="slider"></span></label>
+<span class="toggle-label">Azure Firewall</span>
+</div>
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableVpnGw"><span class="slider"></span></label>
+<span class="toggle-label">VPN Gateway</span>
+</div>
+
+<div id="hubTopologySection">
+<h4 style="color:#4CAF50;margin:20px 0 10px;">Hub Subnets</h4>
+<div id="hubSubnets"></div>
+</div>
+
+<h4 style="color:#2196F3;margin:20px 0 10px;">Spoke VNETs</h4>
+<div id="spokesContainer"></div>
+<button class="btn btn-info" onclick="addSpoke()">+ Add Spoke</button>
+</div>
+<div class="wizard-nav">
+<button class="btn btn-warning" onclick="goToStep(1)">&larr; Back</button>
+<button class="btn" onclick="goToStep(3)">Next: Compute &amp; Kubernetes &rarr;</button>
+</div>
+</div>
+
+<!-- STEP 3: Compute & Kubernetes -->
+<div class="wizard-step" id="step-3">
+<div class="card">
+<h3>Step 3: Compute &amp; Kubernetes</h3>
+<p style="color:#888;margin-bottom:20px;">Configure AKS clusters and VM Scale Sets.</p>
+
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableAks" checked onchange="toggleAksSection()"><span class="slider"></span></label>
+<span class="toggle-label">Azure Kubernetes Service (AKS)</span>
+</div>
+<div id="aksSection">
+<div id="aksPerSpokeContainer"></div>
+</div>
+
+<hr style="border-color:#3a3a3a;margin:25px 0;">
+
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableVmss" onchange="toggleVmssSection()"><span class="slider"></span></label>
+<span class="toggle-label">VM Scale Sets (VMSS)</span>
+</div>
+<div id="vmssSection" style="display:none;">
+<div class="grid-3">
+<div class="form-group">
+<label>VM Size</label>
+<select id="vmssSize">
+<option>Standard_D2s_v3</option>
+<option>Standard_D4s_v3</option>
+<option>Standard_D8s_v3</option>
+<option>Standard_E2s_v3</option>
+<option>Standard_F4s_v2</option>
+</select>
+</div>
+<div class="form-group">
+<label>Instance Count</label>
+<input type="number" id="vmssCount" value="2" min="1" max="100">
+</div>
+<div class="form-group">
+<label>OS Image</label>
+<select id="vmssOs">
+<option value="ubuntu">Ubuntu 22.04 LTS</option>
+<option value="windows">Windows Server 2022</option>
+</select>
+</div>
+</div>
+</div>
+</div>
+<div class="wizard-nav">
+<button class="btn btn-warning" onclick="goToStep(2)">&larr; Back</button>
+<button class="btn" onclick="goToStep(4)">Next: Security &amp; Identity &rarr;</button>
+</div>
+</div>
+
+<!-- STEP 4: Security & Identity -->
+<div class="wizard-step" id="step-4">
+<div class="card">
+<h3>Step 4: Security &amp; Identity</h3>
+<p style="color:#888;margin-bottom:20px;">Configure Key Vault, RBAC assignments, and Azure AD groups.</p>
+
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableKeyVault" checked onchange="toggleKvSection()"><span class="slider"></span></label>
+<span class="toggle-label">Azure Key Vault</span>
+</div>
+<div id="kvSection">
+<div class="grid-3">
+<div class="form-group">
+<div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="kvPurgeProtection" checked><span class="slider"></span></label><span class="toggle-label">Purge Protection</span></div>
+</div>
+<div class="form-group">
+<label>Soft Delete Retention (days)</label>
+<input type="number" id="kvRetention" value="90" min="7" max="90">
+</div>
+<div class="form-group">
+<label>Network ACL Default Action</label>
+<select id="kvAclDefault">
+<option value="Deny">Deny</option>
+<option value="Allow">Allow</option>
+</select>
+</div>
+</div>
+</div>
+
+<hr style="border-color:#3a3a3a;margin:25px 0;">
+<h4 style="color:#4CAF50;margin-bottom:15px;">RBAC Assignments</h4>
+<table id="rbacTable">
+<thead><tr><th>Principal ID</th><th>Role</th><th>Scope</th><th>Actions</th></tr></thead>
+<tbody id="rbacBody"></tbody>
+</table>
+<button class="btn btn-info" style="margin-top:10px;" onclick="openRbacModal()">+ Add Assignment</button>
+
+<hr style="border-color:#3a3a3a;margin:25px 0;">
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableAadGroups" onchange="toggleAadSection()"><span class="slider"></span></label>
+<span class="toggle-label">Azure AD Group Management</span>
+</div>
+<div id="aadSection" style="display:none;">
+<table id="aadTable">
+<thead><tr><th>Group Name</th><th>Description</th><th>Members</th><th>Actions</th></tr></thead>
+<tbody id="aadBody"></tbody>
+</table>
+<button class="btn btn-info" style="margin-top:10px;" onclick="openAadModal()">+ Add Group</button>
+</div>
+</div>
+<div class="wizard-nav">
+<button class="btn btn-warning" onclick="goToStep(3)">&larr; Back</button>
+<button class="btn" onclick="goToStep(5)">Next: Monitoring &amp; DR &rarr;</button>
+</div>
+</div>
+
+<!-- STEP 5: Monitoring & DR -->
+<div class="wizard-step" id="step-5">
+<div class="card">
+<h3>Step 5: Monitoring &amp; Disaster Recovery</h3>
+<p style="color:#888;margin-bottom:20px;">Configure observability, diagnostics, and disaster recovery.</p>
+
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableLogAnalytics" checked><span class="slider"></span></label>
+<span class="toggle-label">Log Analytics Workspace</span>
+</div>
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableDiagnostics" checked><span class="slider"></span></label>
+<span class="toggle-label">Diagnostic Settings</span>
+</div>
+<div class="form-group" style="max-width:300px;">
+<label>Retention (days)</label>
+<input type="number" id="retentionDays" value="30" min="7" max="730">
+</div>
+
+<hr style="border-color:#3a3a3a;margin:25px 0;">
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableAsr" onchange="toggleAsrSection()"><span class="slider"></span></label>
+<span class="toggle-label">Azure Site Recovery</span>
+</div>
+<div id="asrSection" style="display:none;">
+<div class="grid-2">
+<div class="form-group">
+<label>Recovery Vault Name</label>
+<input type="text" id="asrVaultName" placeholder="e.g. rsv-dr-prod">
+</div>
+<div class="form-group">
+<label>Source Region</label>
+<select id="asrSourceRegion"></select>
+</div>
+<div class="form-group">
+<label>Target Region</label>
+<select id="asrTargetRegion"></select>
+</div>
+<div class="form-group">
+<label>RPO (hours)</label>
+<input type="number" id="asrRpo" value="24" min="1">
+</div>
+<div class="form-group">
+<label>Snapshot Interval (hours)</label>
+<input type="number" id="asrSnapshot" value="4" min="1">
+</div>
+</div>
+</div>
+
+<hr style="border-color:#3a3a3a;margin:25px 0;">
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableCloning"><span class="slider"></span></label>
+<span class="toggle-label">Environment Cloning</span>
+</div>
+<div id="cloningSection" style="display:none;">
+<div class="grid-2">
+<div class="form-group">
+<label>Source Environment</label>
+<select id="cloneSource"><option value="dev">dev</option><option value="test">test</option><option value="staging">staging</option><option value="prod">prod</option></select>
+</div>
+<div class="form-group">
+<label>Target Environment Name</label>
+<input type="text" id="cloneTarget" placeholder="e.g. staging-clone">
+</div>
+</div>
+</div>
+</div>
+<div class="wizard-nav">
+<button class="btn btn-warning" onclick="goToStep(4)">&larr; Back</button>
+<button class="btn" onclick="goToStep(6)">Next: Integrations &rarr;</button>
+</div>
+</div>
+
+<!-- STEP 6: External Integrations -->
+<div class="wizard-step" id="step-6">
+<div class="card">
+<h3>Step 6: External Integrations (Advanced)</h3>
+<p style="color:#888;margin-bottom:20px;">Configure CDN, CI/CD pipelines, and API test generation.</p>
+
+<div class="collapsible-header" onclick="toggleCollapsible('akamaiBody',this)">
+<span style="color:#4CAF50;font-weight:bold;">Akamai CDN Configuration</span>
+<span class="chevron">&#9660;</span>
+</div>
+<div class="collapsible-body" id="akamaiBody">
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableAkamai" onchange="toggleAkamaiFields()"><span class="slider"></span></label>
+<span class="toggle-label">Enable Akamai CDN</span>
+</div>
+<div id="akamaiFields" style="display:none;">
+<div class="grid-2">
+<div class="form-group"><label>Edge Hostname</label><input type="text" id="akamaiEdge" placeholder="e.g. www.example.com.edgesuite.net"></div>
+<div class="form-group"><label>Origin Hostname</label><input type="text" id="akamaiOrigin" placeholder="e.g. origin.example.com"></div>
+<div class="form-group"><label>Certificate</label><select id="akamaiCert"><option value="shared">Shared</option><option value="dedicated">Dedicated</option></select></div>
+</div>
+<div class="toggle-wrap" style="margin-top:10px;">
+<label class="toggle"><input type="checkbox" id="akamaiWaf" checked><span class="slider"></span></label>
+<span class="toggle-label">OWASP Top 10 WAF Rules</span>
+</div>
+</div>
+</div>
+
+<div class="collapsible-header" onclick="toggleCollapsible('cicdBody',this)" style="margin-top:10px;">
+<span style="color:#4CAF50;font-weight:bold;">CI/CD Pipeline Templates</span>
+<span class="chevron">&#9660;</span>
+</div>
+<div class="collapsible-body" id="cicdBody">
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableCicd" checked onchange="toggleCicdFields()"><span class="slider"></span></label>
+<span class="toggle-label">Generate CI/CD Templates</span>
+</div>
+<div id="cicdFields">
+<div class="form-group" style="max-width:400px;">
+<label>Platform</label>
+<select id="cicdPlatform" onchange="updateCicdPreview()">
+<option value="azure-devops">Azure DevOps</option>
+<option value="github-actions">GitHub Actions</option>
+</select>
+</div>
+<div id="cicdPreview"></div>
+</div>
+</div>
+
+<div class="collapsible-header" onclick="toggleCollapsible('apiTestBody',this)" style="margin-top:10px;">
+<span style="color:#4CAF50;font-weight:bold;">API Test Snippets</span>
+<span class="chevron">&#9660;</span>
+</div>
+<div class="collapsible-body" id="apiTestBody">
+<div class="toggle-wrap">
+<label class="toggle"><input type="checkbox" id="enableApiTests" onchange="toggleApiTestFields()"><span class="slider"></span></label>
+<span class="toggle-label">Generate API Test Snippets</span>
+</div>
+<div id="apiTestFields" style="display:none;">
+<pre><code id="apiTestCode">// API test snippets will be generated based on your configuration</code></pre>
+</div>
+</div>
+</div>
+<div class="wizard-nav">
+<button class="btn btn-warning" onclick="goToStep(5)">&larr; Back</button>
+<button class="btn" onclick="goToStep(7)">Next: Review &amp; Generate &rarr;</button>
+</div>
+</div>
+
+<!-- STEP 7: Review & Generate -->
+<div class="wizard-step" id="step-7">
+<div class="card">
+<h3>Step 7: Review &amp; Generate</h3>
+<p style="color:#888;margin-bottom:20px;">Review your configuration, preview generated code, and deploy.</p>
+
+<div id="reviewSummary"></div>
+
+<h4 style="color:#4CAF50;margin:25px 0 10px;">Validation Summary</h4>
+<ul class="val-list" id="validationList"></ul>
+
+<hr style="border-color:#3a3a3a;margin:25px 0;">
+<div class="collapsible-header" onclick="toggleCollapsible('tfPreviewBody',this)">
+<span style="color:#4CAF50;font-weight:bold;">Show Terraform Preview</span>
+<span class="chevron">&#9660;</span>
+</div>
+<div class="collapsible-body" id="tfPreviewBody">
+<div class="code-tabs">
+<button class="code-tab active" onclick="showCodeTab('main')">main.tf</button>
+<button class="code-tab" onclick="showCodeTab('variables')">variables.tf</button>
+<button class="code-tab" onclick="showCodeTab('outputs')">outputs.tf</button>
+</div>
+<div class="code-panel active" id="codePanel-main"><pre><code id="codeMain"></code></pre></div>
+<div class="code-panel" id="codePanel-variables"><pre><code id="codeVariables"></code></pre></div>
+<div class="code-panel" id="codePanel-outputs"><pre><code id="codeOutputs"></code></pre></div>
+</div>
+
+<hr style="border-color:#3a3a3a;margin:25px 0;">
+<h4 style="color:#4CAF50;margin-bottom:15px;">Architecture Diagram</h4>
+<svg id="architectureDiagram" width="100%" height="500" viewBox="0 0 900 500"></svg>
+
+<div style="margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;">
+<button class="btn" onclick="generateAndDownload()">Generate &amp; Download ZIP</button>
+<button class="btn btn-info" onclick="deployToProject()">Deploy to Project</button>
+<button class="btn btn-warning" onclick="exportSvg()">Export Diagram as SVG</button>
+<button class="btn btn-warning" onclick="exportPng()">Export Diagram as PNG</button>
+</div>
+</div>
+<div class="wizard-nav">
+<button class="btn btn-warning" onclick="goToStep(6)">&larr; Back</button>
+<div></div>
+</div>
+</div>
+</div><!-- end container -->
+
+<!-- RBAC Modal -->
+<div class="modal" id="rbacModal">
+<div class="modal-content" style="max-width:600px;">
+<span class="close" onclick="closeModal('rbacModal')">&times;</span>
+<h3 style="color:#4CAF50;margin-bottom:20px;">Add RBAC Assignment</h3>
+<div class="form-group"><label>Principal ID</label><input type="text" id="rbacPrincipalId" placeholder="Object ID of user, group, or service principal"></div>
+<div class="form-group"><label>Role</label><select id="rbacRole"><option>Contributor</option><option>Reader</option><option>Owner</option><option>Custom</option></select></div>
+<div class="form-group"><label>Scope</label><select id="rbacScope"><option value="subscription">Subscription</option><option value="resource-group">Resource Group</option><option value="resource">Resource</option></select></div>
+<button class="btn" onclick="addRbacAssignment()">Add Assignment</button>
+</div>
+</div>
+
+<!-- AAD Modal -->
+<div class="modal" id="aadModal">
+<div class="modal-content" style="max-width:600px;">
+<span class="close" onclick="closeModal('aadModal')">&times;</span>
+<h3 style="color:#4CAF50;margin-bottom:20px;">Add Azure AD Group</h3>
+<div class="form-group"><label>Group Name</label><input type="text" id="aadGroupName" placeholder="e.g. sg-aks-admins"></div>
+<div class="form-group"><label>Description</label><input type="text" id="aadGroupDesc" placeholder="Group description"></div>
+<div class="form-group"><label>Members (comma-separated Object IDs)</label><textarea id="aadGroupMembers" rows="3" placeholder="id1, id2, id3"></textarea></div>
+<button class="btn" onclick="addAadGroup()">Add Group</button>
+</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
 <script>
-// try to detect if iframe is reachable and show hint
-const iframe = document.getElementById('tfWizardFrame');
-iframe.addEventListener('load', ()=>{
-  try{
-    // no-cross-origin check; best-effort
-    console.log('TF Wizard iframe loaded');
-  }catch(e){ console.warn('iframe load event', e); }
+/* ========================================================================
+   STATE
+   ======================================================================== */
+var state = {
+  currentStep: 1,
+  totalSteps: 7,
+  project: { name:'', environment:'dev', region:'eastus', subscriptionId:'', tenantId:'', namingPrefix:'', namingConvention:'caf' },
+  network: {
+    topology:'hub-spoke',
+    hubCidr:'10.0.0.0/16',
+    hubSubnets:[
+      {name:'GatewaySubnet',cidr:'10.0.0.0/24'},
+      {name:'AzureFirewallSubnet',cidr:'10.0.1.0/24'},
+      {name:'SharedServicesSubnet',cidr:'10.0.2.0/24'},
+      {name:'ManagementSubnet',cidr:'10.0.3.0/24'}
+    ],
+    spokes:[],
+    enableFirewall:true,
+    enableVpnGw:false
+  },
+  compute: {
+    enableAks:true,
+    aksConfigs:{},
+    enableVmss:false,
+    vmss:{size:'Standard_D2s_v3',count:2,os:'ubuntu'}
+  },
+  security: {
+    enableKeyVault:true,
+    kv:{purgeProtection:true,retention:90,aclDefault:'Deny'},
+    rbacAssignments:[],
+    enableAadGroups:false,
+    aadGroups:[]
+  },
+  monitoring: {
+    enableLogAnalytics:true,
+    enableDiagnostics:true,
+    retentionDays:30,
+    enableAsr:false,
+    asr:{vaultName:'',sourceRegion:'eastus',targetRegion:'westus2',rpo:24,snapshot:4},
+    enableCloning:false,
+    cloning:{source:'dev',target:''}
+  },
+  integrations: {
+    enableAkamai:false,
+    akamai:{edge:'',origin:'',cert:'shared',waf:true},
+    enableCicd:true,
+    cicd:{platform:'azure-devops'},
+    enableApiTests:false
+  }
+};
+
+var AZURE_REGIONS = [
+  'eastus','eastus2','westus','westus2','centralus','northcentralus','southcentralus','westcentralus',
+  'canadacentral','canadaeast','uksouth','ukwest','westeurope','northeurope','francecentral',
+  'germanywestcentral','switzerlandnorth','norwayeast','swedencentral','australiaeast','australiasoutheast',
+  'japaneast','japanwest','southeastasia','eastasia','koreacentral','brazilsouth','southafricanorth','uaenorth'
+];
+
+var STEP_LABELS = ['Project','Network','Compute','Security','Monitoring','Integrations','Review'];
+
+var VM_SIZES = ['Standard_D2s_v3','Standard_D4s_v3','Standard_D8s_v3','Standard_D16s_v3',
+  'Standard_E2s_v3','Standard_E4s_v3','Standard_E8s_v3',
+  'Standard_F4s_v2','Standard_F8s_v2','Standard_B2s','Standard_B4ms'];
+
+/* ========================================================================
+   INIT
+   ======================================================================== */
+function init(){
+  buildStepper();
+  populateRegionDropdowns();
+  renderHubSubnets();
+  updateCicdPreview();
+  document.getElementById('enableCloning').addEventListener('change',function(){
+    document.getElementById('cloningSection').style.display=this.checked?'block':'none';
+  });
+}
+
+function buildStepper(){
+  var el=document.getElementById('stepper');
+  var html='';
+  for(var i=0;i<state.totalSteps;i++){
+    var cls=i===0?'active':'';
+    html+='<div class="step-item '+cls+'" id="stepItem-'+(i+1)+'" onclick="goToStep('+(i+1)+')">';
+    html+='<div class="step-circle">'+(i+1)+'</div>';
+    html+='<div class="step-label">'+STEP_LABELS[i]+'</div>';
+    html+='</div>';
+  }
+  el.innerHTML=html;
+}
+
+function populateRegionDropdowns(){
+  var selects=['azureRegion','asrSourceRegion','asrTargetRegion'];
+  selects.forEach(function(id){
+    var sel=document.getElementById(id);
+    if(!sel)return;
+    sel.innerHTML='';
+    AZURE_REGIONS.forEach(function(r){
+      var o=document.createElement('option');
+      o.value=r;o.textContent=r;
+      sel.appendChild(o);
+    });
+  });
+  var target=document.getElementById('asrTargetRegion');
+  if(target)target.value='westus2';
+}
+
+/* ========================================================================
+   STEP NAVIGATION
+   ======================================================================== */
+function goToStep(n){
+  if(n<1||n>state.totalSteps)return;
+  saveCurrentStepState();
+  // Hide all steps
+  var steps=document.querySelectorAll('.wizard-step');
+  for(var i=0;i<steps.length;i++) steps[i].classList.remove('active');
+  // Show target
+  document.getElementById('step-'+n).classList.add('active');
+  // Update stepper
+  for(var i=1;i<=state.totalSteps;i++){
+    var item=document.getElementById('stepItem-'+i);
+    item.classList.remove('active','completed');
+    if(i<n) item.classList.add('completed');
+    else if(i===n) item.classList.add('active');
+  }
+  state.currentStep=n;
+  window.scrollTo({top:0,behavior:'smooth'});
+  // Step-specific renders
+  if(n===3) renderAksPerSpoke();
+  if(n===7){ buildReviewSummary(); runValidation(); generateTfPreview(); drawArchitectureDiagram(); }
+}
+
+function saveCurrentStepState(){
+  var s=state.currentStep;
+  if(s===1){
+    state.project.name=gv('projectName');
+    state.project.environment=gv('environment');
+    state.project.region=gv('azureRegion');
+    state.project.subscriptionId=gv('subscriptionId');
+    state.project.tenantId=gv('tenantId');
+    state.project.namingPrefix=gv('namingPrefix');
+    state.project.namingConvention=gv('namingConvention');
+  }else if(s===2){
+    state.network.topology=gv('topology');
+    state.network.hubCidr=gv('hubCidr');
+    state.network.enableFirewall=gc('enableFirewall');
+    state.network.enableVpnGw=gc('enableVpnGw');
+    saveHubSubnets();
+    saveSpokes();
+  }else if(s===3){
+    state.compute.enableAks=gc('enableAks');
+    state.compute.enableVmss=gc('enableVmss');
+    if(state.compute.enableVmss){
+      state.compute.vmss.size=gv('vmssSize');
+      state.compute.vmss.count=parseInt(gv('vmssCount'))||2;
+      state.compute.vmss.os=gv('vmssOs');
+    }
+    saveAksConfigs();
+  }else if(s===4){
+    state.security.enableKeyVault=gc('enableKeyVault');
+    if(state.security.enableKeyVault){
+      state.security.kv.purgeProtection=gc('kvPurgeProtection');
+      state.security.kv.retention=parseInt(gv('kvRetention'))||90;
+      state.security.kv.aclDefault=gv('kvAclDefault');
+    }
+    state.security.enableAadGroups=gc('enableAadGroups');
+  }else if(s===5){
+    state.monitoring.enableLogAnalytics=gc('enableLogAnalytics');
+    state.monitoring.enableDiagnostics=gc('enableDiagnostics');
+    state.monitoring.retentionDays=parseInt(gv('retentionDays'))||30;
+    state.monitoring.enableAsr=gc('enableAsr');
+    if(state.monitoring.enableAsr){
+      state.monitoring.asr.vaultName=gv('asrVaultName');
+      state.monitoring.asr.sourceRegion=gv('asrSourceRegion');
+      state.monitoring.asr.targetRegion=gv('asrTargetRegion');
+      state.monitoring.asr.rpo=parseInt(gv('asrRpo'))||24;
+      state.monitoring.asr.snapshot=parseInt(gv('asrSnapshot'))||4;
+    }
+    state.monitoring.enableCloning=gc('enableCloning');
+    if(state.monitoring.enableCloning){
+      state.monitoring.cloning.source=gv('cloneSource');
+      state.monitoring.cloning.target=gv('cloneTarget');
+    }
+  }else if(s===6){
+    state.integrations.enableAkamai=gc('enableAkamai');
+    if(state.integrations.enableAkamai){
+      state.integrations.akamai.edge=gv('akamaiEdge');
+      state.integrations.akamai.origin=gv('akamaiOrigin');
+      state.integrations.akamai.cert=gv('akamaiCert');
+      state.integrations.akamai.waf=gc('akamaiWaf');
+    }
+    state.integrations.enableCicd=gc('enableCicd');
+    if(state.integrations.enableCicd){
+      state.integrations.cicd.platform=gv('cicdPlatform');
+    }
+    state.integrations.enableApiTests=gc('enableApiTests');
+  }
+}
+
+function gv(id){var e=document.getElementById(id);return e?e.value:'';}
+function gc(id){var e=document.getElementById(id);return e?e.checked:false;}
+
+/* ========================================================================
+   STEP 1: Project
+   ======================================================================== */
+function onProjectNameChange(v){
+  var prefix=v.toLowerCase().replace(/[^a-z0-9-]/g,'').substring(0,20);
+  document.getElementById('namingPrefix').value=prefix;
+}
+
+/* ========================================================================
+   STEP 2: Network
+   ======================================================================== */
+function onTopologyChange(){
+  var t=gv('topology');
+  document.getElementById('hubTopologySection').style.display=(t==='hub-spoke')?'block':'none';
+}
+
+function renderHubSubnets(){
+  var c=document.getElementById('hubSubnets');
+  var html='';
+  state.network.hubSubnets.forEach(function(s,i){
+    html+='<div class="subnet-row">';
+    html+='<input type="text" value="'+esc(s.name)+'" id="hubSn-'+i+'" placeholder="Subnet name">';
+    html+='<input type="text" value="'+esc(s.cidr)+'" id="hubSnCidr-'+i+'" placeholder="CIDR" oninput="validateCIDRField(this)">';
+    html+='<button class="btn btn-danger btn-sm" onclick="removeHubSubnet('+i+')">X</button>';
+    html+='</div>';
+  });
+  html+='<button class="btn btn-sm btn-info" onclick="addHubSubnet()" style="margin-top:5px;">+ Add Subnet</button>';
+  c.innerHTML=html;
+}
+
+function addHubSubnet(){
+  var idx=state.network.hubSubnets.length;
+  var octet=idx;
+  state.network.hubSubnets.push({name:'Subnet'+idx,cidr:'10.0.'+octet+'.0/24'});
+  renderHubSubnets();
+}
+
+function removeHubSubnet(i){
+  state.network.hubSubnets.splice(i,1);
+  renderHubSubnets();
+}
+
+function saveHubSubnets(){
+  state.network.hubSubnets=[];
+  var rows=document.querySelectorAll('#hubSubnets .subnet-row');
+  rows.forEach(function(r,i){
+    var name=document.getElementById('hubSn-'+i);
+    var cidr=document.getElementById('hubSnCidr-'+i);
+    if(name&&cidr) state.network.hubSubnets.push({name:name.value,cidr:cidr.value});
+  });
+}
+
+var spokeCounter=0;
+function addSpoke(){
+  spokeCounter++;
+  var idx=state.network.spokes.length;
+  var octet=idx+1;
+  state.network.spokes.push({
+    id:spokeCounter,
+    name:'spoke-'+spokeCounter,
+    cidr:'10.'+octet+'.0.0/16',
+    subnets:[
+      {name:'AKSSubnet',cidr:'10.'+octet+'.0.0/20'},
+      {name:'AppSubnet',cidr:'10.'+octet+'.16.0/20'},
+      {name:'DataSubnet',cidr:'10.'+octet+'.32.0/20'}
+    ],
+    peerWithHub:true,
+    enableNsg:true
+  });
+  renderSpokes();
+}
+
+function renderSpokes(){
+  var c=document.getElementById('spokesContainer');
+  var html='';
+  state.network.spokes.forEach(function(sp,i){
+    html+='<div class="spoke-card" id="spokeCard-'+i+'">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;">';
+    html+='<h4>Spoke: '+esc(sp.name)+'</h4>';
+    html+='<button class="btn btn-danger btn-sm" onclick="removeSpoke('+i+')">Remove</button>';
+    html+='</div>';
+    html+='<div class="grid-2" style="margin-top:10px;">';
+    html+='<div class="form-group"><label>Spoke Name</label><input type="text" value="'+esc(sp.name)+'" id="spokeName-'+i+'"></div>';
+    html+='<div class="form-group"><label>VNET CIDR</label><input type="text" value="'+esc(sp.cidr)+'" id="spokeCidr-'+i+'" oninput="validateCIDRField(this)"><div class="cidr-msg" id="spokeCidrMsg-'+i+'"></div></div>';
+    html+='</div>';
+    html+='<div style="margin:10px 0;"><strong style="color:#888;">Subnets:</strong></div>';
+    sp.subnets.forEach(function(sn,j){
+      html+='<div class="subnet-row">';
+      html+='<input type="text" value="'+esc(sn.name)+'" id="spokeSnName-'+i+'-'+j+'">';
+      html+='<input type="text" value="'+esc(sn.cidr)+'" id="spokeSnCidr-'+i+'-'+j+'" oninput="validateCIDRField(this)">';
+      html+='<button class="btn btn-danger btn-sm" onclick="removeSpokeSubnet('+i+','+j+')">X</button>';
+      html+='</div>';
+    });
+    html+='<button class="btn btn-sm btn-info" onclick="addSpokeSubnet('+i+')" style="margin-top:5px;">+ Add Subnet</button>';
+    html+='<div class="grid-2" style="margin-top:10px;">';
+    html+='<div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="spokePeer-'+i+'" '+(sp.peerWithHub?'checked':'')+'><span class="slider"></span></label><span class="toggle-label">Peer with Hub</span></div>';
+    html+='<div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="spokeNsg-'+i+'" '+(sp.enableNsg?'checked':'')+'><span class="slider"></span></label><span class="toggle-label">NSG Rules</span></div>';
+    html+='</div>';
+    html+='</div>';
+  });
+  c.innerHTML=html;
+}
+
+function removeSpoke(i){
+  state.network.spokes.splice(i,1);
+  renderSpokes();
+}
+
+function addSpokeSubnet(si){
+  saveSpokes();
+  var idx=state.network.spokes[si].subnets.length;
+  state.network.spokes[si].subnets.push({name:'Subnet'+idx,cidr:''});
+  renderSpokes();
+}
+
+function removeSpokeSubnet(si,sni){
+  saveSpokes();
+  state.network.spokes[si].subnets.splice(sni,1);
+  renderSpokes();
+}
+
+function saveSpokes(){
+  state.network.spokes.forEach(function(sp,i){
+    var nameEl=document.getElementById('spokeName-'+i);
+    var cidrEl=document.getElementById('spokeCidr-'+i);
+    var peerEl=document.getElementById('spokePeer-'+i);
+    var nsgEl=document.getElementById('spokeNsg-'+i);
+    if(nameEl) sp.name=nameEl.value;
+    if(cidrEl) sp.cidr=cidrEl.value;
+    if(peerEl) sp.peerWithHub=peerEl.checked;
+    if(nsgEl) sp.enableNsg=nsgEl.checked;
+    sp.subnets=[];
+    var j=0;
+    while(true){
+      var sn=document.getElementById('spokeSnName-'+i+'-'+j);
+      var sc=document.getElementById('spokeSnCidr-'+i+'-'+j);
+      if(!sn||!sc)break;
+      sp.subnets.push({name:sn.value,cidr:sc.value});
+      j++;
+    }
+  });
+}
+
+/* ========================================================================
+   CIDR VALIDATION
+   ======================================================================== */
+function isValidCIDR(cidr){
+  if(!cidr)return false;
+  var m=cidr.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/);
+  if(!m)return false;
+  for(var i=1;i<=4;i++){if(parseInt(m[i])>255)return false;}
+  var prefix=parseInt(m[5]);
+  if(prefix<0||prefix>32)return false;
+  return true;
+}
+
+function cidrToRange(cidr){
+  var parts=cidr.split('/');
+  var ip=parts[0].split('.').map(Number);
+  var prefix=parseInt(parts[1]);
+  var ipNum=((ip[0]<<24)|(ip[1]<<16)|(ip[2]<<8)|ip[3])>>>0;
+  var mask=(0xFFFFFFFF<<(32-prefix))>>>0;
+  var start=(ipNum&mask)>>>0;
+  var end=(start|(~mask>>>0))>>>0;
+  return {start:start,end:end};
+}
+
+function doCIDRsOverlap(cidr1,cidr2){
+  if(!isValidCIDR(cidr1)||!isValidCIDR(cidr2))return false;
+  var r1=cidrToRange(cidr1);
+  var r2=cidrToRange(cidr2);
+  return r1.start<=r2.end && r2.start<=r1.end;
+}
+
+function validateCIDRField(el){
+  var val=el.value;
+  el.classList.remove('cidr-ok','cidr-err');
+  if(!val)return;
+  if(isValidCIDR(val)){
+    el.classList.add('cidr-ok');
+  }else{
+    el.classList.add('cidr-err');
+  }
+}
+
+function validateAllCIDRs(){
+  var results=[];
+  var allCidrs=[];
+  // Hub
+  if(isValidCIDR(state.network.hubCidr)){
+    allCidrs.push({label:'Hub VNET',cidr:state.network.hubCidr});
+    results.push({ok:true,msg:'Hub VNET CIDR is valid: '+state.network.hubCidr});
+  }else if(state.network.hubCidr){
+    results.push({ok:false,msg:'Hub VNET CIDR is invalid: '+state.network.hubCidr});
+  }
+  // Hub subnets
+  state.network.hubSubnets.forEach(function(s){
+    if(s.cidr){
+      if(isValidCIDR(s.cidr)){
+        allCidrs.push({label:'Hub/'+s.name,cidr:s.cidr});
+      }else{
+        results.push({ok:false,msg:'Hub subnet "'+s.name+'" has invalid CIDR: '+s.cidr});
+      }
+    }
+  });
+  // Spokes
+  state.network.spokes.forEach(function(sp){
+    if(isValidCIDR(sp.cidr)){
+      allCidrs.push({label:'Spoke/'+sp.name,cidr:sp.cidr});
+      results.push({ok:true,msg:'Spoke "'+sp.name+'" CIDR is valid: '+sp.cidr});
+    }else if(sp.cidr){
+      results.push({ok:false,msg:'Spoke "'+sp.name+'" CIDR is invalid: '+sp.cidr});
+    }
+    sp.subnets.forEach(function(sn){
+      if(sn.cidr){
+        if(isValidCIDR(sn.cidr)){
+          allCidrs.push({label:'Spoke/'+sp.name+'/'+sn.name,cidr:sn.cidr});
+        }else{
+          results.push({ok:false,msg:'Spoke "'+sp.name+'" subnet "'+sn.name+'" invalid CIDR: '+sn.cidr});
+        }
+      }
+    });
+  });
+  // Overlap check between VNETs only (not subnets within same VNET)
+  var vnets=allCidrs.filter(function(c){return c.label.indexOf('/')===-1||c.label.split('/').length===2;});
+  for(var i=0;i<vnets.length;i++){
+    for(var j=i+1;j<vnets.length;j++){
+      if(doCIDRsOverlap(vnets[i].cidr,vnets[j].cidr)){
+        // only flag if they are different VNETs (hub vs spoke or spoke vs spoke)
+        var isHubI=vnets[i].label.indexOf('Hub')===0;
+        var isHubJ=vnets[j].label.indexOf('Hub')===0;
+        var isSameVnet=false;
+        if(!isHubI&&!isHubJ){
+          isSameVnet=(vnets[i].label===vnets[j].label);
+        }
+        if(!isSameVnet){
+          results.push({ok:false,msg:'CIDR overlap: '+vnets[i].label+' ('+vnets[i].cidr+') overlaps with '+vnets[j].label+' ('+vnets[j].cidr+')'});
+        }
+      }
+    }
+  }
+  return results;
+}
+
+/* ========================================================================
+   STEP 3: Compute
+   ======================================================================== */
+function toggleAksSection(){
+  document.getElementById('aksSection').style.display=gc('enableAks')?'block':'none';
+}
+
+function toggleVmssSection(){
+  document.getElementById('vmssSection').style.display=gc('enableVmss')?'block':'none';
+}
+
+function renderAksPerSpoke(){
+  var c=document.getElementById('aksPerSpokeContainer');
+  if(!state.compute.enableAks||state.network.spokes.length===0){
+    c.innerHTML='<p style="color:#888;">Enable AKS above and add spoke VNETs in Step 2 to configure AKS clusters.</p>';
+    return;
+  }
+  var html='';
+  state.network.spokes.forEach(function(sp,i){
+    var cfg=state.compute.aksConfigs[sp.name]||getDefaultAksConfig();
+    state.compute.aksConfigs[sp.name]=cfg;
+    html+='<div class="spoke-card" style="border-left-color:#ff9800;">';
+    html+='<h4 style="color:#ff9800;">AKS in Spoke: '+esc(sp.name)+'</h4>';
+    html+='<div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="aksEnable-'+i+'" '+(cfg.enabled?'checked':'')+'><span class="slider"></span></label><span class="toggle-label">Enable AKS in this spoke</span></div>';
+    html+='<div id="aksDetail-'+i+'" style="'+(cfg.enabled?'':'display:none')+'">';
+    html+='<div class="grid-3">';
+    html+='<div class="form-group"><label>Kubernetes Version</label><select id="aksK8sVer-'+i+'"><option '+(cfg.k8sVersion==='1.30'?'selected':'')+'>1.30</option><option '+(cfg.k8sVersion==='1.29'?'selected':'')+'>1.29</option><option '+(cfg.k8sVersion==='1.28'?'selected':'')+'>1.28</option><option '+(cfg.k8sVersion==='1.27'?'selected':'')+'>1.27</option></select></div>';
+    html+='<div class="form-group"><label>Network Plugin</label><select id="aksNetPlugin-'+i+'"><option '+(cfg.networkPlugin==='azure'?'selected':'')+'>azure</option><option '+(cfg.networkPlugin==='kubenet'?'selected':'')+'>kubenet</option></select></div>';
+    html+='<div class="form-group"><label>Network Policy</label><select id="aksNetPolicy-'+i+'"><option '+(cfg.networkPolicy==='azure'?'selected':'')+'>azure</option><option '+(cfg.networkPolicy==='calico'?'selected':'')+'>calico</option></select></div>';
+    html+='</div>';
+    html+='<h5 style="color:#4CAF50;margin:15px 0 10px;">System Node Pool</h5>';
+    html+='<div class="grid-3">';
+    html+='<div class="form-group"><label>VM Size</label><select id="aksSysVm-'+i+'">';
+    VM_SIZES.forEach(function(v){html+='<option '+(cfg.sysPool.vmSize===v?'selected':'')+'>'+v+'</option>';});
+    html+='</select></div>';
+    html+='<div class="form-group"><label>Node Count</label><input type="number" id="aksSysCount-'+i+'" value="'+cfg.sysPool.count+'" min="1" max="100"></div>';
+    html+='<div class="form-group"><label>Min (Autoscaler)</label><input type="number" id="aksSysMin-'+i+'" value="'+cfg.sysPool.min+'" min="1"></div>';
+    html+='</div>';
+    html+='<div class="grid-3">';
+    html+='<div class="form-group"><label>Max (Autoscaler)</label><input type="number" id="aksSysMax-'+i+'" value="'+cfg.sysPool.max+'" min="1"></div>';
+    html+='</div>';
+    // User node pools
+    html+='<h5 style="color:#ff9800;margin:15px 0 10px;">User Node Pools</h5>';
+    html+='<div id="aksUserPools-'+i+'">';
+    cfg.userPools.forEach(function(up,j){
+      html+=renderUserPoolHtml(i,j,up);
+    });
+    html+='</div>';
+    html+='<button class="btn btn-sm btn-info" onclick="addUserNodePool('+i+')" style="margin-top:5px;">+ Add User Node Pool</button>';
+    // Toggles
+    html+='<div style="margin-top:15px;">';
+    html+='<div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="aksAadRbac-'+i+'" '+(cfg.enableAadRbac?'checked':'')+'><span class="slider"></span></label><span class="toggle-label">Azure AD RBAC</span></div>';
+    html+='<div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="aksPolicy-'+i+'" '+(cfg.enablePolicy?'checked':'')+'><span class="slider"></span></label><span class="toggle-label">Azure Policy</span></div>';
+    html+='<div class="toggle-wrap"><label class="toggle"><input type="checkbox" id="aksInsights-'+i+'" '+(cfg.enableInsights?'checked':'')+'><span class="slider"></span></label><span class="toggle-label">Container Insights</span></div>';
+    html+='</div>';
+    html+='</div>';
+    html+='</div>';
+  });
+  c.innerHTML=html;
+  // Wire enable toggles
+  state.network.spokes.forEach(function(sp,i){
+    var tog=document.getElementById('aksEnable-'+i);
+    if(tog){
+      tog.addEventListener('change',(function(idx){return function(){
+        document.getElementById('aksDetail-'+idx).style.display=this.checked?'block':'none';
+      };})(i));
+    }
+  });
+}
+
+function getDefaultAksConfig(){
+  return {enabled:true,k8sVersion:'1.29',networkPlugin:'azure',networkPolicy:'azure',
+    sysPool:{vmSize:'Standard_D2s_v3',count:3,min:1,max:5},
+    userPools:[],enableAadRbac:true,enablePolicy:true,enableInsights:true};
+}
+
+function renderUserPoolHtml(si,pi,up){
+  var html='<div class="node-pool-card">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;">';
+  html+='<h5>User Pool: '+esc(up.name)+'</h5>';
+  html+='<button class="btn btn-danger btn-sm" onclick="removeUserNodePool('+si+','+pi+')">Remove</button>';
+  html+='</div>';
+  html+='<div class="grid-3">';
+  html+='<div class="form-group"><label>Name</label><input type="text" value="'+esc(up.name)+'" id="aksUpName-'+si+'-'+pi+'"></div>';
+  html+='<div class="form-group"><label>VM Size</label><select id="aksUpVm-'+si+'-'+pi+'">';
+  VM_SIZES.forEach(function(v){html+='<option '+(up.vmSize===v?'selected':'')+'>'+v+'</option>';});
+  html+='</select></div>';
+  html+='<div class="form-group"><label>Count</label><input type="number" value="'+up.count+'" id="aksUpCount-'+si+'-'+pi+'" min="0"></div>';
+  html+='</div>';
+  html+='<div class="grid-3">';
+  html+='<div class="form-group"><label>Min</label><input type="number" value="'+up.min+'" id="aksUpMin-'+si+'-'+pi+'" min="0"></div>';
+  html+='<div class="form-group"><label>Max</label><input type="number" value="'+up.max+'" id="aksUpMax-'+si+'-'+pi+'" min="1"></div>';
+  html+='<div class="form-group"><label>Labels (k=v,k=v)</label><input type="text" value="'+esc(up.labels)+'" id="aksUpLabels-'+si+'-'+pi+'"></div>';
+  html+='</div>';
+  html+='<div class="form-group"><label>Taints (k=v:effect,...)</label><input type="text" value="'+esc(up.taints)+'" id="aksUpTaints-'+si+'-'+pi+'"></div>';
+  html+='</div>';
+  return html;
+}
+
+function addUserNodePool(si){
+  saveAksConfigs();
+  var sp=state.network.spokes[si];
+  var cfg=state.compute.aksConfigs[sp.name];
+  cfg.userPools.push({name:'userpool'+cfg.userPools.length,vmSize:'Standard_D4s_v3',count:3,min:1,max:10,labels:'',taints:''});
+  renderAksPerSpoke();
+}
+
+function removeUserNodePool(si,pi){
+  saveAksConfigs();
+  var sp=state.network.spokes[si];
+  var cfg=state.compute.aksConfigs[sp.name];
+  cfg.userPools.splice(pi,1);
+  renderAksPerSpoke();
+}
+
+function saveAksConfigs(){
+  state.network.spokes.forEach(function(sp,i){
+    var enableEl=document.getElementById('aksEnable-'+i);
+    if(!enableEl)return;
+    var cfg=state.compute.aksConfigs[sp.name]||getDefaultAksConfig();
+    cfg.enabled=enableEl.checked;
+    cfg.k8sVersion=gvId('aksK8sVer-'+i)||cfg.k8sVersion;
+    cfg.networkPlugin=gvId('aksNetPlugin-'+i)||cfg.networkPlugin;
+    cfg.networkPolicy=gvId('aksNetPolicy-'+i)||cfg.networkPolicy;
+    cfg.sysPool.vmSize=gvId('aksSysVm-'+i)||cfg.sysPool.vmSize;
+    cfg.sysPool.count=parseInt(gvId('aksSysCount-'+i))||3;
+    cfg.sysPool.min=parseInt(gvId('aksSysMin-'+i))||1;
+    cfg.sysPool.max=parseInt(gvId('aksSysMax-'+i))||5;
+    cfg.enableAadRbac=gcId('aksAadRbac-'+i);
+    cfg.enablePolicy=gcId('aksPolicy-'+i);
+    cfg.enableInsights=gcId('aksInsights-'+i);
+    // User pools
+    cfg.userPools.forEach(function(up,j){
+      up.name=gvId('aksUpName-'+i+'-'+j)||up.name;
+      up.vmSize=gvId('aksUpVm-'+i+'-'+j)||up.vmSize;
+      up.count=parseInt(gvId('aksUpCount-'+i+'-'+j))||up.count;
+      up.min=parseInt(gvId('aksUpMin-'+i+'-'+j))||up.min;
+      up.max=parseInt(gvId('aksUpMax-'+i+'-'+j))||up.max;
+      up.labels=gvId('aksUpLabels-'+i+'-'+j)||'';
+      up.taints=gvId('aksUpTaints-'+i+'-'+j)||'';
+    });
+    state.compute.aksConfigs[sp.name]=cfg;
+  });
+}
+
+function gvId(id){var e=document.getElementById(id);return e?e.value:null;}
+function gcId(id){var e=document.getElementById(id);return e?e.checked:false;}
+
+/* ========================================================================
+   STEP 4: Security
+   ======================================================================== */
+function toggleKvSection(){document.getElementById('kvSection').style.display=gc('enableKeyVault')?'block':'none';}
+function toggleAadSection(){document.getElementById('aadSection').style.display=gc('enableAadGroups')?'block':'none';}
+
+function openRbacModal(){document.getElementById('rbacModal').style.display='block';}
+function openAadModal(){document.getElementById('aadModal').style.display='block';}
+function closeModal(id){document.getElementById(id).style.display='none';}
+
+function addRbacAssignment(){
+  var pid=gv('rbacPrincipalId'),role=gv('rbacRole'),scope=gv('rbacScope');
+  if(!pid){showToast('Principal ID is required','error');return;}
+  state.security.rbacAssignments.push({principalId:pid,role:role,scope:scope});
+  renderRbacTable();
+  closeModal('rbacModal');
+  document.getElementById('rbacPrincipalId').value='';
+}
+
+function renderRbacTable(){
+  var b=document.getElementById('rbacBody');
+  var html='';
+  state.security.rbacAssignments.forEach(function(a,i){
+    html+='<tr><td>'+esc(a.principalId)+'</td><td>'+esc(a.role)+'</td><td>'+esc(a.scope)+'</td>';
+    html+='<td><button class="btn btn-danger btn-sm" onclick="removeRbac('+i+')">Delete</button></td></tr>';
+  });
+  b.innerHTML=html;
+}
+
+function removeRbac(i){state.security.rbacAssignments.splice(i,1);renderRbacTable();}
+
+function addAadGroup(){
+  var name=gv('aadGroupName'),desc=gv('aadGroupDesc'),members=gv('aadGroupMembers');
+  if(!name){showToast('Group name is required','error');return;}
+  state.security.aadGroups.push({name:name,description:desc,members:members});
+  renderAadTable();
+  closeModal('aadModal');
+  document.getElementById('aadGroupName').value='';
+  document.getElementById('aadGroupDesc').value='';
+  document.getElementById('aadGroupMembers').value='';
+}
+
+function renderAadTable(){
+  var b=document.getElementById('aadBody');
+  var html='';
+  state.security.aadGroups.forEach(function(g,i){
+    html+='<tr><td>'+esc(g.name)+'</td><td>'+esc(g.description)+'</td><td>'+esc(g.members)+'</td>';
+    html+='<td><button class="btn btn-danger btn-sm" onclick="removeAad('+i+')">Delete</button></td></tr>';
+  });
+  b.innerHTML=html;
+}
+
+function removeAad(i){state.security.aadGroups.splice(i,1);renderAadTable();}
+
+/* ========================================================================
+   STEP 5: Monitoring toggles
+   ======================================================================== */
+function toggleAsrSection(){document.getElementById('asrSection').style.display=gc('enableAsr')?'block':'none';}
+
+/* ========================================================================
+   STEP 6: Integrations
+   ======================================================================== */
+function toggleCollapsible(id,header){
+  var body=document.getElementById(id);
+  body.classList.toggle('open');
+  var chevron=header.querySelector('.chevron');
+  if(chevron) chevron.classList.toggle('open');
+}
+
+function toggleAkamaiFields(){document.getElementById('akamaiFields').style.display=gc('enableAkamai')?'block':'none';}
+function toggleCicdFields(){document.getElementById('cicdFields').style.display=gc('enableCicd')?'block':'none';}
+function toggleApiTestFields(){document.getElementById('apiTestFields').style.display=gc('enableApiTests')?'block':'none';}
+
+function updateCicdPreview(){
+  var platform=gv('cicdPlatform')||'azure-devops';
+  var el=document.getElementById('cicdPreview');
+  if(!el)return;
+  var yaml='';
+  if(platform==='azure-devops'){
+    yaml='trigger:\n  branches:\n    include:\n      - main\n\npool:\n  vmImage: "ubuntu-latest"\n\nstages:\n  - stage: Validate\n    jobs:\n      - job: TerraformValidate\n        steps:\n          - task: TerraformInstaller@0\n            inputs:\n              terraformVersion: "latest"\n          - script: |\n              terraform init\n              terraform validate\n              terraform plan -out=tfplan\n            displayName: "Terraform Init, Validate & Plan"\n\n  - stage: Apply\n    dependsOn: Validate\n    condition: and(succeeded(), eq(variables[\'Build.SourceBranch\'], \'refs/heads/main\'))\n    jobs:\n      - deployment: TerraformApply\n        environment: "production"\n        strategy:\n          runOnce:\n            deploy:\n              steps:\n                - script: terraform apply -auto-approve tfplan\n                  displayName: "Terraform Apply"';
+  }else{
+    yaml='name: Terraform CI/CD\n\non:\n  push:\n    branches: [ main ]\n  pull_request:\n    branches: [ main ]\n\njobs:\n  terraform:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: hashicorp/setup-terraform@v3\n      - name: Terraform Init\n        run: terraform init\n      - name: Terraform Validate\n        run: terraform validate\n      - name: Terraform Plan\n        run: terraform plan -out=tfplan\n      - name: Terraform Apply\n        if: github.ref == \'refs/heads/main\' && github.event_name == \'push\'\n        run: terraform apply -auto-approve tfplan';
+  }
+  el.innerHTML='<pre style="margin-top:10px;"><code>'+esc(yaml)+'</code></pre>';
+}
+
+/* ========================================================================
+   STEP 7: Review
+   ======================================================================== */
+function buildReviewSummary(){
+  var el=document.getElementById('reviewSummary');
+  var h='';
+  // Project
+  h+='<div class="review-section"><h4>Project Configuration</h4>';
+  h+=ri('Project Name',state.project.name||'(not set)');
+  h+=ri('Environment',state.project.environment);
+  h+=ri('Region',state.project.region);
+  h+=ri('Subscription ID',state.project.subscriptionId||'(not set)');
+  h+=ri('Tenant ID',state.project.tenantId||'(not set)');
+  h+=ri('Naming Prefix',state.project.namingPrefix||'(not set)');
+  h+=ri('Naming Convention',state.project.namingConvention==='caf'?'Cloud Adoption Framework':'Custom');
+  h+='</div>';
+  // Network
+  h+='<div class="review-section"><h4>Network Topology</h4>';
+  h+=ri('Topology',state.network.topology);
+  h+=ri('Hub CIDR',state.network.hubCidr);
+  h+=ri('Hub Subnets',state.network.hubSubnets.map(function(s){return s.name+' ('+s.cidr+')';}).join(', '));
+  h+=ri('Spokes',state.network.spokes.length+' spoke(s)');
+  state.network.spokes.forEach(function(sp){
+    h+=ri('  Spoke: '+sp.name,sp.cidr+' | Subnets: '+sp.subnets.map(function(sn){return sn.name;}).join(', '));
+  });
+  h+=ri('Azure Firewall',state.network.enableFirewall?'Enabled':'Disabled');
+  h+=ri('VPN Gateway',state.network.enableVpnGw?'Enabled':'Disabled');
+  h+='</div>';
+  // Compute
+  h+='<div class="review-section"><h4>Compute &amp; Kubernetes</h4>';
+  h+=ri('AKS',state.compute.enableAks?'Enabled':'Disabled');
+  if(state.compute.enableAks){
+    Object.keys(state.compute.aksConfigs).forEach(function(k){
+      var c=state.compute.aksConfigs[k];
+      if(c.enabled){
+        h+=ri('  AKS in '+k,'K8s '+c.k8sVersion+' | System: '+c.sysPool.vmSize+' x'+c.sysPool.count+' | User Pools: '+c.userPools.length);
+      }
+    });
+  }
+  h+=ri('VMSS',state.compute.enableVmss?state.compute.vmss.size+' x'+state.compute.vmss.count+' ('+state.compute.vmss.os+')':'Disabled');
+  h+='</div>';
+  // Security
+  h+='<div class="review-section"><h4>Security &amp; Identity</h4>';
+  h+=ri('Key Vault',state.security.enableKeyVault?'Enabled (Purge: '+(state.security.kv.purgeProtection?'On':'Off')+', Retention: '+state.security.kv.retention+'d, ACL: '+state.security.kv.aclDefault+')':'Disabled');
+  h+=ri('RBAC Assignments',state.security.rbacAssignments.length+' assignment(s)');
+  h+=ri('AAD Groups',state.security.enableAadGroups?state.security.aadGroups.length+' group(s)':'Disabled');
+  h+='</div>';
+  // Monitoring
+  h+='<div class="review-section"><h4>Monitoring &amp; DR</h4>';
+  h+=ri('Log Analytics',state.monitoring.enableLogAnalytics?'Enabled':'Disabled');
+  h+=ri('Diagnostics',state.monitoring.enableDiagnostics?'Enabled':'Disabled');
+  h+=ri('Retention',state.monitoring.retentionDays+' days');
+  h+=ri('Site Recovery',state.monitoring.enableAsr?'Enabled ('+state.monitoring.asr.sourceRegion+' -> '+state.monitoring.asr.targetRegion+')':'Disabled');
+  h+=ri('Env Cloning',state.monitoring.enableCloning?state.monitoring.cloning.source+' -> '+state.monitoring.cloning.target:'Disabled');
+  h+='</div>';
+  // Integrations
+  h+='<div class="review-section"><h4>External Integrations</h4>';
+  h+=ri('Akamai CDN',state.integrations.enableAkamai?'Enabled':'Disabled');
+  h+=ri('CI/CD Templates',state.integrations.enableCicd?state.integrations.cicd.platform:'Disabled');
+  h+=ri('API Tests',state.integrations.enableApiTests?'Enabled':'Disabled');
+  h+='</div>';
+  el.innerHTML=h;
+}
+
+function ri(label,val){
+  return '<div class="review-item"><span class="lbl">'+esc(label)+'</span><span class="val">'+esc(val)+'</span></div>';
+}
+
+function runValidation(){
+  var list=document.getElementById('validationList');
+  var checks=[];
+  // Project
+  checks.push({ok:!!state.project.name,msg:'Project name is set'});
+  checks.push({ok:!!state.project.subscriptionId,msg:'Subscription ID is set'});
+  checks.push({ok:!!state.project.tenantId,msg:'Tenant ID is set'});
+  // Network
+  checks.push({ok:isValidCIDR(state.network.hubCidr),msg:'Hub VNET CIDR is valid'});
+  checks.push({ok:state.network.spokes.length>0,msg:'At least one spoke VNET is defined'});
+  // CIDR checks
+  var cidrResults=validateAllCIDRs();
+  cidrResults.forEach(function(r){checks.push(r);});
+  // AKS
+  if(state.compute.enableAks){
+    var anyAks=false;
+    Object.keys(state.compute.aksConfigs).forEach(function(k){if(state.compute.aksConfigs[k].enabled)anyAks=true;});
+    checks.push({ok:anyAks,msg:'At least one AKS cluster is enabled'});
+  }
+  var html='';
+  checks.forEach(function(c){
+    html+='<li><span class="val-icon '+(c.ok?'val-pass':'val-fail')+'">'+(c.ok?'&#10003;':'&#10007;')+'</span><span>'+esc(c.msg)+'</span></li>';
+  });
+  list.innerHTML=html;
+}
+
+/* ========================================================================
+   TERRAFORM CODE GENERATION
+   ======================================================================== */
+function generateTfPreview(){
+  var p=state.project;
+  var n=state.network;
+  var mainTf='# =============================================================================\n';
+  mainTf+='# Terraform Enterprise Configuration\n';
+  mainTf+='# Project: '+p.name+' | Environment: '+p.environment+' | Region: '+p.region+'\n';
+  mainTf+='# Generated by MasterChief TF Wizard\n';
+  mainTf+='# =============================================================================\n\n';
+  mainTf+='terraform {\n  required_version = ">= 1.5.0"\n  required_providers {\n    azurerm = {\n      source  = "hashicorp/azurerm"\n      version = "~> 3.80"\n    }\n    azuread = {\n      source  = "hashicorp/azuread"\n      version = "~> 2.45"\n    }\n  }\n  backend "azurerm" {}\n}\n\n';
+  mainTf+='provider "azurerm" {\n  features {\n    key_vault {\n      purge_soft_delete_on_destroy = false\n    }\n  }\n  subscription_id = var.subscription_id\n  tenant_id       = var.tenant_id\n}\n\n';
+  mainTf+='# --- Resource Groups ---\n';
+  mainTf+='resource "azurerm_resource_group" "hub" {\n  name     = "'+p.namingPrefix+'-'+p.environment+'-hub-rg"\n  location = var.location\n  tags     = var.tags\n}\n\n';
+  n.spokes.forEach(function(sp){
+    mainTf+='resource "azurerm_resource_group" "'+safeName(sp.name)+'" {\n  name     = "'+p.namingPrefix+'-'+p.environment+'-'+sp.name+'-rg"\n  location = var.location\n  tags     = var.tags\n}\n\n';
+  });
+  // Hub VNET
+  mainTf+='# --- Hub Virtual Network ---\n';
+  mainTf+='resource "azurerm_virtual_network" "hub" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-hub-vnet"\n  resource_group_name = azurerm_resource_group.hub.name\n  location            = azurerm_resource_group.hub.location\n  address_space       = ["'+n.hubCidr+'"]\n  tags                = var.tags\n}\n\n';
+  n.hubSubnets.forEach(function(s){
+    mainTf+='resource "azurerm_subnet" "hub_'+safeName(s.name)+'" {\n  name                 = "'+s.name+'"\n  resource_group_name  = azurerm_resource_group.hub.name\n  virtual_network_name = azurerm_virtual_network.hub.name\n  address_prefixes     = ["'+s.cidr+'"]\n}\n\n';
+  });
+  // Firewall
+  if(n.enableFirewall){
+    mainTf+='# --- Azure Firewall ---\n';
+    mainTf+='resource "azurerm_public_ip" "firewall" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-fw-pip"\n  resource_group_name = azurerm_resource_group.hub.name\n  location            = azurerm_resource_group.hub.location\n  allocation_method   = "Static"\n  sku                 = "Standard"\n  tags                = var.tags\n}\n\n';
+    mainTf+='resource "azurerm_firewall" "hub" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-fw"\n  resource_group_name = azurerm_resource_group.hub.name\n  location            = azurerm_resource_group.hub.location\n  sku_name            = "AZFW_VNet"\n  sku_tier            = "Standard"\n  ip_configuration {\n    name                 = "configuration"\n    subnet_id            = azurerm_subnet.hub_AzureFirewallSubnet.id\n    public_ip_address_id = azurerm_public_ip.firewall.id\n  }\n  tags = var.tags\n}\n\n';
+  }
+  // VPN GW
+  if(n.enableVpnGw){
+    mainTf+='# --- VPN Gateway ---\n';
+    mainTf+='resource "azurerm_public_ip" "vpn_gw" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-vpngw-pip"\n  resource_group_name = azurerm_resource_group.hub.name\n  location            = azurerm_resource_group.hub.location\n  allocation_method   = "Static"\n  sku                 = "Standard"\n  tags                = var.tags\n}\n\n';
+    mainTf+='resource "azurerm_virtual_network_gateway" "hub" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-vpngw"\n  resource_group_name = azurerm_resource_group.hub.name\n  location            = azurerm_resource_group.hub.location\n  type                = "Vpn"\n  vpn_type            = "RouteBased"\n  sku                 = "VpnGw1"\n  ip_configuration {\n    name                 = "vnetGatewayConfig"\n    public_ip_address_id = azurerm_public_ip.vpn_gw.id\n    subnet_id            = azurerm_subnet.hub_GatewaySubnet.id\n  }\n  tags = var.tags\n}\n\n';
+  }
+  // Spoke VNETs
+  n.spokes.forEach(function(sp){
+    var sn=safeName(sp.name);
+    mainTf+='# --- Spoke: '+sp.name+' ---\n';
+    mainTf+='resource "azurerm_virtual_network" "'+sn+'" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-'+sp.name+'-vnet"\n  resource_group_name = azurerm_resource_group.'+sn+'.name\n  location            = azurerm_resource_group.'+sn+'.location\n  address_space       = ["'+sp.cidr+'"]\n  tags                = var.tags\n}\n\n';
+    sp.subnets.forEach(function(sub){
+      mainTf+='resource "azurerm_subnet" "'+sn+'_'+safeName(sub.name)+'" {\n  name                 = "'+sub.name+'"\n  resource_group_name  = azurerm_resource_group.'+sn+'.name\n  virtual_network_name = azurerm_virtual_network.'+sn+'.name\n  address_prefixes     = ["'+sub.cidr+'"]\n}\n\n';
+    });
+    if(sp.peerWithHub&&n.topology==='hub-spoke'){
+      mainTf+='resource "azurerm_virtual_network_peering" "hub_to_'+sn+'" {\n  name                      = "hub-to-'+sp.name+'"\n  resource_group_name       = azurerm_resource_group.hub.name\n  virtual_network_name      = azurerm_virtual_network.hub.name\n  remote_virtual_network_id = azurerm_virtual_network.'+sn+'.id\n  allow_forwarded_traffic   = true\n  allow_gateway_transit     = true\n}\n\n';
+      mainTf+='resource "azurerm_virtual_network_peering" "'+sn+'_to_hub" {\n  name                      = "'+sp.name+'-to-hub"\n  resource_group_name       = azurerm_resource_group.'+sn+'.name\n  virtual_network_name      = azurerm_virtual_network.'+sn+'.name\n  remote_virtual_network_id = azurerm_virtual_network.hub.id\n  allow_forwarded_traffic   = true\n  use_remote_gateways       = '+(n.enableVpnGw?'true':'false')+'\n}\n\n';
+    }
+    if(sp.enableNsg){
+      mainTf+='resource "azurerm_network_security_group" "'+sn+'" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-'+sp.name+'-nsg"\n  resource_group_name = azurerm_resource_group.'+sn+'.name\n  location            = azurerm_resource_group.'+sn+'.location\n  tags                = var.tags\n}\n\n';
+    }
+  });
+  // AKS
+  if(state.compute.enableAks){
+    Object.keys(state.compute.aksConfigs).forEach(function(spName){
+      var c=state.compute.aksConfigs[spName];
+      if(!c.enabled)return;
+      var sn=safeName(spName);
+      mainTf+='# --- AKS: '+spName+' ---\n';
+      mainTf+='resource "azurerm_kubernetes_cluster" "'+sn+'" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-'+spName+'-aks"\n  resource_group_name = azurerm_resource_group.'+sn+'.name\n  location            = azurerm_resource_group.'+sn+'.location\n  dns_prefix          = "'+p.namingPrefix+'-'+spName+'"\n  kubernetes_version   = "'+c.k8sVersion+'"\n  network_profile {\n    network_plugin = "'+c.networkPlugin+'"\n    network_policy = "'+c.networkPolicy+'"\n  }\n  default_node_pool {\n    name                = "system"\n    vm_size             = "'+c.sysPool.vmSize+'"\n    node_count          = '+c.sysPool.count+'\n    enable_auto_scaling = true\n    min_count           = '+c.sysPool.min+'\n    max_count           = '+c.sysPool.max+'\n    vnet_subnet_id      = azurerm_subnet.'+sn+'_AKSSubnet.id\n  }\n  identity {\n    type = "SystemAssigned"\n  }\n';
+      if(c.enableAadRbac) mainTf+='  azure_active_directory_role_based_access_control {\n    managed            = true\n    azure_rbac_enabled = true\n  }\n';
+      if(c.enablePolicy) mainTf+='  azure_policy_enabled = true\n';
+      if(c.enableInsights) mainTf+='  oms_agent {\n    log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id\n  }\n';
+      mainTf+='  tags = var.tags\n}\n\n';
+      c.userPools.forEach(function(up){
+        mainTf+='resource "azurerm_kubernetes_cluster_node_pool" "'+sn+'_'+safeName(up.name)+'" {\n  name                  = "'+up.name+'"\n  kubernetes_cluster_id = azurerm_kubernetes_cluster.'+sn+'.id\n  vm_size               = "'+up.vmSize+'"\n  node_count            = '+up.count+'\n  enable_auto_scaling   = true\n  min_count             = '+up.min+'\n  max_count             = '+up.max+'\n  vnet_subnet_id        = azurerm_subnet.'+sn+'_AKSSubnet.id\n';
+        if(up.labels){
+          mainTf+='  node_labels = {\n';
+          up.labels.split(',').forEach(function(l){var kv=l.trim().split('=');if(kv.length===2)mainTf+='    "'+kv[0].trim()+'" = "'+kv[1].trim()+'"\n';});
+          mainTf+='  }\n';
+        }
+        if(up.taints) mainTf+='  node_taints = ["'+up.taints+'"]\n';
+        mainTf+='  tags = var.tags\n}\n\n';
+      });
+    });
+  }
+  // Key Vault
+  if(state.security.enableKeyVault){
+    mainTf+='# --- Key Vault ---\n';
+    mainTf+='data "azurerm_client_config" "current" {}\n\n';
+    mainTf+='resource "azurerm_key_vault" "main" {\n  name                       = "'+p.namingPrefix+'-'+p.environment+'-kv"\n  resource_group_name        = azurerm_resource_group.hub.name\n  location                   = azurerm_resource_group.hub.location\n  tenant_id                  = data.azurerm_client_config.current.tenant_id\n  sku_name                   = "standard"\n  purge_protection_enabled   = '+state.security.kv.purgeProtection+'\n  soft_delete_retention_days = '+state.security.kv.retention+'\n  network_acls {\n    default_action = "'+state.security.kv.aclDefault+'"\n    bypass         = "AzureServices"\n  }\n  tags = var.tags\n}\n\n';
+  }
+  // Log Analytics
+  if(state.monitoring.enableLogAnalytics){
+    mainTf+='# --- Log Analytics ---\n';
+    mainTf+='resource "azurerm_log_analytics_workspace" "main" {\n  name                = "'+p.namingPrefix+'-'+p.environment+'-law"\n  resource_group_name = azurerm_resource_group.hub.name\n  location            = azurerm_resource_group.hub.location\n  sku                 = "PerGB2018"\n  retention_in_days   = '+state.monitoring.retentionDays+'\n  tags                = var.tags\n}\n\n';
+  }
+  // RBAC
+  state.security.rbacAssignments.forEach(function(a,i){
+    mainTf+='resource "azurerm_role_assignment" "assignment_'+i+'" {\n  scope                = var.subscription_id\n  role_definition_name = "'+a.role+'"\n  principal_id         = "'+a.principalId+'"\n}\n\n';
+  });
+  // ASR
+  if(state.monitoring.enableAsr){
+    mainTf+='# --- Azure Site Recovery ---\n';
+    mainTf+='resource "azurerm_recovery_services_vault" "main" {\n  name                = "'+(state.monitoring.asr.vaultName||p.namingPrefix+'-'+p.environment+'-rsv')+'"\n  resource_group_name = azurerm_resource_group.hub.name\n  location            = azurerm_resource_group.hub.location\n  sku                 = "Standard"\n  tags                = var.tags\n}\n\n';
+  }
+
+  document.getElementById('codeMain').textContent=mainTf;
+
+  // variables.tf
+  var varsTf='variable "subscription_id" {\n  description = "Azure Subscription ID"\n  type        = string\n  default     = "'+p.subscriptionId+'"\n}\n\n';
+  varsTf+='variable "tenant_id" {\n  description = "Azure Tenant ID"\n  type        = string\n  default     = "'+p.tenantId+'"\n}\n\n';
+  varsTf+='variable "location" {\n  description = "Azure Region"\n  type        = string\n  default     = "'+p.region+'"\n}\n\n';
+  varsTf+='variable "environment" {\n  description = "Environment name"\n  type        = string\n  default     = "'+p.environment+'"\n}\n\n';
+  varsTf+='variable "tags" {\n  description = "Resource tags"\n  type        = map(string)\n  default = {\n    environment = "'+p.environment+'"\n    project     = "'+p.name+'"\n    managed_by  = "terraform"\n    generated   = "masterchief-tf-wizard"\n  }\n}\n';
+  document.getElementById('codeVariables').textContent=varsTf;
+
+  // outputs.tf
+  var outTf='output "hub_vnet_id" {\n  value = azurerm_virtual_network.hub.id\n}\n\n';
+  n.spokes.forEach(function(sp){
+    outTf+='output "'+safeName(sp.name)+'_vnet_id" {\n  value = azurerm_virtual_network.'+safeName(sp.name)+'.id\n}\n\n';
+  });
+  if(state.compute.enableAks){
+    Object.keys(state.compute.aksConfigs).forEach(function(k){
+      if(state.compute.aksConfigs[k].enabled){
+        outTf+='output "'+safeName(k)+'_aks_id" {\n  value = azurerm_kubernetes_cluster.'+safeName(k)+'.id\n}\n\n';
+        outTf+='output "'+safeName(k)+'_aks_fqdn" {\n  value = azurerm_kubernetes_cluster.'+safeName(k)+'.fqdn\n}\n\n';
+      }
+    });
+  }
+  if(state.security.enableKeyVault){
+    outTf+='output "key_vault_id" {\n  value = azurerm_key_vault.main.id\n}\n\n';
+    outTf+='output "key_vault_uri" {\n  value = azurerm_key_vault.main.vault_uri\n}\n\n';
+  }
+  if(state.monitoring.enableLogAnalytics){
+    outTf+='output "log_analytics_workspace_id" {\n  value = azurerm_log_analytics_workspace.main.id\n}\n';
+  }
+  document.getElementById('codeOutputs').textContent=outTf;
+}
+
+function safeName(s){return s.replace(/[^a-zA-Z0-9_]/g,'_');}
+
+function showCodeTab(tab){
+  document.querySelectorAll('.code-tab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.code-panel').forEach(function(p){p.classList.remove('active');});
+  event.target.classList.add('active');
+  document.getElementById('codePanel-'+tab).classList.add('active');
+}
+
+/* ========================================================================
+   SVG ARCHITECTURE DIAGRAM
+   ======================================================================== */
+function drawArchitectureDiagram(){
+  var svg=document.getElementById('architectureDiagram');
+  var w=900,h=500;
+  var cx=w/2,cy=h/2;
+  var hubR=90;
+  var spokeR=60;
+  var orbitR=180;
+  var spokes=state.network.spokes;
+  var spokeCount=spokes.length||1;
+
+  var s='';
+  // Background grid
+  for(var gx=0;gx<w;gx+=50){s+='<line x1="'+gx+'" y1="0" x2="'+gx+'" y2="'+h+'" stroke="#222" stroke-width="0.5"/>';}
+  for(var gy=0;gy<h;gy+=50){s+='<line x1="0" y1="'+gy+'" x2="'+w+'" y2="'+gy+'" stroke="#222" stroke-width="0.5"/>';}
+
+  // Draw connections first (behind circles)
+  spokes.forEach(function(sp,i){
+    var angle=(2*Math.PI*i/spokeCount)-(Math.PI/2);
+    var sx=cx+orbitR*Math.cos(angle);
+    var sy=cy+orbitR*Math.sin(angle);
+    if(sp.peerWithHub){
+      s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+sx+'" y2="'+sy+'" stroke="#4CAF50" stroke-width="2" stroke-dasharray="8,4" opacity="0.6"/>';
+      s+='<text x="'+((cx+sx)/2+10)+'" y="'+((cy+sy)/2-5)+'" fill="#4CAF50" font-size="9" opacity="0.7">peering</text>';
+    }
+  });
+
+  // Hub circle
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+hubR+'" fill="#1a3a5c" stroke="#2196F3" stroke-width="3"/>';
+  s+='<text x="'+cx+'" y="'+(cy-20)+'" text-anchor="middle" fill="#2196F3" font-size="14" font-weight="bold">Hub VNET</text>';
+  s+='<text x="'+cx+'" y="'+(cy)+'" text-anchor="middle" fill="#888" font-size="10">'+state.network.hubCidr+'</text>';
+  // Hub icons
+  var iconY=cy+20;
+  if(state.network.enableFirewall){
+    s+='<rect x="'+(cx-35)+'" y="'+iconY+'" width="14" height="14" rx="2" fill="#f44336" opacity="0.8"/>';
+    s+='<text x="'+(cx-28)+'" y="'+(iconY+25)+'" fill="#f44336" font-size="8" text-anchor="middle">FW</text>';
+  }
+  if(state.network.enableVpnGw){
+    s+='<rect x="'+(cx-5)+'" y="'+iconY+'" width="14" height="14" rx="2" fill="#9C27B0" opacity="0.8"/>';
+    s+='<text x="'+(cx+2)+'" y="'+(iconY+25)+'" fill="#9C27B0" font-size="8" text-anchor="middle">VPN</text>';
+  }
+  if(state.security.enableKeyVault){
+    s+='<rect x="'+(cx+25)+'" y="'+iconY+'" width="14" height="14" rx="2" fill="#ff9800" opacity="0.8"/>';
+    s+='<text x="'+(cx+32)+'" y="'+(iconY+25)+'" fill="#ff9800" font-size="8" text-anchor="middle">KV</text>';
+  }
+
+  // Spokes
+  spokes.forEach(function(sp,i){
+    var angle=(2*Math.PI*i/spokeCount)-(Math.PI/2);
+    var sx=cx+orbitR*Math.cos(angle);
+    var sy=cy+orbitR*Math.sin(angle);
+    s+='<circle cx="'+sx+'" cy="'+sy+'" r="'+spokeR+'" fill="#1a3a2c" stroke="#4CAF50" stroke-width="2"/>';
+    s+='<text x="'+sx+'" y="'+(sy-15)+'" text-anchor="middle" fill="#4CAF50" font-size="11" font-weight="bold">'+esc(sp.name)+'</text>';
+    s+='<text x="'+sx+'" y="'+(sy+2)+'" text-anchor="middle" fill="#888" font-size="9">'+esc(sp.cidr)+'</text>';
+    // AKS icon
+    var aksCfg=state.compute.aksConfigs[sp.name];
+    if(state.compute.enableAks&&aksCfg&&aksCfg.enabled){
+      s+='<rect x="'+(sx-7)+'" y="'+(sy+12)+'" width="14" height="14" rx="2" fill="#ff9800" opacity="0.8"/>';
+      s+='<text x="'+sx+'" y="'+(sy+38)+'" fill="#ff9800" font-size="8" text-anchor="middle">AKS</text>';
+    }
+  });
+
+  // Legend
+  var ly=h-70;
+  s+='<rect x="20" y="'+ly+'" width="200" height="60" rx="5" fill="#2d2d2d" stroke="#3a3a3a"/>';
+  s+='<text x="30" y="'+(ly+15)+'" fill="#888" font-size="10" font-weight="bold">Legend</text>';
+  s+='<rect x="30" y="'+(ly+22)+'" width="10" height="10" fill="#2196F3"/><text x="45" y="'+(ly+31)+'" fill="#888" font-size="9">Hub</text>';
+  s+='<rect x="80" y="'+(ly+22)+'" width="10" height="10" fill="#4CAF50"/><text x="95" y="'+(ly+31)+'" fill="#888" font-size="9">Spoke</text>';
+  s+='<rect x="130" y="'+(ly+22)+'" width="10" height="10" fill="#f44336"/><text x="145" y="'+(ly+31)+'" fill="#888" font-size="9">Security</text>';
+  s+='<rect x="30" y="'+(ly+38)+'" width="10" height="10" fill="#ff9800"/><text x="45" y="'+(ly+47)+'" fill="#888" font-size="9">Compute</text>';
+  s+='<rect x="100" y="'+(ly+38)+'" width="10" height="10" fill="#9C27B0"/><text x="115" y="'+(ly+47)+'" fill="#888" font-size="9">Gateway</text>';
+
+  svg.innerHTML=s;
+}
+
+/* ========================================================================
+   API CALLS
+   ======================================================================== */
+function getFullConfig(){
+  saveCurrentStepState();
+  return {
+    project:state.project,
+    network:state.network,
+    compute:state.compute,
+    security:state.security,
+    monitoring:state.monitoring,
+    integrations:state.integrations
+  };
+}
+
+function generateAndDownload(){
+  showToast('Generating Terraform configuration...','info');
+  fetch('/api/terraform/enterprise/generate',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(getFullConfig())
+  }).then(function(r){return r.json();}).then(function(data){
+    if(data.ok&&data.result&&data.result.download_url){
+      showToast('Configuration generated! Downloading...','success');
+      window.location.href=data.result.download_url;
+    }else{
+      showToast('Generation failed: '+(data.error||'Unknown error'),'error');
+    }
+  }).catch(function(e){
+    showToast('Network error: '+e.message,'error');
+  });
+}
+
+function deployToProject(){
+  showToast('Deploying to project...','info');
+  fetch('/api/terraform/enterprise/deploy_to_project',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(getFullConfig())
+  }).then(function(r){return r.json();}).then(function(data){
+    if(data.ok){
+      showToast('Deployed to project successfully!','success');
+    }else{
+      showToast('Deploy failed: '+(data.error||'Unknown error'),'error');
+    }
+  }).catch(function(e){
+    showToast('Network error: '+e.message,'error');
+  });
+}
+
+function exportSvg(){
+  var svg=document.getElementById('architectureDiagram');
+  var svgData=new XMLSerializer().serializeToString(svg);
+  var blob=new Blob(['<?xml version="1.0" encoding="UTF-8"?>'+svgData],{type:'image/svg+xml'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='architecture-diagram.svg';a.click();
+  URL.revokeObjectURL(url);
+  showToast('SVG diagram downloaded','success');
+}
+
+function exportPng(){
+  var svg=document.getElementById('architectureDiagram');
+  var svgData=new XMLSerializer().serializeToString(svg);
+  var canvas=document.createElement('canvas');
+  canvas.width=900;canvas.height=500;
+  var ctx=canvas.getContext('2d');
+  var img=new Image();
+  img.onload=function(){
+    ctx.fillStyle='#1a1a1a';
+    ctx.fillRect(0,0,900,500);
+    ctx.drawImage(img,0,0);
+    var a=document.createElement('a');
+    a.href=canvas.toDataURL('image/png');
+    a.download='architecture-diagram.png';
+    a.click();
+    showToast('PNG diagram downloaded','success');
+  };
+  img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(svgData)));
+}
+
+/* ========================================================================
+   UTILITIES
+   ======================================================================== */
+function esc(s){
+  if(!s)return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg,type){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast toast-'+(type||'info')+' show';
+  setTimeout(function(){t.classList.remove('show');},4000);
+}
+
+// Close modals on outside click
+window.addEventListener('click',function(e){
+  if(e.target.classList.contains('modal')) e.target.style.display='none';
 });
+
+// Init
+init();
 </script>
 </body>
 </html>

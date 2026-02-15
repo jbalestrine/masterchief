@@ -56,6 +56,13 @@ import io
 
 import tempfile
 
+import re
+
+try:
+    from cryptography.fernet import Fernet
+except ImportError:
+    Fernet = None
+
 
 
 # Determine an interpreter command for a given script path.
@@ -213,6 +220,21 @@ app.config['SCRIPTS_FOLDER']=_data_dir/'scripts'
 app.config['JAMROOM_DB']=_data_dir/'jamroom.json'
 
 app.config['SHOUTCAST_DB']=_data_dir/'shoutcast.json'
+
+app.config['RBAC_DB'] = _data_dir / 'rbac.json'
+app.config['VAULT_DB'] = _data_dir / 'vault.json'
+app.config['VAULT_KEY'] = _data_dir / 'vault.key'
+app.config['NOTIFICATIONS_DB'] = _data_dir / 'notifications.json'
+app.config['NOTIFICATION_CHANNELS_DB'] = _data_dir / 'notification_channels.json'
+app.config['NOTIFICATION_RULES_DB'] = _data_dir / 'notification_rules.json'
+app.config['PIPELINES_DB'] = _data_dir / 'pipelines.json'
+app.config['PIPELINE_RUNS_DB'] = _data_dir / 'pipeline_runs.json'
+app.config['CLOUD_DB'] = _data_dir / 'cloud_accounts.json'
+app.config['MARKETPLACE_DB'] = _data_dir / 'marketplace.json'
+app.config['MEMORIES_PATH'] = _data_dir / 'echo_memories.jsonl'
+app.config['MEMORY_INDEX_PATH'] = _data_dir / 'echo_memory_index.json'
+app.config['VAULT_AUDIT_DB'] = _data_dir / 'vault_audit.json'
+app.config['RBAC_ENABLED'] = False
 
 app.config['MAX_CONTENT_LENGTH']=100*1024*1024
 
@@ -3194,6 +3216,22 @@ code{color:#4CAF50;}
 <a href="/addons" class="{{ 'active' if '/addons' in request.path else '' }}">Addons</a>
 
 <a href="/echo-train" class="{{ 'active' if '/echo-train' in request.path else '' }}">Training</a>
+
+<a href="/pipelines" class="{{ 'active' if '/pipelines' in request.path else '' }}">Pipelines</a>
+
+<a href="/cloud" class="{{ 'active' if '/cloud' in request.path else '' }}">Cloud</a>
+
+<a href="/secrets" class="{{ 'active' if '/secrets' in request.path else '' }}">Secrets</a>
+
+<a href="/echo-memory" class="{{ 'active' if '/echo-memory' in request.path else '' }}">Memory</a>
+
+<a href="/marketplace" class="{{ 'active' if '/marketplace' in request.path else '' }}">Marketplace</a>
+
+<a href="/notifications" class="{{ 'active' if '/notifications' in request.path else '' }}">Alerts</a>
+
+<a href="/rbac" class="{{ 'active' if '/rbac' in request.path else '' }}">Access</a>
+
+<a href="/about" class="{{ 'active' if '/about' in request.path else '' }}">About</a>
 
 </nav>
 
@@ -10170,6 +10208,2815 @@ def web_tf_wizard():
         app.logger.exception('Failed to serve web_tf_wizard.html')
     return redirect(url_for('web_ide'))
 
+
+
+###############################################################################
+# ========================  NEW FEATURE MANAGERS  ============================
+###############################################################################
+
+# ---------------------------------------------------------------------------
+#  1. RBAC Manager
+# ---------------------------------------------------------------------------
+
+class RBACManager:
+    ALL_PERMISSIONS = [
+        'dashboard','echo-chat','scripts','web_ide','processes','services',
+        'addons','training','pipelines','cloud','secrets_read','secrets_write',
+        'resources','notifications','rbac','marketplace'
+    ]
+
+    def __init__(self, db_path):
+        self.db_path = Path(db_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save({
+                'users': [{
+                    'id': str(uuid.uuid4()), 'username': 'admin',
+                    'password_hash': hashlib.sha256('admin'.encode()).hexdigest(),
+                    'role': 'admin', 'created': datetime.now().isoformat(),
+                    'active': True, 'api_keys': []
+                }],
+                'roles': [
+                    {'name': 'admin', 'permissions': ['*'], 'builtin': True},
+                    {'name': 'developer', 'permissions': ['dashboard','echo-chat','scripts','web_ide','resources','secrets_read','pipelines','marketplace','training'], 'builtin': True},
+                    {'name': 'operator', 'permissions': ['dashboard','pipelines','processes','services','cloud','secrets_read','notifications'], 'builtin': True},
+                    {'name': 'viewer', 'permissions': ['dashboard','echo-chat'], 'builtin': True}
+                ],
+                'sessions': [],
+                'audit_log': []
+            })
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'users': [], 'roles': [], 'sessions': [], 'audit_log': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def get_users(self):
+        d = self._load()
+        return [{ k: v for k, v in u.items() if k != 'password_hash' } for u in d['users']]
+
+    def add_user(self, username, password, role='viewer'):
+        d = self._load()
+        if any(u['username'] == username for u in d['users']):
+            raise ValueError(f'User {username} already exists')
+        user = {
+            'id': str(uuid.uuid4()), 'username': username,
+            'password_hash': hashlib.sha256(password.encode()).hexdigest(),
+            'role': role, 'created': datetime.now().isoformat(),
+            'active': True, 'api_keys': []
+        }
+        d['users'].append(user)
+        self._audit(d, 'system', 'user_created', f'User {username} created with role {role}')
+        self._save(d)
+        return {k: v for k, v in user.items() if k != 'password_hash'}
+
+    def update_user(self, user_id, updates):
+        d = self._load()
+        for u in d['users']:
+            if u['id'] == user_id:
+                for k, v in updates.items():
+                    if k == 'password':
+                        u['password_hash'] = hashlib.sha256(v.encode()).hexdigest()
+                    elif k not in ('id', 'password_hash'):
+                        u[k] = v
+                self._audit(d, 'system', 'user_updated', f'User {u["username"]} updated')
+                self._save(d)
+                return {k2: v2 for k2, v2 in u.items() if k2 != 'password_hash'}
+        raise ValueError('User not found')
+
+    def delete_user(self, user_id):
+        d = self._load()
+        d['users'] = [u for u in d['users'] if u['id'] != user_id]
+        self._audit(d, 'system', 'user_deleted', f'User {user_id} deleted')
+        self._save(d)
+
+    def get_roles(self):
+        return self._load().get('roles', [])
+
+    def add_role(self, name, permissions):
+        d = self._load()
+        if any(r['name'] == name for r in d['roles']):
+            raise ValueError(f'Role {name} already exists')
+        role = {'name': name, 'permissions': permissions, 'builtin': False}
+        d['roles'].append(role)
+        self._audit(d, 'system', 'role_created', f'Role {name} created')
+        self._save(d)
+        return role
+
+    def update_role(self, name, permissions):
+        d = self._load()
+        for r in d['roles']:
+            if r['name'] == name:
+                if r.get('builtin') and name == 'admin':
+                    raise ValueError('Cannot modify admin role')
+                r['permissions'] = permissions
+                self._audit(d, 'system', 'role_updated', f'Role {name} updated')
+                self._save(d)
+                return r
+        raise ValueError('Role not found')
+
+    def delete_role(self, name):
+        d = self._load()
+        d['roles'] = [r for r in d['roles'] if r['name'] != name or r.get('builtin')]
+        self._save(d)
+
+    def authenticate(self, username, password):
+        d = self._load()
+        pw_hash = hashlib.sha256(password.encode()).hexdigest()
+        for u in d['users']:
+            if u['username'] == username and u['password_hash'] == pw_hash and u.get('active', True):
+                sess = {
+                    'id': str(uuid.uuid4()), 'user_id': u['id'], 'username': username,
+                    'created': datetime.now().isoformat(), 'last_active': datetime.now().isoformat(),
+                    'ip': request.remote_addr or 'unknown'
+                }
+                d['sessions'].append(sess)
+                self._audit(d, username, 'login', f'User {username} logged in')
+                self._save(d)
+                return sess
+        return None
+
+    def get_sessions(self):
+        return self._load().get('sessions', [])
+
+    def delete_session(self, session_id):
+        d = self._load()
+        d['sessions'] = [s for s in d['sessions'] if s['id'] != session_id]
+        self._audit(d, 'system', 'session_revoked', f'Session {session_id[:8]}... revoked')
+        self._save(d)
+
+    def generate_api_key(self, user_id):
+        d = self._load()
+        for u in d['users']:
+            if u['id'] == user_id:
+                key = f'mc_{uuid.uuid4().hex}'
+                key_entry = {'id': str(uuid.uuid4()), 'key': key, 'created': datetime.now().isoformat()}
+                u.setdefault('api_keys', []).append(key_entry)
+                self._audit(d, u['username'], 'api_key_generated', f'API key generated for {u["username"]}')
+                self._save(d)
+                return key_entry
+        raise ValueError('User not found')
+
+    def revoke_api_key(self, key_id):
+        d = self._load()
+        for u in d['users']:
+            u['api_keys'] = [k for k in u.get('api_keys', []) if k['id'] != key_id]
+        self._save(d)
+
+    def get_audit_log(self, limit=100):
+        d = self._load()
+        return list(reversed(d.get('audit_log', [])))[:limit]
+
+    def _audit(self, data, user, action, details=''):
+        data.setdefault('audit_log', []).append({
+            'id': str(uuid.uuid4()), 'timestamp': datetime.now().isoformat(),
+            'user': user, 'action': action, 'details': details
+        })
+        if len(data['audit_log']) > 1000:
+            data['audit_log'] = data['audit_log'][-1000:]
+
+
+# ---------------------------------------------------------------------------
+#  2. Notification Manager
+# ---------------------------------------------------------------------------
+
+class NotificationManager:
+    def __init__(self, db_path, channels_path, rules_path):
+        self.db_path = Path(db_path)
+        self.channels_path = Path(channels_path)
+        self.rules_path = Path(rules_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        for p, default in [
+            (self.db_path, {'notifications': []}),
+            (self.channels_path, {'channels': [
+                {'id': str(uuid.uuid4()), 'name': 'In-App', 'type': 'in_app', 'config': {}, 'enabled': True, 'created': datetime.now().isoformat()}
+            ]}),
+            (self.rules_path, {'rules': []})
+        ]:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if not p.exists():
+                p.write_text(json.dumps(default, indent=2), encoding='utf-8')
+
+    def _load(self, path):
+        try:
+            return json.loads(Path(path).read_text(encoding='utf-8'))
+        except Exception:
+            return {}
+
+    def _save(self, path, data):
+        Path(path).write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    # -- Notifications --
+    def send(self, title, message, severity='info', source='system'):
+        n = {
+            'id': str(uuid.uuid4()), 'title': title, 'message': message,
+            'severity': severity, 'source': source,
+            'read': False, 'timestamp': datetime.now().isoformat()
+        }
+        d = self._load(self.db_path)
+        d.setdefault('notifications', []).insert(0, n)
+        if len(d['notifications']) > 500:
+            d['notifications'] = d['notifications'][:500]
+        self._save(self.db_path, d)
+        self._dispatch(n)
+        return n
+
+    def list_notifications(self, unread_only=False, severity=None, limit=50):
+        d = self._load(self.db_path)
+        items = d.get('notifications', [])
+        if unread_only:
+            items = [i for i in items if not i.get('read')]
+        if severity:
+            items = [i for i in items if i.get('severity') == severity]
+        return items[:limit]
+
+    def unread_count(self):
+        d = self._load(self.db_path)
+        return sum(1 for n in d.get('notifications', []) if not n.get('read'))
+
+    def mark_read(self, nid):
+        d = self._load(self.db_path)
+        for n in d.get('notifications', []):
+            if n['id'] == nid:
+                n['read'] = True
+                break
+        self._save(self.db_path, d)
+
+    def mark_all_read(self):
+        d = self._load(self.db_path)
+        for n in d.get('notifications', []):
+            n['read'] = True
+        self._save(self.db_path, d)
+
+    def delete_notification(self, nid):
+        d = self._load(self.db_path)
+        d['notifications'] = [n for n in d.get('notifications', []) if n['id'] != nid]
+        self._save(self.db_path, d)
+
+    # -- Channels --
+    def get_channels(self):
+        return self._load(self.channels_path).get('channels', [])
+
+    def add_channel(self, name, ctype, config):
+        d = self._load(self.channels_path)
+        ch = {'id': str(uuid.uuid4()), 'name': name, 'type': ctype, 'config': config, 'enabled': True, 'created': datetime.now().isoformat()}
+        d.setdefault('channels', []).append(ch)
+        self._save(self.channels_path, d)
+        return ch
+
+    def update_channel(self, cid, updates):
+        d = self._load(self.channels_path)
+        for ch in d.get('channels', []):
+            if ch['id'] == cid:
+                ch.update({k: v for k, v in updates.items() if k != 'id'})
+                self._save(self.channels_path, d)
+                return ch
+        raise ValueError('Channel not found')
+
+    def delete_channel(self, cid):
+        d = self._load(self.channels_path)
+        d['channels'] = [ch for ch in d.get('channels', []) if ch['id'] != cid]
+        self._save(self.channels_path, d)
+
+    def test_channel(self, cid):
+        channels = self.get_channels()
+        ch = next((c for c in channels if c['id'] == cid), None)
+        if not ch:
+            raise ValueError('Channel not found')
+        test_n = {'title': 'Test Notification', 'message': 'This is a test from MasterChief.', 'severity': 'info'}
+        return self._dispatch_to_channel(ch, test_n)
+
+    # -- Rules --
+    def get_rules(self):
+        return self._load(self.rules_path).get('rules', [])
+
+    def add_rule(self, name, event_type, severity_filter, channel_id, active=True):
+        d = self._load(self.rules_path)
+        rule = {'id': str(uuid.uuid4()), 'name': name, 'event_type': event_type,
+                'severity_filter': severity_filter, 'channel_id': channel_id,
+                'active': active, 'created': datetime.now().isoformat()}
+        d.setdefault('rules', []).append(rule)
+        self._save(self.rules_path, d)
+        return rule
+
+    def update_rule(self, rid, updates):
+        d = self._load(self.rules_path)
+        for r in d.get('rules', []):
+            if r['id'] == rid:
+                r.update({k: v for k, v in updates.items() if k != 'id'})
+                self._save(self.rules_path, d)
+                return r
+        raise ValueError('Rule not found')
+
+    def delete_rule(self, rid):
+        d = self._load(self.rules_path)
+        d['rules'] = [r for r in d.get('rules', []) if r['id'] != rid]
+        self._save(self.rules_path, d)
+
+    # -- Dispatch --
+    def _dispatch(self, notification):
+        channels = self.get_channels()
+        rules = self.get_rules()
+        for rule in rules:
+            if not rule.get('active'):
+                continue
+            if rule.get('severity_filter') not in ('all', notification.get('severity')):
+                continue
+            ch = next((c for c in channels if c['id'] == rule.get('channel_id')), None)
+            if ch and ch.get('enabled'):
+                try:
+                    self._dispatch_to_channel(ch, notification)
+                except Exception:
+                    pass
+
+    def _dispatch_to_channel(self, ch, notification):
+        ctype = ch.get('type', '')
+        cfg = ch.get('config', {})
+        payload_text = f"**{notification['title']}**\n{notification['message']}"
+        if ctype == 'slack' and cfg.get('webhook_url'):
+            requests.post(cfg['webhook_url'], json={'text': payload_text}, timeout=10)
+        elif ctype == 'teams' and cfg.get('webhook_url'):
+            requests.post(cfg['webhook_url'], json={'@type': 'MessageCard', 'summary': notification['title'], 'sections': [{'text': notification['message']}]}, timeout=10)
+        elif ctype == 'discord' and cfg.get('webhook_url'):
+            requests.post(cfg['webhook_url'], json={'content': payload_text}, timeout=10)
+        elif ctype == 'email':
+            try:
+                import smtplib
+                from email.mime.text import MIMEText
+                msg = MIMEText(notification['message'])
+                msg['Subject'] = notification['title']
+                msg['From'] = cfg.get('from_email', '')
+                msg['To'] = cfg.get('to_email', '')
+                with smtplib.SMTP(cfg.get('smtp_host', 'localhost'), int(cfg.get('smtp_port', 25))) as s:
+                    if cfg.get('smtp_user'):
+                        s.login(cfg['smtp_user'], cfg.get('smtp_pass', ''))
+                    s.send_message(msg)
+            except Exception:
+                pass
+        return {'ok': True, 'channel': ch['name']}
+
+
+# ---------------------------------------------------------------------------
+#  3. Vault Manager
+# ---------------------------------------------------------------------------
+
+class VaultManager:
+    def __init__(self, db_path, key_path, audit_path):
+        self.db_path = Path(db_path)
+        self.key_path = Path(key_path)
+        self.audit_path = Path(audit_path)
+        self._fernet = self._init_encryption()
+        self._ensure_db()
+
+    def _init_encryption(self):
+        if Fernet is None:
+            return None
+        self.key_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.key_path.exists():
+            key = self.key_path.read_bytes()
+        else:
+            key = Fernet.generate_key()
+            self.key_path.write_bytes(key)
+        return Fernet(key)
+
+    def _encrypt(self, plaintext):
+        if self._fernet:
+            return self._fernet.encrypt(plaintext.encode()).decode()
+        return base64.b64encode(plaintext.encode()).decode()
+
+    def _decrypt(self, ciphertext):
+        if self._fernet:
+            return self._fernet.decrypt(ciphertext.encode()).decode()
+        return base64.b64decode(ciphertext.encode()).decode()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save_db({'secrets': []})
+        if not self.audit_path.exists():
+            self.audit_path.write_text(json.dumps({'entries': []}, indent=2), encoding='utf-8')
+
+    def _load_db(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'secrets': []}
+
+    def _save_db(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def _audit(self, user, action, secret_name, details=''):
+        try:
+            d = json.loads(self.audit_path.read_text(encoding='utf-8')) if self.audit_path.exists() else {'entries': []}
+        except Exception:
+            d = {'entries': []}
+        d['entries'].append({
+            'id': str(uuid.uuid4()), 'timestamp': datetime.now().isoformat(),
+            'user': user, 'action': action, 'secret_name': secret_name, 'details': details
+        })
+        if len(d['entries']) > 2000:
+            d['entries'] = d['entries'][-2000:]
+        self.audit_path.write_text(json.dumps(d, indent=2), encoding='utf-8')
+
+    def list_secrets(self):
+        d = self._load_db()
+        return [{k: v for k, v in s.items() if k != 'encrypted_value' and k != 'versions'} for s in d.get('secrets', [])]
+
+    def create_secret(self, name, value, secret_type='other', rotation_days=0):
+        d = self._load_db()
+        if any(s['name'] == name for s in d.get('secrets', [])):
+            raise ValueError(f'Secret {name} already exists')
+        secret = {
+            'id': str(uuid.uuid4()), 'name': name, 'type': secret_type,
+            'encrypted_value': self._encrypt(value),
+            'rotation_days': rotation_days,
+            'created': datetime.now().isoformat(),
+            'updated': datetime.now().isoformat(),
+            'last_accessed': None,
+            'versions': [{'version': 1, 'timestamp': datetime.now().isoformat(), 'encrypted_value': self._encrypt(value)}]
+        }
+        d.setdefault('secrets', []).append(secret)
+        self._save_db(d)
+        self._audit('system', 'created', name, f'Secret {name} created (type={secret_type})')
+        return {k: v for k, v in secret.items() if k != 'encrypted_value' and k != 'versions'}
+
+    def get_secret(self, sid, user='system'):
+        d = self._load_db()
+        for s in d.get('secrets', []):
+            if s['id'] == sid:
+                s['last_accessed'] = datetime.now().isoformat()
+                self._save_db(d)
+                self._audit(user, 'accessed', s['name'])
+                return {
+                    'id': s['id'], 'name': s['name'], 'type': s['type'],
+                    'value': self._decrypt(s['encrypted_value']),
+                    'rotation_days': s.get('rotation_days', 0),
+                    'created': s['created'], 'updated': s['updated'],
+                    'last_accessed': s['last_accessed']
+                }
+        raise ValueError('Secret not found')
+
+    def update_secret(self, sid, value=None, rotation_days=None):
+        d = self._load_db()
+        for s in d.get('secrets', []):
+            if s['id'] == sid:
+                if value is not None:
+                    ver = len(s.get('versions', [])) + 1
+                    s.setdefault('versions', []).append({
+                        'version': ver, 'timestamp': datetime.now().isoformat(),
+                        'encrypted_value': self._encrypt(value)
+                    })
+                    s['encrypted_value'] = self._encrypt(value)
+                    s['updated'] = datetime.now().isoformat()
+                if rotation_days is not None:
+                    s['rotation_days'] = rotation_days
+                self._save_db(d)
+                self._audit('system', 'updated', s['name'])
+                return {k: v for k, v in s.items() if k != 'encrypted_value' and k != 'versions'}
+        raise ValueError('Secret not found')
+
+    def delete_secret(self, sid):
+        d = self._load_db()
+        name = next((s['name'] for s in d.get('secrets', []) if s['id'] == sid), 'unknown')
+        d['secrets'] = [s for s in d.get('secrets', []) if s['id'] != sid]
+        self._save_db(d)
+        self._audit('system', 'deleted', name)
+
+    def get_versions(self, sid):
+        d = self._load_db()
+        for s in d.get('secrets', []):
+            if s['id'] == sid:
+                return [{'version': v['version'], 'timestamp': v['timestamp']} for v in s.get('versions', [])]
+        return []
+
+    def get_audit_log(self, limit=100):
+        try:
+            d = json.loads(self.audit_path.read_text(encoding='utf-8'))
+        except Exception:
+            d = {'entries': []}
+        return list(reversed(d.get('entries', [])))[:limit]
+
+    def check_rotation(self):
+        d = self._load_db()
+        due = []
+        now = datetime.now()
+        for s in d.get('secrets', []):
+            rd = s.get('rotation_days', 0)
+            if rd > 0:
+                updated = datetime.fromisoformat(s['updated'])
+                days_since = (now - updated).days
+                status = 'overdue' if days_since > rd else ('due_soon' if days_since > rd * 0.8 else 'ok')
+                due.append({'id': s['id'], 'name': s['name'], 'rotation_days': rd, 'days_since_update': days_since, 'status': status})
+        return due
+
+
+# ---------------------------------------------------------------------------
+#  4. Memory Manager
+# ---------------------------------------------------------------------------
+
+class MemoryManager:
+    def __init__(self, memories_path, index_path):
+        self.memories_path = Path(memories_path)
+        self.index_path = Path(index_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.memories_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.memories_path.exists():
+            self.memories_path.touch()
+        if not self.index_path.exists():
+            self.index_path.write_text(json.dumps({'topics': {}, 'entities': {}, 'pinned': []}, indent=2), encoding='utf-8')
+
+    def _load_all(self):
+        memories = []
+        if self.memories_path.exists():
+            for line in self.memories_path.read_text(encoding='utf-8').strip().split('\n'):
+                if line.strip():
+                    try:
+                        memories.append(json.loads(line))
+                    except Exception:
+                        pass
+        return memories
+
+    def _save_all(self, memories):
+        self.memories_path.write_text('\n'.join(json.dumps(m) for m in memories) + '\n' if memories else '', encoding='utf-8')
+
+    def _load_index(self):
+        try:
+            return json.loads(self.index_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'topics': {}, 'entities': {}, 'pinned': []}
+
+    def _save_index(self, idx):
+        self.index_path.write_text(json.dumps(idx, indent=2), encoding='utf-8')
+
+    def _update_index(self, memory):
+        idx = self._load_index()
+        for t in memory.get('topics', []):
+            idx['topics'][t] = idx['topics'].get(t, 0) + 1
+        for e in memory.get('entities', []):
+            idx['entities'][e] = idx['entities'].get(e, 0) + 1
+        if memory.get('pinned'):
+            if memory['id'] not in idx['pinned']:
+                idx['pinned'].append(memory['id'])
+        self._save_index(idx)
+
+    def add_memory(self, content, topics=None, entities=None, source='manual', importance=0.5):
+        memory = {
+            'id': str(uuid.uuid4()), 'content': content,
+            'topics': [t.strip() for t in (topics or []) if t.strip()],
+            'entities': [e.strip() for e in (entities or []) if e.strip()],
+            'source': source, 'importance': max(0.0, min(1.0, float(importance))),
+            'created': datetime.now().isoformat(), 'accessed_count': 0,
+            'pinned': False, 'decay_factor': 1.0
+        }
+        with open(self.memories_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(memory) + '\n')
+        self._update_index(memory)
+        return memory
+
+    def get_all(self, topic=None, pinned_only=False, query=None):
+        memories = self._load_all()
+        if topic:
+            memories = [m for m in memories if topic in m.get('topics', [])]
+        if pinned_only:
+            memories = [m for m in memories if m.get('pinned')]
+        if query:
+            q = query.lower()
+            memories = [m for m in memories if q in m.get('content', '').lower() or any(q in t.lower() for t in m.get('topics', []))]
+        return list(reversed(memories))
+
+    def get_memory(self, mid):
+        for m in self._load_all():
+            if m['id'] == mid:
+                return m
+        return None
+
+    def update_memory(self, mid, updates):
+        memories = self._load_all()
+        for m in memories:
+            if m['id'] == mid:
+                for k, v in updates.items():
+                    if k not in ('id', 'created'):
+                        m[k] = v
+                self._save_all(memories)
+                return m
+        raise ValueError('Memory not found')
+
+    def delete_memory(self, mid):
+        memories = self._load_all()
+        memories = [m for m in memories if m['id'] != mid]
+        self._save_all(memories)
+
+    def toggle_pin(self, mid):
+        memories = self._load_all()
+        for m in memories:
+            if m['id'] == mid:
+                m['pinned'] = not m.get('pinned', False)
+                self._save_all(memories)
+                return m
+        raise ValueError('Memory not found')
+
+    def search(self, query, limit=20):
+        query_terms = query.lower().split()
+        results = []
+        for m in self._load_all():
+            content_lower = m.get('content', '').lower()
+            topic_text = ' '.join(m.get('topics', [])).lower()
+            entity_text = ' '.join(m.get('entities', [])).lower()
+            combined = content_lower + ' ' + topic_text + ' ' + entity_text
+            score = sum(1 for term in query_terms if term in combined)
+            if score > 0:
+                score *= m.get('importance', 0.5) * m.get('decay_factor', 1.0)
+                if m.get('pinned'):
+                    score *= 1.5
+                results.append((score, m))
+        results.sort(key=lambda x: x[0], reverse=True)
+        return [m for _, m in results[:limit]]
+
+    def get_topics(self):
+        idx = self._load_index()
+        return idx.get('topics', {})
+
+    def get_context_for_conversation(self, message, limit=5):
+        return self.search(message, limit=limit)
+
+
+# ---------------------------------------------------------------------------
+#  5. Pipeline Manager
+# ---------------------------------------------------------------------------
+
+PIPELINE_RUNS = {}  # run_id -> run status (in-memory, like EXEC_JOBS)
+
+class PipelineManager:
+    def __init__(self, db_path, runs_path):
+        self.db_path = Path(db_path)
+        self.runs_path = Path(runs_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        for p, default in [(self.db_path, {'pipelines': []}), (self.runs_path, {'runs': []})]:
+            if not p.exists():
+                p.write_text(json.dumps(default, indent=2), encoding='utf-8')
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'pipelines': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def _load_runs(self):
+        try:
+            return json.loads(self.runs_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'runs': []}
+
+    def _save_runs(self, data):
+        self.runs_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def list_pipelines(self):
+        return self._load().get('pipelines', [])
+
+    def get_pipeline(self, pid):
+        for p in self._load().get('pipelines', []):
+            if p['id'] == pid:
+                return p
+        raise ValueError('Pipeline not found')
+
+    def create_pipeline(self, name, description=''):
+        d = self._load()
+        pipeline = {
+            'id': str(uuid.uuid4()), 'name': name, 'description': description,
+            'stages': [], 'created': datetime.now().isoformat(),
+            'updated': datetime.now().isoformat()
+        }
+        d.setdefault('pipelines', []).append(pipeline)
+        self._save(d)
+        return pipeline
+
+    def update_pipeline(self, pid, updates):
+        d = self._load()
+        for p in d.get('pipelines', []):
+            if p['id'] == pid:
+                for k, v in updates.items():
+                    if k not in ('id', 'created'):
+                        p[k] = v
+                p['updated'] = datetime.now().isoformat()
+                self._save(d)
+                return p
+        raise ValueError('Pipeline not found')
+
+    def delete_pipeline(self, pid):
+        d = self._load()
+        d['pipelines'] = [p for p in d.get('pipelines', []) if p['id'] != pid]
+        self._save(d)
+
+    def execute_pipeline(self, pid):
+        pipeline = self.get_pipeline(pid)
+        run = {
+            'id': str(uuid.uuid4()), 'pipeline_id': pid,
+            'pipeline_name': pipeline['name'], 'status': 'running',
+            'started': datetime.now().isoformat(), 'finished': None,
+            'stages': [], 'log': []
+        }
+        PIPELINE_RUNS[run['id']] = run
+        t = threading.Thread(target=self._run_pipeline, args=(run, pipeline), daemon=True)
+        t.start()
+        return run
+
+    def _run_pipeline(self, run, pipeline):
+        try:
+            for stage in sorted(pipeline.get('stages', []), key=lambda s: s.get('order', 0)):
+                stage_run = {
+                    'stage_id': stage['id'], 'name': stage.get('name', 'Stage'),
+                    'status': 'running', 'started': datetime.now().isoformat(),
+                    'finished': None, 'steps': []
+                }
+                run['stages'].append(stage_run)
+                run['log'].append(f"[{datetime.now().isoformat()}] Starting stage: {stage.get('name')}")
+                for step in stage.get('steps', []):
+                    step_run = self._execute_step(step, run)
+                    stage_run['steps'].append(step_run)
+                    if step_run['status'] == 'failed':
+                        stage_run['status'] = 'failed'
+                        stage_run['finished'] = datetime.now().isoformat()
+                        run['status'] = 'failed'
+                        run['finished'] = datetime.now().isoformat()
+                        run['log'].append(f"[{datetime.now().isoformat()}] Pipeline FAILED at stage: {stage.get('name')}")
+                        self._persist_run(run)
+                        return
+                stage_run['status'] = 'completed'
+                stage_run['finished'] = datetime.now().isoformat()
+            run['status'] = 'completed'
+            run['finished'] = datetime.now().isoformat()
+            run['log'].append(f"[{datetime.now().isoformat()}] Pipeline completed successfully")
+        except Exception as e:
+            run['status'] = 'failed'
+            run['finished'] = datetime.now().isoformat()
+            run['log'].append(f"[{datetime.now().isoformat()}] Pipeline error: {str(e)}")
+        self._persist_run(run)
+
+    def _execute_step(self, step, run):
+        step_run = {
+            'step_id': step.get('id', str(uuid.uuid4())),
+            'name': step.get('name', 'Step'), 'type': step.get('type', 'custom_command'),
+            'status': 'running', 'started': datetime.now().isoformat(),
+            'output': '', 'finished': None
+        }
+        run['log'].append(f"[{datetime.now().isoformat()}] Running step: {step.get('name')} (type={step.get('type')})")
+        try:
+            cfg = step.get('config', {})
+            cmd = None
+            cwd = cfg.get('working_dir') or None
+            if step.get('type') == 'script':
+                cmd = f"{cfg.get('script_path', '')} {cfg.get('args', '')}".strip()
+            elif step.get('type') == 'docker_build':
+                cmd = f"docker build -t {cfg.get('image_tag', 'latest')} -f {cfg.get('dockerfile_path', 'Dockerfile')} {cfg.get('context_dir', '.')}"
+            elif step.get('type') in ('terraform_apply', 'terraform_plan'):
+                action = 'apply -auto-approve' if step['type'] == 'terraform_apply' else 'plan'
+                var_file = f"-var-file={cfg['var_file']}" if cfg.get('var_file') else ''
+                cmd = f"terraform {action} {var_file}".strip()
+            elif step.get('type') == 'test_run':
+                cmd = cfg.get('test_command', 'echo No test command')
+            elif step.get('type') == 'deploy':
+                cmd = f"echo Deploying to {cfg.get('target', 'unknown')} with strategy {cfg.get('strategy', 'rolling')}"
+            elif step.get('type') == 'custom_command':
+                cmd = cfg.get('command', 'echo hello')
+            else:
+                cmd = f"echo Unknown step type: {step.get('type')}"
+
+            if cmd:
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True,
+                    timeout=int(cfg.get('timeout', 300)), cwd=cwd
+                )
+                step_run['output'] = result.stdout + result.stderr
+                step_run['status'] = 'completed' if result.returncode == 0 else 'failed'
+            else:
+                step_run['status'] = 'completed'
+                step_run['output'] = 'No command to run'
+        except subprocess.TimeoutExpired:
+            step_run['status'] = 'failed'
+            step_run['output'] = 'Step timed out'
+        except Exception as e:
+            step_run['status'] = 'failed'
+            step_run['output'] = str(e)
+        step_run['finished'] = datetime.now().isoformat()
+        return step_run
+
+    def _persist_run(self, run):
+        d = self._load_runs()
+        d.setdefault('runs', []).insert(0, run)
+        if len(d['runs']) > 100:
+            d['runs'] = d['runs'][:100]
+        self._save_runs(d)
+
+    def get_run(self, rid):
+        if rid in PIPELINE_RUNS:
+            return PIPELINE_RUNS[rid]
+        d = self._load_runs()
+        for r in d.get('runs', []):
+            if r['id'] == rid:
+                return r
+        raise ValueError('Run not found')
+
+    def get_runs(self, pipeline_id=None, limit=50):
+        runs = list(PIPELINE_RUNS.values())
+        d = self._load_runs()
+        for r in d.get('runs', []):
+            if r['id'] not in PIPELINE_RUNS:
+                runs.append(r)
+        if pipeline_id:
+            runs = [r for r in runs if r.get('pipeline_id') == pipeline_id]
+        runs.sort(key=lambda r: r.get('started', ''), reverse=True)
+        return runs[:limit]
+
+    def cancel_run(self, rid):
+        if rid in PIPELINE_RUNS:
+            PIPELINE_RUNS[rid]['status'] = 'cancelled'
+            PIPELINE_RUNS[rid]['finished'] = datetime.now().isoformat()
+            return PIPELINE_RUNS[rid]
+        raise ValueError('Run not found or already finished')
+
+
+# ---------------------------------------------------------------------------
+#  6. Cloud Dashboard Manager
+# ---------------------------------------------------------------------------
+
+class CloudProvider:
+    def list_resources(self, credentials):
+        return []
+    def get_resource(self, credentials, resource_id):
+        return None
+    def start_vm(self, credentials, vm_id):
+        return {'ok': True}
+    def stop_vm(self, credentials, vm_id):
+        return {'ok': True}
+
+class AzureProvider(CloudProvider):
+    def list_resources(self, credentials):
+        return [
+            {'id': 'azure-vm-1', 'name': 'prod-web-01', 'type': 'vm', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_D2s_v3', 'cost_monthly': 70.08, 'created': '2024-01-15'},
+            {'id': 'azure-vm-2', 'name': 'prod-api-01', 'type': 'vm', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_D4s_v3', 'cost_monthly': 140.16, 'created': '2024-01-15'},
+            {'id': 'azure-stor-1', 'name': 'prodstorage01', 'type': 'storage', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_LRS', 'cost_monthly': 21.84, 'created': '2024-02-01'},
+            {'id': 'azure-db-1', 'name': 'prod-sql-01', 'type': 'database', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'GP_Gen5_2', 'cost_monthly': 295.20, 'created': '2024-01-20'},
+            {'id': 'azure-net-1', 'name': 'prod-vnet', 'type': 'network', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': '10.0.0.0/16', 'cost_monthly': 0, 'created': '2024-01-10'},
+        ]
+
+class AWSProvider(CloudProvider):
+    def list_resources(self, credentials):
+        return [
+            {'id': 'aws-vm-1', 'name': 'staging-web', 'type': 'vm', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 't3.medium', 'cost_monthly': 30.37, 'created': '2024-03-01'},
+            {'id': 'aws-vm-2', 'name': 'staging-worker', 'type': 'vm', 'provider': 'aws', 'status': 'stopped', 'region': 'us-east-1', 'size': 't3.large', 'cost_monthly': 0, 'created': '2024-03-01'},
+            {'id': 'aws-stor-1', 'name': 'staging-s3-data', 'type': 'storage', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 'S3 Standard', 'cost_monthly': 15.50, 'created': '2024-03-05'},
+            {'id': 'aws-db-1', 'name': 'staging-rds', 'type': 'database', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 'db.t3.medium', 'cost_monthly': 52.56, 'created': '2024-03-10'},
+        ]
+
+class GCPProvider(CloudProvider):
+    def list_resources(self, credentials):
+        return [
+            {'id': 'gcp-vm-1', 'name': 'dev-instance-1', 'type': 'vm', 'provider': 'gcp', 'status': 'running', 'region': 'us-central1', 'size': 'e2-medium', 'cost_monthly': 24.27, 'created': '2024-04-01'},
+            {'id': 'gcp-stor-1', 'name': 'dev-bucket', 'type': 'storage', 'provider': 'gcp', 'status': 'running', 'region': 'us-central1', 'size': 'Standard', 'cost_monthly': 8.50, 'created': '2024-04-05'},
+            {'id': 'gcp-db-1', 'name': 'dev-cloudsql', 'type': 'database', 'provider': 'gcp', 'status': 'stopped', 'region': 'us-central1', 'size': 'db-f1-micro', 'cost_monthly': 0, 'created': '2024-04-10'},
+        ]
+
+class CloudDashboardManager:
+    def __init__(self, db_path):
+        self.db_path = Path(db_path)
+        self._providers = {'azure': AzureProvider(), 'aws': AWSProvider(), 'gcp': GCPProvider()}
+        self._resource_cache = {}
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save({'accounts': [
+                {'id': str(uuid.uuid4()), 'name': 'Azure Production', 'provider': 'azure', 'credential_secret_id': '', 'region': 'eastus', 'created': datetime.now().isoformat()},
+                {'id': str(uuid.uuid4()), 'name': 'AWS Staging', 'provider': 'aws', 'credential_secret_id': '', 'region': 'us-east-1', 'created': datetime.now().isoformat()},
+                {'id': str(uuid.uuid4()), 'name': 'GCP Development', 'provider': 'gcp', 'credential_secret_id': '', 'region': 'us-central1', 'created': datetime.now().isoformat()},
+            ]})
+        self.refresh()
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'accounts': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def get_accounts(self):
+        return self._load().get('accounts', [])
+
+    def add_account(self, name, provider, credential_secret_id='', region=''):
+        d = self._load()
+        acct = {'id': str(uuid.uuid4()), 'name': name, 'provider': provider,
+                'credential_secret_id': credential_secret_id, 'region': region,
+                'created': datetime.now().isoformat()}
+        d.setdefault('accounts', []).append(acct)
+        self._save(d)
+        self.refresh()
+        return acct
+
+    def remove_account(self, aid):
+        d = self._load()
+        d['accounts'] = [a for a in d.get('accounts', []) if a['id'] != aid]
+        self._save(d)
+        self._resource_cache.pop(aid, None)
+
+    def refresh(self):
+        self._resource_cache = {}
+        for acct in self.get_accounts():
+            provider = self._providers.get(acct['provider'])
+            if provider:
+                try:
+                    self._resource_cache[acct['id']] = provider.list_resources(acct.get('credential_secret_id'))
+                except Exception:
+                    self._resource_cache[acct['id']] = []
+
+    def get_resources(self, provider=None, rtype=None, status=None):
+        all_res = []
+        for acct_id, resources in self._resource_cache.items():
+            all_res.extend(resources)
+        if provider:
+            all_res = [r for r in all_res if r.get('provider') == provider]
+        if rtype:
+            all_res = [r for r in all_res if r.get('type') == rtype]
+        if status:
+            all_res = [r for r in all_res if r.get('status') == status]
+        return all_res
+
+    def get_resource(self, rid):
+        for resources in self._resource_cache.values():
+            for r in resources:
+                if r['id'] == rid:
+                    return r
+        raise ValueError('Resource not found')
+
+    def start_resource(self, rid):
+        for resources in self._resource_cache.values():
+            for r in resources:
+                if r['id'] == rid:
+                    r['status'] = 'running'
+                    return r
+        raise ValueError('Resource not found')
+
+    def stop_resource(self, rid):
+        for resources in self._resource_cache.values():
+            for r in resources:
+                if r['id'] == rid:
+                    r['status'] = 'stopped'
+                    r['cost_monthly'] = 0
+                    return r
+        raise ValueError('Resource not found')
+
+    def get_costs(self):
+        costs = {'azure': 0, 'aws': 0, 'gcp': 0, 'total': 0}
+        for r in self.get_resources():
+            p = r.get('provider', 'other')
+            c = r.get('cost_monthly', 0)
+            costs[p] = costs.get(p, 0) + c
+            costs['total'] += c
+        return costs
+
+
+# ---------------------------------------------------------------------------
+#  7. Marketplace Manager
+# ---------------------------------------------------------------------------
+
+class MarketplaceManager:
+    def __init__(self, db_path):
+        self.db_path = Path(db_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save({
+                'plugins': [
+                    {'id': 'terraform-iac', 'name': 'Terraform IaC', 'version': '1.2.0', 'author': 'MasterChief Team', 'category': 'DevOps', 'description': 'Infrastructure as Code automation with Terraform. Supports Azure, AWS, and GCP providers with plan/apply/destroy workflows.', 'installed': True, 'rating': 4.5, 'review_count': 12, 'config': {'default_provider': 'azure', 'state_backend': 'local'}, 'dependencies': []},
+                    {'id': 'ansible-config', 'name': 'Ansible Config Management', 'version': '2.0.1', 'author': 'MasterChief Team', 'category': 'Automation', 'description': 'Server configuration management with Ansible playbooks. Includes security hardening, package management, and service configuration.', 'installed': True, 'rating': 4.2, 'review_count': 8, 'config': {'inventory_path': '/etc/ansible/hosts'}, 'dependencies': []},
+                    {'id': 'k8s-deploy', 'name': 'Kubernetes Deployer', 'version': '3.1.0', 'author': 'MasterChief Team', 'category': 'DevOps', 'description': 'Kubernetes deployment automation with Helm charts, Kustomize overlays, and rolling/canary/blue-green strategies.', 'installed': True, 'rating': 4.8, 'review_count': 25, 'config': {'default_namespace': 'default', 'context': 'minikube'}, 'dependencies': ['terraform-iac']},
+                    {'id': 'prometheus-monitor', 'name': 'Prometheus Monitoring', 'version': '1.5.0', 'author': 'MasterChief Team', 'category': 'Monitoring', 'description': 'Full metrics pipeline with Prometheus, Grafana dashboards, and alerting rules. Includes custom exporters for application metrics.', 'installed': False, 'rating': 4.6, 'review_count': 18, 'config': {}, 'dependencies': []},
+                    {'id': 'vault-secrets', 'name': 'HashiCorp Vault', 'version': '0.9.0', 'author': 'Community', 'category': 'Security', 'description': 'Integration with HashiCorp Vault for enterprise secret management. Supports dynamic secrets, PKI, and transit encryption.', 'installed': False, 'rating': 4.0, 'review_count': 6, 'config': {}, 'dependencies': []},
+                    {'id': 'jenkins-ci', 'name': 'Jenkins CI Bridge', 'version': '1.0.0', 'author': 'Community', 'category': 'Integration', 'description': 'Bridge MasterChief pipelines with Jenkins CI/CD. Trigger Jenkins jobs, sync status, and import pipeline definitions.', 'installed': False, 'rating': 3.8, 'review_count': 4, 'config': {}, 'dependencies': []},
+                    {'id': 'github-actions', 'name': 'GitHub Actions Sync', 'version': '2.1.0', 'author': 'Community', 'category': 'Integration', 'description': 'Sync GitHub Actions workflows with MasterChief pipelines. Auto-import workflows, sync status, and trigger actions.', 'installed': False, 'rating': 4.3, 'review_count': 14, 'config': {}, 'dependencies': []},
+                    {'id': 'sonarqube-scan', 'name': 'SonarQube Scanner', 'version': '1.3.0', 'author': 'Community', 'category': 'Security', 'description': 'Code quality and security scanning with SonarQube integration. Automated code review, vulnerability detection, and quality gates.', 'installed': False, 'rating': 4.1, 'review_count': 9, 'config': {}, 'dependencies': []},
+                    {'id': 'elk-logging', 'name': 'ELK Stack Logging', 'version': '2.0.0', 'author': 'MasterChief Team', 'category': 'Monitoring', 'description': 'Centralized logging with Elasticsearch, Logstash, and Kibana. Includes pre-built dashboards and alert rules for DevOps workflows.', 'installed': False, 'rating': 4.4, 'review_count': 11, 'config': {}, 'dependencies': []},
+                    {'id': 'cost-optimizer', 'name': 'Cloud Cost Optimizer', 'version': '1.1.0', 'author': 'Community', 'category': 'DevOps', 'description': 'Analyze and optimize cloud spending across Azure, AWS, and GCP. Right-sizing recommendations, reserved instance advisor, and cost anomaly detection.', 'installed': False, 'rating': 3.9, 'review_count': 7, 'config': {}, 'dependencies': []},
+                    {'id': 'postgres-manager', 'name': 'PostgreSQL Manager', 'version': '1.0.0', 'author': 'Community', 'category': 'Database', 'description': 'PostgreSQL database management with backup scheduling, query optimization, replication monitoring, and automated failover.', 'installed': False, 'rating': 4.2, 'review_count': 5, 'config': {}, 'dependencies': []},
+                    {'id': 'nginx-proxy', 'name': 'Nginx Proxy Manager', 'version': '1.4.0', 'author': 'Community', 'category': 'Networking', 'description': 'Nginx reverse proxy management with SSL automation, load balancing, and upstream health checks. Includes Let\'s Encrypt integration.', 'installed': False, 'rating': 4.5, 'review_count': 16, 'config': {}, 'dependencies': []},
+                ],
+                'reviews': []
+            })
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'plugins': [], 'reviews': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def list_plugins(self, query=None, category=None, installed_only=False):
+        d = self._load()
+        plugins = d.get('plugins', [])
+        if query:
+            q = query.lower()
+            plugins = [p for p in plugins if q in p.get('name', '').lower() or q in p.get('description', '').lower()]
+        if category and category != 'All':
+            plugins = [p for p in plugins if p.get('category') == category]
+        if installed_only:
+            plugins = [p for p in plugins if p.get('installed')]
+        return plugins
+
+    def get_plugin(self, pid):
+        for p in self._load().get('plugins', []):
+            if p['id'] == pid:
+                return p
+        raise ValueError('Plugin not found')
+
+    def install_plugin(self, pid):
+        d = self._load()
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                deps = p.get('dependencies', [])
+                for dep in deps:
+                    dep_plugin = next((x for x in d['plugins'] if x['id'] == dep), None)
+                    if dep_plugin and not dep_plugin.get('installed'):
+                        raise ValueError(f'Dependency {dep} must be installed first')
+                p['installed'] = True
+                self._save(d)
+                return p
+        raise ValueError('Plugin not found')
+
+    def uninstall_plugin(self, pid):
+        d = self._load()
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                dependents = [x['name'] for x in d['plugins'] if pid in x.get('dependencies', []) and x.get('installed')]
+                if dependents:
+                    raise ValueError(f'Cannot uninstall: {", ".join(dependents)} depend on this plugin')
+                p['installed'] = False
+                p['config'] = {}
+                self._save(d)
+                return p
+        raise ValueError('Plugin not found')
+
+    def get_config(self, pid):
+        p = self.get_plugin(pid)
+        return p.get('config', {})
+
+    def update_config(self, pid, config):
+        d = self._load()
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                p['config'] = config
+                self._save(d)
+                return p
+        raise ValueError('Plugin not found')
+
+    def get_reviews(self, pid):
+        d = self._load()
+        return [r for r in d.get('reviews', []) if r.get('plugin_id') == pid]
+
+    def add_review(self, pid, rating, text, author='Anonymous'):
+        d = self._load()
+        review = {
+            'id': str(uuid.uuid4()), 'plugin_id': pid,
+            'rating': max(1, min(5, int(rating))), 'text': text,
+            'author': author, 'created': datetime.now().isoformat()
+        }
+        d.setdefault('reviews', []).append(review)
+        plugin_reviews = [r for r in d['reviews'] if r.get('plugin_id') == pid]
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                p['review_count'] = len(plugin_reviews)
+                p['rating'] = round(sum(r['rating'] for r in plugin_reviews) / len(plugin_reviews), 1)
+                break
+        self._save(d)
+        return review
+
+
+###############################################################################
+#  Manager Instantiations
+###############################################################################
+
+rbac_mgr = RBACManager(app.config['RBAC_DB'])
+vault_mgr = VaultManager(app.config['VAULT_DB'], app.config['VAULT_KEY'], app.config['VAULT_AUDIT_DB'])
+notification_mgr = NotificationManager(app.config['NOTIFICATIONS_DB'], app.config['NOTIFICATION_CHANNELS_DB'], app.config['NOTIFICATION_RULES_DB'])
+pipeline_mgr = PipelineManager(app.config['PIPELINES_DB'], app.config['PIPELINE_RUNS_DB'])
+cloud_mgr = CloudDashboardManager(app.config['CLOUD_DB'])
+memory_mgr = MemoryManager(app.config['MEMORIES_PATH'], app.config['MEMORY_INDEX_PATH'])
+marketplace_mgr = MarketplaceManager(app.config['MARKETPLACE_DB'])
+
+
+###############################################################################
+# =====================  NEW FEATURE API ROUTES  ============================
+###############################################################################
+
+# ---------------------------------------------------------------------------
+#  RBAC Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/rbac')
+def rbac_page():
+    p = Path(__file__).resolve().parent / 'rbac.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+@app.route('/api/rbac/users', methods=['GET'])
+def api_rbac_users_list():
+    try:
+        return jsonify({'ok': True, 'result': rbac_mgr.get_users()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/users', methods=['POST'])
+def api_rbac_users_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        user = rbac_mgr.add_user(d.get('username', ''), d.get('password', ''), d.get('role', 'viewer'))
+        return jsonify({'ok': True, 'result': user})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/users/<user_id>', methods=['PUT'])
+def api_rbac_users_update(user_id):
+    try:
+        d = request.get_json(silent=True) or {}
+        user = rbac_mgr.update_user(user_id, d)
+        return jsonify({'ok': True, 'result': user})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/users/<user_id>', methods=['DELETE'])
+def api_rbac_users_delete(user_id):
+    try:
+        rbac_mgr.delete_user(user_id)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/roles', methods=['GET'])
+def api_rbac_roles_list():
+    try:
+        return jsonify({'ok': True, 'result': rbac_mgr.get_roles()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/roles', methods=['POST'])
+def api_rbac_roles_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        role = rbac_mgr.add_role(d.get('name', ''), d.get('permissions', []))
+        return jsonify({'ok': True, 'result': role})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/roles/<role_name>', methods=['PUT'])
+def api_rbac_roles_update(role_name):
+    try:
+        d = request.get_json(silent=True) or {}
+        role = rbac_mgr.update_role(role_name, d.get('permissions', []))
+        return jsonify({'ok': True, 'result': role})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/roles/<role_name>', methods=['DELETE'])
+def api_rbac_roles_delete(role_name):
+    try:
+        rbac_mgr.delete_role(role_name)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/sessions', methods=['GET'])
+def api_rbac_sessions_list():
+    try:
+        return jsonify({'ok': True, 'result': rbac_mgr.get_sessions()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/sessions/<session_id>', methods=['DELETE'])
+def api_rbac_sessions_delete(session_id):
+    try:
+        rbac_mgr.delete_session(session_id)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/audit', methods=['GET'])
+def api_rbac_audit():
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        return jsonify({'ok': True, 'result': rbac_mgr.get_audit_log(limit)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/api_keys', methods=['POST'])
+def api_rbac_api_keys_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        key = rbac_mgr.generate_api_key(d.get('user_id', ''))
+        return jsonify({'ok': True, 'result': key})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/api_keys/<key_id>', methods=['DELETE'])
+def api_rbac_api_keys_delete(key_id):
+    try:
+        rbac_mgr.revoke_api_key(key_id)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/login', methods=['POST'])
+def api_rbac_login():
+    try:
+        d = request.get_json(silent=True) or {}
+        sess = rbac_mgr.authenticate(d.get('username', ''), d.get('password', ''))
+        if sess:
+            return jsonify({'ok': True, 'result': sess})
+        return jsonify({'ok': False, 'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Notification Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/notifications')
+def notifications_page():
+    p = Path(__file__).resolve().parent / 'notifications.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+@app.route('/api/notifications', methods=['GET'])
+def api_notifications_list():
+    try:
+        unread = request.args.get('unread', '').lower() == 'true'
+        severity = request.args.get('severity')
+        return jsonify({'ok': True, 'result': notification_mgr.list_notifications(unread_only=unread, severity=severity)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/count', methods=['GET'])
+def api_notifications_count():
+    try:
+        return jsonify({'ok': True, 'result': notification_mgr.unread_count()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/<nid>/read', methods=['POST'])
+def api_notifications_read(nid):
+    try:
+        notification_mgr.mark_read(nid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/read_all', methods=['POST'])
+def api_notifications_read_all():
+    try:
+        notification_mgr.mark_all_read()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/<nid>', methods=['DELETE'])
+def api_notifications_delete(nid):
+    try:
+        notification_mgr.delete_notification(nid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/channels', methods=['GET'])
+def api_notification_channels_list():
+    try:
+        return jsonify({'ok': True, 'result': notification_mgr.get_channels()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/channels', methods=['POST'])
+def api_notification_channels_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        ch = notification_mgr.add_channel(d.get('name', ''), d.get('type', 'in_app'), d.get('config', {}))
+        return jsonify({'ok': True, 'result': ch})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/channels/<cid>', methods=['PUT'])
+def api_notification_channels_update(cid):
+    try:
+        d = request.get_json(silent=True) or {}
+        ch = notification_mgr.update_channel(cid, d)
+        return jsonify({'ok': True, 'result': ch})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/channels/<cid>', methods=['DELETE'])
+def api_notification_channels_delete(cid):
+    try:
+        notification_mgr.delete_channel(cid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/channels/<cid>/test', methods=['POST'])
+def api_notification_channels_test(cid):
+    try:
+        result = notification_mgr.test_channel(cid)
+        return jsonify({'ok': True, 'result': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/rules', methods=['GET'])
+def api_notification_rules_list():
+    try:
+        return jsonify({'ok': True, 'result': notification_mgr.get_rules()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/rules', methods=['POST'])
+def api_notification_rules_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        rule = notification_mgr.add_rule(d.get('name', ''), d.get('event_type', ''), d.get('severity_filter', 'all'), d.get('channel_id', ''), d.get('active', True))
+        return jsonify({'ok': True, 'result': rule})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/rules/<rid>', methods=['PUT'])
+def api_notification_rules_update(rid):
+    try:
+        d = request.get_json(silent=True) or {}
+        rule = notification_mgr.update_rule(rid, d)
+        return jsonify({'ok': True, 'result': rule})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/rules/<rid>', methods=['DELETE'])
+def api_notification_rules_delete(rid):
+    try:
+        notification_mgr.delete_rule(rid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Vault Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/secrets')
+def secrets_page():
+    p = Path(__file__).resolve().parent / 'secrets_vault.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+@app.route('/api/vault/secrets', methods=['GET'])
+def api_vault_list():
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.list_secrets()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/secrets', methods=['POST'])
+def api_vault_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        secret = vault_mgr.create_secret(d.get('name', ''), d.get('value', ''), d.get('type', 'other'), d.get('rotation_days', 0))
+        return jsonify({'ok': True, 'result': secret})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/vault/secrets/<sid>', methods=['GET'])
+def api_vault_get(sid):
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.get_secret(sid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/vault/secrets/<sid>', methods=['PUT'])
+def api_vault_update(sid):
+    try:
+        d = request.get_json(silent=True) or {}
+        secret = vault_mgr.update_secret(sid, value=d.get('value'), rotation_days=d.get('rotation_days'))
+        return jsonify({'ok': True, 'result': secret})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/vault/secrets/<sid>', methods=['DELETE'])
+def api_vault_delete(sid):
+    try:
+        vault_mgr.delete_secret(sid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/secrets/<sid>/versions', methods=['GET'])
+def api_vault_versions(sid):
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.get_versions(sid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/audit', methods=['GET'])
+def api_vault_audit():
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        return jsonify({'ok': True, 'result': vault_mgr.get_audit_log(limit)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/rotation', methods=['GET'])
+def api_vault_rotation():
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.check_rotation()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Echo Memory Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/echo-memory')
+def echo_memory_page():
+    p = Path(__file__).resolve().parent / 'echo_memory.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+@app.route('/api/echo/memories', methods=['GET'])
+def api_echo_memories_list():
+    try:
+        topic = request.args.get('topic')
+        q = request.args.get('q')
+        pinned = request.args.get('pinned', '').lower() == 'true'
+        return jsonify({'ok': True, 'result': memory_mgr.get_all(topic=topic, pinned_only=pinned, query=q)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories', methods=['POST'])
+def api_echo_memories_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        topics = d.get('topics', [])
+        if isinstance(topics, str):
+            topics = [t.strip() for t in topics.split(',') if t.strip()]
+        entities = d.get('entities', [])
+        if isinstance(entities, str):
+            entities = [e.strip() for e in entities.split(',') if e.strip()]
+        memory = memory_mgr.add_memory(
+            content=d.get('content', ''),
+            topics=topics, entities=entities,
+            source=d.get('source', 'manual'),
+            importance=d.get('importance', 0.5)
+        )
+        return jsonify({'ok': True, 'result': memory})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/echo/memories/<mid>', methods=['GET'])
+def api_echo_memories_get(mid):
+    try:
+        m = memory_mgr.get_memory(mid)
+        if m:
+            return jsonify({'ok': True, 'result': m})
+        return jsonify({'ok': False, 'error': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/<mid>', methods=['PUT'])
+def api_echo_memories_update(mid):
+    try:
+        d = request.get_json(silent=True) or {}
+        m = memory_mgr.update_memory(mid, d)
+        return jsonify({'ok': True, 'result': m})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/echo/memories/<mid>', methods=['DELETE'])
+def api_echo_memories_delete(mid):
+    try:
+        memory_mgr.delete_memory(mid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/<mid>/pin', methods=['POST'])
+def api_echo_memories_pin(mid):
+    try:
+        m = memory_mgr.toggle_pin(mid)
+        return jsonify({'ok': True, 'result': m})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/echo/memories/search', methods=['GET'])
+def api_echo_memories_search():
+    try:
+        q = request.args.get('q', '')
+        return jsonify({'ok': True, 'result': memory_mgr.search(q)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/topics', methods=['GET'])
+def api_echo_memories_topics():
+    try:
+        return jsonify({'ok': True, 'result': memory_mgr.get_topics()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/context', methods=['POST'])
+def api_echo_memories_context():
+    try:
+        d = request.get_json(silent=True) or {}
+        return jsonify({'ok': True, 'result': memory_mgr.get_context_for_conversation(d.get('message', ''))})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Pipeline Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/pipelines')
+def pipelines_page():
+    p = Path(__file__).resolve().parent / 'pipelines.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+@app.route('/api/pipelines', methods=['GET'])
+def api_pipelines_list():
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.list_pipelines()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/pipelines', methods=['POST'])
+def api_pipelines_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        pipeline = pipeline_mgr.create_pipeline(d.get('name', 'New Pipeline'), d.get('description', ''))
+        return jsonify({'ok': True, 'result': pipeline})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/<pid>', methods=['GET'])
+def api_pipelines_get(pid):
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_pipeline(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/pipelines/<pid>', methods=['PUT'])
+def api_pipelines_update(pid):
+    try:
+        d = request.get_json(silent=True) or {}
+        pipeline = pipeline_mgr.update_pipeline(pid, d)
+        return jsonify({'ok': True, 'result': pipeline})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/<pid>', methods=['DELETE'])
+def api_pipelines_delete(pid):
+    try:
+        pipeline_mgr.delete_pipeline(pid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/pipelines/<pid>/execute', methods=['POST'])
+def api_pipelines_execute(pid):
+    try:
+        run = pipeline_mgr.execute_pipeline(pid)
+        return jsonify({'ok': True, 'result': run})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/runs', methods=['GET'])
+def api_pipeline_runs_list():
+    try:
+        pid = request.args.get('pipeline_id')
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_runs(pipeline_id=pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/pipelines/runs/<rid>', methods=['GET'])
+def api_pipeline_runs_get(rid):
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_run(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/pipelines/runs/<rid>/cancel', methods=['POST'])
+def api_pipeline_runs_cancel(rid):
+    try:
+        run = pipeline_mgr.cancel_run(rid)
+        return jsonify({'ok': True, 'result': run})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/import', methods=['POST'])
+def api_pipelines_import():
+    try:
+        d = request.get_json(silent=True) or {}
+        d.pop('id', None)
+        d['id'] = str(uuid.uuid4())
+        d['created'] = datetime.now().isoformat()
+        d['updated'] = datetime.now().isoformat()
+        data = pipeline_mgr._load()
+        data.setdefault('pipelines', []).append(d)
+        pipeline_mgr._save(data)
+        return jsonify({'ok': True, 'result': d})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/<pid>/export', methods=['GET'])
+def api_pipelines_export(pid):
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_pipeline(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+
+# ---------------------------------------------------------------------------
+#  Cloud Dashboard Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/cloud')
+def cloud_page():
+    p = Path(__file__).resolve().parent / 'cloud_dashboard.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+@app.route('/api/cloud/accounts', methods=['GET'])
+def api_cloud_accounts_list():
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.get_accounts()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/accounts', methods=['POST'])
+def api_cloud_accounts_create():
+    try:
+        d = request.get_json(silent=True) or {}
+        acct = cloud_mgr.add_account(d.get('name', ''), d.get('provider', 'azure'), d.get('credential_secret_id', ''), d.get('region', ''))
+        return jsonify({'ok': True, 'result': acct})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/cloud/accounts/<aid>', methods=['DELETE'])
+def api_cloud_accounts_delete(aid):
+    try:
+        cloud_mgr.remove_account(aid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/resources', methods=['GET'])
+def api_cloud_resources_list():
+    try:
+        provider = request.args.get('provider')
+        rtype = request.args.get('type')
+        status = request.args.get('status')
+        return jsonify({'ok': True, 'result': cloud_mgr.get_resources(provider=provider, rtype=rtype, status=status)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/resources/<rid>', methods=['GET'])
+def api_cloud_resources_get(rid):
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.get_resource(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/cloud/resources/<rid>/start', methods=['POST'])
+def api_cloud_resources_start(rid):
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.start_resource(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/cloud/resources/<rid>/stop', methods=['POST'])
+def api_cloud_resources_stop(rid):
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.stop_resource(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/cloud/costs', methods=['GET'])
+def api_cloud_costs():
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.get_costs()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/refresh', methods=['POST'])
+def api_cloud_refresh():
+    try:
+        cloud_mgr.refresh()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Marketplace Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/marketplace')
+def marketplace_page():
+    p = Path(__file__).resolve().parent / 'marketplace.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+@app.route('/api/marketplace/plugins', methods=['GET'])
+def api_marketplace_plugins_list():
+    try:
+        q = request.args.get('q')
+        category = request.args.get('category')
+        installed = request.args.get('installed', '').lower() == 'true'
+        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins(query=q, category=category, installed_only=installed)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/marketplace/plugins/<pid>', methods=['GET'])
+def api_marketplace_plugins_get(pid):
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/marketplace/plugins/<pid>/install', methods=['POST'])
+def api_marketplace_plugins_install(pid):
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.install_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/uninstall', methods=['POST'])
+def api_marketplace_plugins_uninstall(pid):
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.uninstall_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/update', methods=['POST'])
+def api_marketplace_plugins_update(pid):
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/config', methods=['GET'])
+def api_marketplace_plugins_config_get(pid):
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_config(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/marketplace/plugins/<pid>/config', methods=['PUT'])
+def api_marketplace_plugins_config_update(pid):
+    try:
+        d = request.get_json(silent=True) or {}
+        return jsonify({'ok': True, 'result': marketplace_mgr.update_config(pid, d)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/reviews', methods=['GET'])
+def api_marketplace_plugins_reviews_list(pid):
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_reviews(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/marketplace/plugins/<pid>/reviews', methods=['POST'])
+def api_marketplace_plugins_reviews_create(pid):
+    try:
+        d = request.get_json(silent=True) or {}
+        review = marketplace_mgr.add_review(pid, d.get('rating', 5), d.get('text', ''), d.get('author', 'Anonymous'))
+        return jsonify({'ok': True, 'result': review})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/installed', methods=['GET'])
+def api_marketplace_installed():
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins(installed_only=True)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/marketplace/refresh', methods=['POST'])
+def api_marketplace_refresh():
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+###############################################################################
+# ========================  ABOUT PAGE  ======================================
+###############################################################################
+
+@app.route('/about')
+def about_page():
+    p = Path(__file__).resolve().parent / 'about.html'
+    if p.exists():
+        return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    return redirect(url_for('index'))
+
+
+###############################################################################
+# =============  ENTERPRISE TERRAFORM WIZARD ENGINE  =========================
+###############################################################################
+
+ENTERPRISE_TF_JOBS = {}  # job_id -> generated project path
+
+class EnterpriseTerraformGenerator:
+    """Generates enterprise-grade Terraform projects from wizard configuration."""
+
+    def __init__(self, output_base):
+        self.output_base = Path(output_base)
+        self.output_base.mkdir(parents=True, exist_ok=True)
+
+    def generate(self, config):
+        """Generate a full enterprise Terraform project and return a job ID."""
+        job_id = str(uuid.uuid4())[:8]
+        project_name = config.get('project_name', 'enterprise-infra')
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '', project_name) or 'project'
+        out_dir = self.output_base / f'{safe_name}_{job_id}'
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        self._write_providers(config, out_dir)
+        self._write_backend(config, out_dir)
+        self._write_variables(config, out_dir)
+        self._write_locals(config, out_dir)
+
+        # Module directories
+        modules_dir = out_dir / 'modules'
+
+        # Hub module
+        if config.get('topology') == 'hub-spoke':
+            self._write_hub_module(config, modules_dir / 'hub')
+
+        # Spoke modules
+        for spoke in config.get('spokes', []):
+            spoke_name = re.sub(r'[^a-zA-Z0-9_-]', '', spoke.get('name', 'spoke'))
+            self._write_spoke_module(config, spoke, modules_dir / f'spoke_{spoke_name}')
+
+        # AKS module
+        if config.get('aks_enabled'):
+            self._write_aks_module(config, modules_dir / 'aks')
+
+        # Key Vault module
+        if config.get('keyvault_enabled', True):
+            self._write_keyvault_module(config, modules_dir / 'keyvault')
+
+        # Monitoring module
+        if config.get('log_analytics_enabled', True):
+            self._write_monitoring_module(config, modules_dir / 'monitoring')
+
+        # RBAC module
+        if config.get('rbac_assignments'):
+            self._write_rbac_module(config, modules_dir / 'rbac')
+
+        # DR module
+        if config.get('asr_enabled'):
+            self._write_dr_module(config, modules_dir / 'disaster_recovery')
+
+        # Users module (AAD groups)
+        if config.get('aad_groups_enabled'):
+            self._write_users_module(config, modules_dir / 'users')
+
+        # Akamai module
+        if config.get('akamai_enabled'):
+            self._write_akamai_module(config, modules_dir / 'akamai')
+
+        # VMSS module
+        if config.get('vmss_enabled'):
+            self._write_vmss_module(config, modules_dir / 'vmss')
+
+        # Main.tf referencing all modules
+        self._write_main(config, out_dir)
+
+        # Outputs
+        self._write_outputs(config, out_dir)
+
+        # Environment tfvars
+        self._write_environments(config, out_dir)
+
+        # CI/CD templates
+        if config.get('cicd_enabled'):
+            self._write_cicd_templates(config, out_dir)
+
+        # README
+        self._write_readme(config, out_dir)
+
+        # Create ZIP
+        zip_path = out_dir.parent / f'{safe_name}_{job_id}.zip'
+        shutil.make_archive(str(zip_path).replace('.zip', ''), 'zip', str(out_dir))
+
+        ENTERPRISE_TF_JOBS[job_id] = {
+            'id': job_id, 'path': str(zip_path), 'project_dir': str(out_dir),
+            'name': project_name, 'created': datetime.now().isoformat()
+        }
+        return job_id
+
+    def _w(self, path, content):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
+
+    def _write_providers(self, cfg, out):
+        providers = ['    azurerm = {\n      source  = "hashicorp/azurerm"\n      version = ">= 3.0"\n    }']
+        providers.append('    azuread = {\n      source  = "hashicorp/azuread"\n      version = ">= 2.0"\n    }')
+        providers.append('    random = {\n      source  = "hashicorp/random"\n      version = ">= 3.0"\n    }')
+        if cfg.get('aks_enabled'):
+            providers.append('    kubernetes = {\n      source  = "hashicorp/kubernetes"\n      version = ">= 2.0"\n    }')
+        if cfg.get('akamai_enabled'):
+            providers.append('    akamai = {\n      source  = "akamai/akamai"\n      version = ">= 1.0"\n    }')
+        self._w(out / 'providers.tf', f"""terraform {{
+  required_version = ">= 1.5"
+  required_providers {{
+{chr(10).join(providers)}
+  }}
+}}
+
+provider "azurerm" {{
+  features {{
+    key_vault {{
+      purge_soft_delete_on_destroy = false
+    }}
+  }}
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
+}}
+
+provider "azuread" {{
+  tenant_id = var.tenant_id
+}}
+""")
+
+    def _write_backend(self, cfg, out):
+        backend = cfg.get('backend', {})
+        if backend.get('type') == 'azurerm':
+            self._w(out / 'backend.tf', f"""terraform {{
+  backend "azurerm" {{
+    resource_group_name  = "{backend.get('resource_group', 'tfstate-rg')}"
+    storage_account_name = "{backend.get('storage_account', 'tfstatesa')}"
+    container_name       = "{backend.get('container', 'tfstate')}"
+    key                  = "{cfg.get('project_name', 'enterprise')}/terraform.tfstate"
+  }}
+}}
+""")
+        else:
+            self._w(out / 'backend.tf', 'terraform {\n  backend "local" {\n    path = "terraform.tfstate"\n  }\n}\n')
+
+    def _write_variables(self, cfg, out):
+        region = cfg.get('region', 'eastus')
+        env = cfg.get('environment', 'dev')
+        self._w(out / 'variables.tf', f"""variable "subscription_id" {{
+  type        = string
+  description = "Azure Subscription ID"
+  default     = "{cfg.get('subscription_id', '')}"
+}}
+
+variable "tenant_id" {{
+  type        = string
+  description = "Azure AD Tenant ID"
+  default     = "{cfg.get('tenant_id', '')}"
+}}
+
+variable "environment" {{
+  type        = string
+  description = "Environment name (dev/test/staging/prod)"
+  default     = "{env}"
+}}
+
+variable "location" {{
+  type        = string
+  description = "Azure region"
+  default     = "{region}"
+}}
+
+variable "naming_prefix" {{
+  type        = string
+  description = "Naming prefix for all resources"
+  default     = "{cfg.get('naming_prefix', cfg.get('project_name', 'mc'))}"
+}}
+
+variable "tags" {{
+  type = map(string)
+  default = {{
+    Environment = "{env}"
+    ManagedBy   = "terraform"
+    Project     = "{cfg.get('project_name', 'masterchief')}"
+  }}
+}}
+""")
+
+    def _write_locals(self, cfg, out):
+        prefix = cfg.get('naming_prefix', cfg.get('project_name', 'mc'))
+        self._w(out / 'locals.tf', f"""locals {{
+  prefix      = var.naming_prefix
+  environment = var.environment
+  location    = var.location
+  tags        = var.tags
+  hub_rg_name = "${{local.prefix}}-hub-rg"
+}}
+""")
+
+    def _write_hub_module(self, cfg, mod_dir):
+        hub_cidr = cfg.get('hub_cidr', '10.0.0.0/16')
+        hub_subnets = cfg.get('hub_subnets', [
+            {'name': 'GatewaySubnet', 'cidr': '10.0.0.0/24'},
+            {'name': 'AzureFirewallSubnet', 'cidr': '10.0.1.0/24'},
+            {'name': 'SharedServicesSubnet', 'cidr': '10.0.2.0/24'},
+            {'name': 'ManagementSubnet', 'cidr': '10.0.3.0/24'},
+        ])
+        subnets_hcl = '\n'.join(f'    {{ name = "{s["name"]}", cidr = "{s["cidr"]}" }},' for s in hub_subnets)
+        self._w(mod_dir / 'main.tf', f"""resource "azurerm_resource_group" "hub" {{
+  name     = "${{var.prefix}}-hub-rg"
+  location = var.location
+  tags     = var.tags
+}}
+
+resource "azurerm_virtual_network" "hub" {{
+  name                = "${{var.prefix}}-hub-vnet"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  address_space       = [var.hub_cidr]
+  tags                = var.tags
+}}
+
+resource "azurerm_subnet" "hub_subnets" {{
+  for_each             = {{ for s in var.hub_subnets : s.name => s }}
+  name                 = each.value.name
+  resource_group_name  = azurerm_resource_group.hub.name
+  virtual_network_name = azurerm_virtual_network.hub.name
+  address_prefixes     = [each.value.cidr]
+}}
+
+resource "azurerm_network_security_group" "hub_nsg" {{
+  name                = "${{var.prefix}}-hub-nsg"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  tags                = var.tags
+}}
+{'''
+resource "azurerm_firewall" "hub" {
+  name                = "${var.prefix}-hub-fw"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  sku_name            = "AZFW_VNet"
+  sku_tier            = "Standard"
+  ip_configuration {
+    name                 = "configuration"
+    subnet_id            = azurerm_subnet.hub_subnets["AzureFirewallSubnet"].id
+    public_ip_address_id = azurerm_public_ip.fw_pip.id
+  }
+  tags = var.tags
+}
+
+resource "azurerm_public_ip" "fw_pip" {
+  name                = "${var.prefix}-hub-fw-pip"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  tags                = var.tags
+}
+''' if cfg.get('firewall_enabled') else ''}
+""")
+        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
+variable "location" {{ type = string }}
+variable "tags" {{ type = map(string) }}
+variable "hub_cidr" {{
+  type    = string
+  default = "{hub_cidr}"
+}}
+variable "hub_subnets" {{
+  type = list(object({{ name = string, cidr = string }}))
+  default = [
+{subnets_hcl}
+  ]
+}}
+""")
+        self._w(mod_dir / 'outputs.tf', """output "hub_vnet_id" { value = azurerm_virtual_network.hub.id }
+output "hub_vnet_name" { value = azurerm_virtual_network.hub.name }
+output "hub_rg_name" { value = azurerm_resource_group.hub.name }
+output "hub_subnet_ids" { value = { for k, v in azurerm_subnet.hub_subnets : k => v.id } }
+""")
+
+    def _write_spoke_module(self, cfg, spoke, mod_dir):
+        spoke_cidr = spoke.get('cidr', '10.1.0.0/16')
+        spoke_subnets = spoke.get('subnets', [
+            {'name': 'AKSSubnet', 'cidr': '10.1.1.0/24'},
+            {'name': 'AppSubnet', 'cidr': '10.1.2.0/24'},
+            {'name': 'DataSubnet', 'cidr': '10.1.3.0/24'},
+        ])
+        subnets_hcl = '\n'.join(f'    {{ name = "{s["name"]}", cidr = "{s["cidr"]}" }},' for s in spoke_subnets)
+        self._w(mod_dir / 'main.tf', f"""resource "azurerm_resource_group" "spoke" {{
+  name     = "${{var.prefix}}-${{var.spoke_name}}-rg"
+  location = var.location
+  tags     = var.tags
+}}
+
+resource "azurerm_virtual_network" "spoke" {{
+  name                = "${{var.prefix}}-${{var.spoke_name}}-vnet"
+  location            = azurerm_resource_group.spoke.location
+  resource_group_name = azurerm_resource_group.spoke.name
+  address_space       = [var.spoke_cidr]
+  tags                = var.tags
+}}
+
+resource "azurerm_subnet" "spoke_subnets" {{
+  for_each             = {{ for s in var.spoke_subnets : s.name => s }}
+  name                 = each.value.name
+  resource_group_name  = azurerm_resource_group.spoke.name
+  virtual_network_name = azurerm_virtual_network.spoke.name
+  address_prefixes     = [each.value.cidr]
+}}
+
+resource "azurerm_network_security_group" "spoke_nsg" {{
+  name                = "${{var.prefix}}-${{var.spoke_name}}-nsg"
+  location            = azurerm_resource_group.spoke.location
+  resource_group_name = azurerm_resource_group.spoke.name
+  tags                = var.tags
+}}
+{"" if not spoke.get('peering', True) else '''
+resource "azurerm_virtual_network_peering" "spoke_to_hub" {
+  name                      = "${var.prefix}-${var.spoke_name}-to-hub"
+  resource_group_name       = azurerm_resource_group.spoke.name
+  virtual_network_name      = azurerm_virtual_network.spoke.name
+  remote_virtual_network_id = var.hub_vnet_id
+  allow_forwarded_traffic   = true
+  allow_gateway_transit     = false
+  use_remote_gateways       = false
+}
+
+resource "azurerm_virtual_network_peering" "hub_to_spoke" {
+  name                      = "hub-to-${var.spoke_name}"
+  resource_group_name       = var.hub_rg_name
+  virtual_network_name      = var.hub_vnet_name
+  remote_virtual_network_id = azurerm_virtual_network.spoke.id
+  allow_forwarded_traffic   = true
+  allow_gateway_transit     = true
+  use_remote_gateways       = false
+}
+'''}
+""")
+        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
+variable "location" {{ type = string }}
+variable "tags" {{ type = map(string) }}
+variable "spoke_name" {{ type = string }}
+variable "spoke_cidr" {{
+  type    = string
+  default = "{spoke_cidr}"
+}}
+variable "spoke_subnets" {{
+  type = list(object({{ name = string, cidr = string }}))
+  default = [
+{subnets_hcl}
+  ]
+}}
+variable "hub_vnet_id" {{ type = string; default = "" }}
+variable "hub_vnet_name" {{ type = string; default = "" }}
+variable "hub_rg_name" {{ type = string; default = "" }}
+""")
+        self._w(mod_dir / 'outputs.tf', f"""output "spoke_vnet_id" {{ value = azurerm_virtual_network.spoke.id }}
+output "spoke_rg_name" {{ value = azurerm_resource_group.spoke.name }}
+output "spoke_subnet_ids" {{ value = {{ for k, v in azurerm_subnet.spoke_subnets : k => v.id }} }}
+""")
+
+    def _write_aks_module(self, cfg, mod_dir):
+        aks_cfg = cfg.get('aks_config', {})
+        self._w(mod_dir / 'main.tf', """resource "azurerm_kubernetes_cluster" "aks" {
+  name                = "${var.prefix}-aks"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  dns_prefix          = "${var.prefix}-aks"
+  kubernetes_version  = var.kubernetes_version
+
+  default_node_pool {
+    name                = "system"
+    node_count          = var.system_node_count
+    vm_size             = var.system_vm_size
+    enable_auto_scaling = true
+    min_count           = var.system_min_count
+    max_count           = var.system_max_count
+    vnet_subnet_id      = var.subnet_id
+    max_pods            = 110
+    os_disk_size_gb     = 128
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  network_profile {
+    network_plugin    = var.network_plugin
+    network_policy    = var.network_policy
+    load_balancer_sku = "standard"
+    outbound_type     = "loadBalancer"
+  }
+
+  azure_active_directory_role_based_access_control {
+    managed            = var.enable_aad_rbac
+    azure_rbac_enabled = var.enable_aad_rbac
+  }
+
+  oms_agent {
+    log_analytics_workspace_id = var.log_analytics_workspace_id
+  }
+
+  azure_policy_enabled = var.enable_azure_policy
+
+  tags = var.tags
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+variable "subnet_id" { type = string }
+variable "kubernetes_version" { type = string; default = "1.29" }
+variable "system_vm_size" { type = string; default = "Standard_D2s_v3" }
+variable "system_node_count" { type = number; default = 3 }
+variable "system_min_count" { type = number; default = 2 }
+variable "system_max_count" { type = number; default = 5 }
+variable "network_plugin" { type = string; default = "azure" }
+variable "network_policy" { type = string; default = "azure" }
+variable "enable_aad_rbac" { type = bool; default = true }
+variable "enable_azure_policy" { type = bool; default = true }
+variable "log_analytics_workspace_id" { type = string; default = "" }
+""")
+        self._w(mod_dir / 'outputs.tf', """output "aks_id" { value = azurerm_kubernetes_cluster.aks.id }
+output "aks_name" { value = azurerm_kubernetes_cluster.aks.name }
+output "kube_config" { value = azurerm_kubernetes_cluster.aks.kube_admin_config_raw; sensitive = true }
+""")
+
+    def _write_keyvault_module(self, cfg, mod_dir):
+        kv = cfg.get('keyvault_config', {})
+        self._w(mod_dir / 'main.tf', f"""data "azurerm_client_config" "current" {{}}
+
+resource "azurerm_key_vault" "kv" {{
+  name                       = "${{var.prefix}}-kv"
+  location                   = var.location
+  resource_group_name        = var.resource_group_name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  purge_protection_enabled   = {str(kv.get('purge_protection', True)).lower()}
+  soft_delete_retention_days = {kv.get('soft_delete_days', 90)}
+  enable_rbac_authorization  = true
+
+  network_acls {{
+    default_action = "{kv.get('default_action', 'Deny')}"
+    bypass         = "AzureServices"
+  }}
+
+  tags = var.tags
+}}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+""")
+        self._w(mod_dir / 'outputs.tf', """output "key_vault_id" { value = azurerm_key_vault.kv.id }
+output "key_vault_uri" { value = azurerm_key_vault.kv.vault_uri }
+""")
+
+    def _write_monitoring_module(self, cfg, mod_dir):
+        self._w(mod_dir / 'main.tf', """resource "azurerm_log_analytics_workspace" "law" {
+  name                = "${var.prefix}-law"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = "PerGB2018"
+  retention_in_days   = var.retention_days
+  tags                = var.tags
+}
+
+resource "azurerm_log_analytics_solution" "containers" {
+  count                 = var.enable_container_insights ? 1 : 0
+  solution_name         = "ContainerInsights"
+  location              = var.location
+  resource_group_name   = var.resource_group_name
+  workspace_resource_id = azurerm_log_analytics_workspace.law.id
+  workspace_name        = azurerm_log_analytics_workspace.law.name
+  plan {
+    publisher = "Microsoft"
+    product   = "OMSGallery/ContainerInsights"
+  }
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+variable "retention_days" { type = number; default = 30 }
+variable "enable_container_insights" { type = bool; default = true }
+""")
+        self._w(mod_dir / 'outputs.tf', """output "workspace_id" { value = azurerm_log_analytics_workspace.law.id }
+output "workspace_key" { value = azurerm_log_analytics_workspace.law.primary_shared_key; sensitive = true }
+""")
+
+    def _write_rbac_module(self, cfg, mod_dir):
+        self._w(mod_dir / 'main.tf', """resource "azurerm_role_assignment" "assignments" {
+  for_each             = { for idx, a in var.assignments : idx => a }
+  scope                = each.value.scope
+  role_definition_name = each.value.role
+  principal_id         = each.value.principal_id
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "assignments" {
+  type = list(object({
+    principal_id = string
+    role         = string
+    scope        = string
+  }))
+  default = []
+}
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "assignment_ids" { value = [for a in azurerm_role_assignment.assignments : a.id] }\n')
+
+    def _write_dr_module(self, cfg, mod_dir):
+        asr = cfg.get('asr_config', {})
+        self._w(mod_dir / 'main.tf', f"""resource "azurerm_recovery_services_vault" "vault" {{
+  name                = "${{var.prefix}}-asr-vault"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = "Standard"
+  tags                = var.tags
+}}
+
+resource "azurerm_site_recovery_fabric" "primary" {{
+  name                = "primary-fabric"
+  resource_group_name = var.resource_group_name
+  recovery_vault_name = azurerm_recovery_services_vault.vault.name
+  location            = var.source_region
+}}
+
+resource "azurerm_site_recovery_fabric" "secondary" {{
+  name                = "secondary-fabric"
+  resource_group_name = var.resource_group_name
+  recovery_vault_name = azurerm_recovery_services_vault.vault.name
+  location            = var.target_region
+}}
+
+resource "azurerm_site_recovery_replication_policy" "policy" {{
+  name                                                 = "${{var.prefix}}-replication-policy"
+  resource_group_name                                  = var.resource_group_name
+  recovery_vault_name                                  = azurerm_recovery_services_vault.vault.name
+  recovery_point_retention_in_minutes                  = {asr.get('rpo_minutes', 1440)}
+  application_consistent_snapshot_frequency_in_minutes = {asr.get('snapshot_minutes', 240)}
+}}
+""")
+        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
+variable "location" {{ type = string }}
+variable "resource_group_name" {{ type = string }}
+variable "tags" {{ type = map(string) }}
+variable "source_region" {{ type = string; default = "{asr.get('source_region', 'eastus')}" }}
+variable "target_region" {{ type = string; default = "{asr.get('target_region', 'westus2')}" }}
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "vault_id" { value = azurerm_recovery_services_vault.vault.id }\n')
+
+    def _write_users_module(self, cfg, mod_dir):
+        self._w(mod_dir / 'main.tf', """resource "azuread_group" "groups" {
+  for_each         = { for g in var.groups : g.name => g }
+  display_name     = each.value.name
+  description      = each.value.description
+  security_enabled = true
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "groups" {
+  type = list(object({
+    name        = string
+    description = string
+  }))
+  default = []
+}
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "group_ids" { value = { for k, v in azuread_group.groups : k => v.id } }\n')
+
+    def _write_akamai_module(self, cfg, mod_dir):
+        ak = cfg.get('akamai_config', {})
+        self._w(mod_dir / 'main.tf', """# Akamai CDN & WAF Configuration
+# Requires Akamai API credentials configured
+
+resource "akamai_property" "cdn" {
+  name        = "${var.prefix}-cdn"
+  product_id  = "prd_Fresca"
+  contract_id = var.contract_id
+  group_id    = var.group_id
+
+  hostnames {
+    cname_from = var.edge_hostname
+    cname_to   = var.origin_hostname
+  }
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "contract_id" { type = string; default = "" }
+variable "group_id" { type = string; default = "" }
+variable "edge_hostname" { type = string; default = "" }
+variable "origin_hostname" { type = string; default = "" }
+""")
+        self._w(mod_dir / 'outputs.tf', '# Akamai outputs\n')
+
+    def _write_vmss_module(self, cfg, mod_dir):
+        vmss = cfg.get('vmss_config', {})
+        self._w(mod_dir / 'main.tf', """resource "azurerm_linux_virtual_machine_scale_set" "vmss" {
+  name                = "${var.prefix}-vmss"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = var.vm_size
+  instances           = var.instance_count
+  admin_username      = "adminuser"
+
+  admin_ssh_key {
+    username   = "adminuser"
+    public_key = var.ssh_public_key
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+
+  os_disk {
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+
+  network_interface {
+    name    = "vmss-nic"
+    primary = true
+    ip_configuration {
+      name      = "internal"
+      primary   = true
+      subnet_id = var.subnet_id
+    }
+  }
+
+  tags = var.tags
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+variable "subnet_id" { type = string }
+variable "vm_size" { type = string; default = "Standard_D2s_v3" }
+variable "instance_count" { type = number; default = 2 }
+variable "ssh_public_key" { type = string; default = "" }
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "vmss_id" { value = azurerm_linux_virtual_machine_scale_set.vmss.id }\n')
+
+    def _write_main(self, cfg, out):
+        lines = ['# Main module composition\n']
+        if cfg.get('topology') == 'hub-spoke':
+            lines.append("""module "hub" {
+  source   = "./modules/hub"
+  prefix   = local.prefix
+  location = local.location
+  tags     = local.tags
+}
+""")
+        for spoke in cfg.get('spokes', []):
+            sname = re.sub(r'[^a-zA-Z0-9_]', '', spoke.get('name', 'spoke'))
+            lines.append(f"""module "spoke_{sname}" {{
+  source         = "./modules/spoke_{sname}"
+  prefix         = local.prefix
+  location       = local.location
+  tags           = local.tags
+  spoke_name     = "{spoke.get('name', sname)}"
+  hub_vnet_id    = {"module.hub.hub_vnet_id" if cfg.get('topology') == 'hub-spoke' else '""'}
+  hub_vnet_name  = {"module.hub.hub_vnet_name" if cfg.get('topology') == 'hub-spoke' else '""'}
+  hub_rg_name    = {"module.hub.hub_rg_name" if cfg.get('topology') == 'hub-spoke' else '""'}
+}}
+""")
+        if cfg.get('log_analytics_enabled', True):
+            lines.append("""module "monitoring" {
+  source              = "./modules/monitoring"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  tags                = local.tags
+}
+""")
+        if cfg.get('keyvault_enabled', True):
+            lines.append("""module "keyvault" {
+  source              = "./modules/keyvault"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  tags                = local.tags
+}
+""")
+        if cfg.get('aks_enabled'):
+            first_spoke = cfg.get('spokes', [{}])[0] if cfg.get('spokes') else {}
+            sname = re.sub(r'[^a-zA-Z0-9_]', '', first_spoke.get('name', 'spoke'))
+            lines.append(f"""module "aks" {{
+  source                     = "./modules/aks"
+  prefix                     = local.prefix
+  location                   = local.location
+  resource_group_name        = module.spoke_{sname}.spoke_rg_name
+  subnet_id                  = module.spoke_{sname}.spoke_subnet_ids["AKSSubnet"]
+  log_analytics_workspace_id = module.monitoring.workspace_id
+  tags                       = local.tags
+}}
+""")
+        if cfg.get('rbac_assignments'):
+            lines.append("""module "rbac" {
+  source      = "./modules/rbac"
+  assignments = var.rbac_assignments
+}
+""")
+        if cfg.get('asr_enabled'):
+            lines.append("""module "disaster_recovery" {
+  source              = "./modules/disaster_recovery"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  tags                = local.tags
+}
+""")
+        if cfg.get('aad_groups_enabled'):
+            lines.append("""module "users" {
+  source = "./modules/users"
+  groups = var.aad_groups
+}
+""")
+        if cfg.get('vmss_enabled'):
+            lines.append("""module "vmss" {
+  source              = "./modules/vmss"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  subnet_id           = module.hub.hub_subnet_ids["SharedServicesSubnet"]
+  tags                = local.tags
+}
+""")
+        self._w(out / 'main.tf', '\n'.join(lines))
+
+    def _write_outputs(self, cfg, out):
+        lines = ['# Outputs\n']
+        if cfg.get('topology') == 'hub-spoke':
+            lines.append('output "hub_vnet_id" { value = module.hub.hub_vnet_id }')
+        for spoke in cfg.get('spokes', []):
+            sname = re.sub(r'[^a-zA-Z0-9_]', '', spoke.get('name', 'spoke'))
+            lines.append(f'output "spoke_{sname}_vnet_id" {{ value = module.spoke_{sname}.spoke_vnet_id }}')
+        if cfg.get('aks_enabled'):
+            lines.append('output "aks_name" { value = module.aks.aks_name }')
+        if cfg.get('keyvault_enabled', True):
+            lines.append('output "keyvault_uri" { value = module.keyvault.key_vault_uri }')
+        if cfg.get('log_analytics_enabled', True):
+            lines.append('output "log_analytics_workspace_id" { value = module.monitoring.workspace_id }')
+        self._w(out / 'outputs.tf', '\n'.join(lines) + '\n')
+
+    def _write_environments(self, cfg, out):
+        envs_dir = out / 'environments'
+        for env in ('dev', 'test', 'staging', 'prod'):
+            content = f"""environment    = "{env}"
+location       = "{cfg.get('region', 'eastus')}"
+naming_prefix  = "{cfg.get('naming_prefix', 'mc')}-{env}"
+"""
+            self._w(envs_dir / f'{env}.tfvars', content)
+
+    def _write_cicd_templates(self, cfg, out):
+        cicd_dir = out / 'cicd'
+        platform = cfg.get('cicd_platform', 'github')
+        if platform == 'github':
+            self._w(cicd_dir / '.github' / 'workflows' / 'terraform.yml', """name: Terraform CI/CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+      - name: Terraform Init
+        run: terraform init
+      - name: Terraform Format Check
+        run: terraform fmt -check
+      - name: Terraform Plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -var-file=environments/${{ github.event.pull_request.base.ref == 'main' && 'prod' || 'dev' }}.tfvars -no-color
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -var-file=environments/prod.tfvars
+""")
+        else:
+            self._w(cicd_dir / 'azure-pipelines.yml', """trigger:
+  branches:
+    include: [main]
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Plan
+    jobs:
+      - job: TerraformPlan
+        steps:
+          - task: TerraformInstaller@0
+            inputs:
+              terraformVersion: '1.5.0'
+          - task: TerraformTaskV4@4
+            inputs:
+              command: 'init'
+          - task: TerraformTaskV4@4
+            inputs:
+              command: 'plan'
+              commandOptions: '-var-file=environments/prod.tfvars'
+  - stage: Apply
+    dependsOn: Plan
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: TerraformApply
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: TerraformTaskV4@4
+                  inputs:
+                    command: 'apply'
+                    commandOptions: '-auto-approve -var-file=environments/prod.tfvars'
+""")
+
+    def _write_readme(self, cfg, out):
+        spokes = ', '.join(s.get('name', 'spoke') for s in cfg.get('spokes', []))
+        modules = []
+        if cfg.get('topology') == 'hub-spoke': modules.append('Hub Network')
+        if cfg.get('spokes'): modules.append(f'Spokes: {spokes}')
+        if cfg.get('aks_enabled'): modules.append('AKS Kubernetes')
+        if cfg.get('keyvault_enabled', True): modules.append('Key Vault')
+        if cfg.get('log_analytics_enabled', True): modules.append('Log Analytics')
+        if cfg.get('asr_enabled'): modules.append('Disaster Recovery')
+        if cfg.get('aad_groups_enabled'): modules.append('Azure AD Groups')
+        if cfg.get('vmss_enabled'): modules.append('VM Scale Sets')
+        if cfg.get('akamai_enabled'): modules.append('Akamai CDN/WAF')
+        self._w(out / 'README.md', f"""# {cfg.get('project_name', 'Enterprise Infrastructure')}
+
+Generated by MasterChief Enterprise Terraform Wizard.
+
+## Architecture
+- Topology: {cfg.get('topology', 'hub-spoke')}
+- Region: {cfg.get('region', 'eastus')}
+- Environment: {cfg.get('environment', 'dev')}
+
+## Modules
+{chr(10).join(f'- {m}' for m in modules)}
+
+## Usage
+```bash
+terraform init
+terraform plan -var-file=environments/dev.tfvars
+terraform apply -var-file=environments/dev.tfvars
+```
+
+## Environments
+- dev.tfvars / test.tfvars / staging.tfvars / prod.tfvars
+""")
+
+    def validate(self, config):
+        """Validate configuration and return issues."""
+        issues = []
+        # Check CIDRs
+        cidrs = []
+        if config.get('hub_cidr'):
+            cidrs.append(('Hub', config['hub_cidr']))
+        for spoke in config.get('spokes', []):
+            if spoke.get('cidr'):
+                cidrs.append((spoke.get('name', 'Spoke'), spoke['cidr']))
+        # Basic CIDR overlap check
+        for i, (n1, c1) in enumerate(cidrs):
+            for j, (n2, c2) in enumerate(cidrs):
+                if i < j:
+                    if self._cidrs_overlap(c1, c2):
+                        issues.append({'severity': 'error', 'message': f'CIDR overlap: {n1} ({c1}) overlaps with {n2} ({c2})'})
+        # Naming
+        if not config.get('project_name'):
+            issues.append({'severity': 'error', 'message': 'Project name is required'})
+        if not config.get('subscription_id'):
+            issues.append({'severity': 'warning', 'message': 'Subscription ID not set — required for deployment'})
+        if not config.get('tenant_id'):
+            issues.append({'severity': 'warning', 'message': 'Tenant ID not set — required for Azure AD operations'})
+        # Best practices
+        if config.get('keyvault_config', {}).get('default_action') == 'Allow':
+            issues.append({'severity': 'warning', 'message': 'Key Vault network ACL set to Allow — Deny recommended for production'})
+        if config.get('environment') == 'prod' and not config.get('asr_enabled'):
+            issues.append({'severity': 'info', 'message': 'Production environment without DR — consider enabling Azure Site Recovery'})
+        if not issues:
+            issues.append({'severity': 'success', 'message': 'All validations passed'})
+        return issues
+
+    def _cidrs_overlap(self, cidr1, cidr2):
+        try:
+            def cidr_to_range(cidr):
+                parts = cidr.split('/')
+                ip_parts = list(map(int, parts[0].split('.')))
+                ip_int = (ip_parts[0] << 24) + (ip_parts[1] << 16) + (ip_parts[2] << 8) + ip_parts[3]
+                mask = (0xFFFFFFFF << (32 - int(parts[1]))) & 0xFFFFFFFF
+                start = ip_int & mask
+                end = start + (~mask & 0xFFFFFFFF)
+                return start, end
+            s1, e1 = cidr_to_range(cidr1)
+            s2, e2 = cidr_to_range(cidr2)
+            return s1 <= e2 and s2 <= e1
+        except Exception:
+            return False
+
+enterprise_tf_gen = EnterpriseTerraformGenerator(_data_dir / 'terraform_enterprise')
+
+
+# ---------------------------------------------------------------------------
+#  Enterprise TF Wizard Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/terraform/enterprise/generate', methods=['POST'])
+def api_tf_enterprise_generate():
+    try:
+        config = request.get_json(silent=True) or {}
+        job_id = enterprise_tf_gen.generate(config)
+        return jsonify({'ok': True, 'result': {'job_id': job_id, 'download_url': f'/api/terraform/enterprise/download/{job_id}'}})
+    except Exception as e:
+        app.logger.exception('Enterprise TF generation failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/validate', methods=['POST'])
+def api_tf_enterprise_validate():
+    try:
+        config = request.get_json(silent=True) or {}
+        issues = enterprise_tf_gen.validate(config)
+        return jsonify({'ok': True, 'result': issues})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/download/<job_id>', methods=['GET'])
+def api_tf_enterprise_download(job_id):
+    try:
+        job = ENTERPRISE_TF_JOBS.get(job_id)
+        if not job:
+            return jsonify({'ok': False, 'error': 'Job not found'}), 404
+        zip_path = Path(job['path'])
+        if zip_path.exists():
+            return send_file(str(zip_path), as_attachment=True, download_name=zip_path.name)
+        return jsonify({'ok': False, 'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/deploy_to_project', methods=['POST'])
+def api_tf_enterprise_deploy_to_project():
+    try:
+        config = request.get_json(silent=True) or {}
+        job_id = enterprise_tf_gen.generate(config)
+        job = ENTERPRISE_TF_JOBS[job_id]
+        return jsonify({'ok': True, 'result': {'job_id': job_id, 'project_dir': job['project_dir']}})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+###############################################################################
+# ========================  END NEW FEATURES  ================================
+###############################################################################
 
 
 if __name__=='__main__':

@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Access Control - RBAC Management</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;line-height:1.6;}
+.container{max-width:1400px;margin:0 auto;padding:20px;}
+header{background:#2d2d2d;padding:20px;margin-bottom:30px;border-bottom:3px solid #4CAF50;}
+h1{color:#4CAF50;font-size:2.5em;margin-bottom:10px;}
+.subtitle{color:#888;font-size:1.1em;}
+nav{background:#252525;padding:15px;margin-bottom:30px;border-radius:8px;}
+nav a{color:#4CAF50;text-decoration:none;margin-right:20px;padding:8px 15px;border-radius:5px;display:inline-block;transition:all 0.3s;}
+nav a:hover,nav a.active{background:#4CAF50;color:#fff;}
+.card{background:#2d2d2d;padding:25px;border-radius:10px;border-left:4px solid #4CAF50;box-shadow:0 4px 6px rgba(0,0,0,0.3);}
+.card h3{color:#4CAF50;margin-bottom:15px;font-size:1.4em;}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #3a3a3a;}
+th{background:#252525;color:#4CAF50;font-weight:bold;}
+tr:hover{background:#333;}
+.btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;transition:all 0.3s;}
+.btn:hover{background:#45a049;transform:translateY(-2px);}
+.btn-danger{background:#f44336;}
+.btn-danger:hover{background:#da190b;}
+.btn-warning{background:#ff9800;}
+.btn-warning:hover{background:#e68900;}
+.btn-info{background:#2196F3;}
+.btn-info:hover{background:#0b7dda;}
+.btn-sm{padding:5px 10px;font-size:0.85em;}
+.form-group{margin-bottom:20px;}
+label{display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;}
+input,textarea,select{width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#4CAF50;}
+.status-badge{padding:5px 12px;border-radius:15px;font-size:0.85em;font-weight:bold;}
+.status-running{background:#4CAF50;color:#fff;}
+.status-stopped{background:#f44336;color:#fff;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;}
+.modal-content{background:#2d2d2d;margin:50px auto;padding:30px;border-radius:10px;max-width:700px;position:relative;}
+.close{position:absolute;top:15px;right:20px;font-size:30px;cursor:pointer;color:#888;}
+.close:hover{color:#4CAF50;}
+
+/* Tab navigation */
+.tab-nav{display:flex;gap:0;margin-bottom:0;border-bottom:2px solid #3a3a3a;}
+.tab-btn{background:#252525;color:#888;border:none;padding:14px 28px;cursor:pointer;font-size:1em;transition:all 0.3s;border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:none;margin-bottom:-2px;}
+.tab-btn:hover{color:#4CAF50;background:#2d2d2d;}
+.tab-btn.active{background:#2d2d2d;color:#4CAF50;border-color:#3a3a3a;border-bottom-color:#2d2d2d;font-weight:bold;}
+.tab-content{display:none;padding:25px;background:#2d2d2d;border-radius:0 0 10px 10px;border:1px solid #3a3a3a;border-top:none;}
+.tab-content.active{display:block;}
+
+/* Top bar for tabs */
+.tab-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+
+/* Role cards grid */
+.roles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;margin-top:15px;}
+.role-card{background:#252525;padding:20px;border-radius:10px;border-left:4px solid #4CAF50;position:relative;}
+.role-card h4{color:#4CAF50;font-size:1.2em;margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+.builtin-badge{background:#ff9800;color:#fff;padding:2px 10px;border-radius:12px;font-size:0.7em;font-weight:bold;}
+.perm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.perm-item{display:flex;align-items:center;gap:8px;font-size:0.9em;color:#ccc;}
+.perm-item input[type="checkbox"]{width:auto;margin:0;accent-color:#4CAF50;}
+.role-actions{margin-top:15px;padding-top:12px;border-top:1px solid #3a3a3a;}
+
+/* Filter bar */
+.filter-bar{display:flex;gap:15px;align-items:center;flex-wrap:wrap;}
+.filter-bar select,.filter-bar input{width:auto;min-width:180px;}
+
+/* API key display */
+.api-key-display{background:#1a1a1a;padding:15px;border-radius:5px;font-family:monospace;word-break:break-all;margin:15px 0;border:1px solid #4CAF50;font-size:0.95em;}
+
+/* Scrollable modal */
+.modal-content{max-height:85vh;overflow-y:auto;}
+
+/* Truncated text */
+.truncated{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;font-family:monospace;font-size:0.9em;}
+
+/* Empty state */
+.empty-state{text-align:center;padding:40px;color:#666;font-size:1.1em;}
+
+/* Notification toast */
+.toast{position:fixed;top:20px;right:20px;padding:15px 25px;border-radius:8px;color:#fff;z-index:2000;opacity:0;transition:opacity 0.3s;font-weight:bold;}
+.toast.show{opacity:1;}
+.toast-success{background:#4CAF50;}
+.toast-error{background:#f44336;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>Access Control</h1>
+    <p class="subtitle">Role-Based Access Control (RBAC) Management</p>
+  </div>
+</header>
+
+<div class="container">
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/echo-chat">&#127769; Echo Chat</a>
+    <a href="/scripts">Scripts</a>
+    <a href="/processes">Processes</a>
+    <a href="/services">Services</a>
+    <a href="/addons">Addons</a>
+    <a href="/echo-train">Training</a>
+    <a href="/pipelines">Pipelines</a>
+    <a href="/cloud">Cloud</a>
+    <a href="/secrets">Secrets</a>
+    <a href="/echo-memory">Memory</a>
+    <a href="/marketplace">Marketplace</a>
+    <a href="/notifications">Alerts</a>
+    <a href="/rbac" class="active">Access</a>
+  </nav>
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('users')">Users</button>
+    <button class="tab-btn" onclick="switchTab('roles')">Roles</button>
+    <button class="tab-btn" onclick="switchTab('sessions')">Sessions</button>
+    <button class="tab-btn" onclick="switchTab('audit')">Audit Log</button>
+  </div>
+
+  <!-- Users Tab -->
+  <div id="tab-users" class="tab-content active">
+    <div class="tab-toolbar">
+      <h3 style="color:#4CAF50;">Manage Users</h3>
+      <button class="btn" onclick="openAddUserModal()">+ Add User</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        <tr><td colspan="5" class="empty-state">Loading users...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Roles Tab -->
+  <div id="tab-roles" class="tab-content">
+    <div class="tab-toolbar">
+      <h3 style="color:#4CAF50;">Manage Roles</h3>
+      <button class="btn" onclick="openAddRoleModal()">+ Add Role</button>
+    </div>
+    <div id="roles-grid" class="roles-grid">
+      <div class="empty-state" style="grid-column:1/-1;">Loading roles...</div>
+    </div>
+  </div>
+
+  <!-- Sessions Tab -->
+  <div id="tab-sessions" class="tab-content">
+    <div class="tab-toolbar">
+      <h3 style="color:#4CAF50;">Active Sessions</h3>
+      <button class="btn btn-danger" onclick="forceLogoutAll()">Force Logout All</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Session ID</th>
+          <th>User</th>
+          <th>Created</th>
+          <th>Last Active</th>
+          <th>IP Address</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="sessions-tbody">
+        <tr><td colspan="6" class="empty-state">Loading sessions...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Audit Log Tab -->
+  <div id="tab-audit" class="tab-content">
+    <div class="tab-toolbar">
+      <h3 style="color:#4CAF50;">Audit Log</h3>
+      <div class="filter-bar">
+        <select id="audit-filter-user" onchange="loadAuditLog()">
+          <option value="">All Users</option>
+        </select>
+        <select id="audit-filter-action" onchange="loadAuditLog()">
+          <option value="">All Actions</option>
+          <option value="login">Login</option>
+          <option value="logout">Logout</option>
+          <option value="create_user">Create User</option>
+          <option value="update_user">Update User</option>
+          <option value="delete_user">Delete User</option>
+          <option value="create_role">Create Role</option>
+          <option value="update_role">Update Role</option>
+          <option value="delete_role">Delete Role</option>
+          <option value="generate_api_key">Generate API Key</option>
+          <option value="revoke_api_key">Revoke API Key</option>
+          <option value="force_logout">Force Logout</option>
+        </select>
+        <button class="btn btn-sm btn-info" onclick="loadAuditLog()">Refresh</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="audit-tbody">
+        <tr><td colspan="4" class="empty-state">Loading audit log...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add/Edit User Modal -->
+<div id="user-modal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('user-modal')">&times;</span>
+    <h3 style="color:#4CAF50;margin-bottom:20px;" id="user-modal-title">Add User</h3>
+    <form id="user-form" onsubmit="saveUser(event)">
+      <input type="hidden" id="user-form-id" value="">
+      <div class="form-group">
+        <label for="user-form-username">Username</label>
+        <input type="text" id="user-form-username" required placeholder="Enter username">
+      </div>
+      <div class="form-group" id="password-group">
+        <label for="user-form-password">Password</label>
+        <input type="password" id="user-form-password" placeholder="Enter password">
+      </div>
+      <div class="form-group">
+        <label for="user-form-role">Role</label>
+        <select id="user-form-role" required>
+          <option value="">Select a role...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="user-form-status">Status</label>
+        <select id="user-form-status">
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+      <button type="submit" class="btn">Save User</button>
+      <button type="button" class="btn btn-danger" onclick="closeModal('user-modal')">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<!-- Add/Edit Role Modal -->
+<div id="role-modal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('role-modal')">&times;</span>
+    <h3 style="color:#4CAF50;margin-bottom:20px;" id="role-modal-title">Add Role</h3>
+    <form id="role-form" onsubmit="saveRole(event)">
+      <input type="hidden" id="role-form-original-name" value="">
+      <div class="form-group">
+        <label for="role-form-name">Role Name</label>
+        <input type="text" id="role-form-name" required placeholder="Enter role name">
+      </div>
+      <div class="form-group">
+        <label>Permissions</label>
+        <div class="perm-grid" id="role-form-permissions"></div>
+      </div>
+      <button type="submit" class="btn">Save Role</button>
+      <button type="button" class="btn btn-danger" onclick="closeModal('role-modal')">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<!-- API Key Modal -->
+<div id="apikey-modal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('apikey-modal')">&times;</span>
+    <h3 style="color:#4CAF50;margin-bottom:20px;">API Key Generated</h3>
+    <p style="margin-bottom:10px;color:#ff9800;">Copy this key now. It will not be shown again.</p>
+    <div class="api-key-display" id="apikey-display"></div>
+    <button class="btn btn-info" onclick="copyApiKey()">Copy to Clipboard</button>
+    <button class="btn" onclick="closeModal('apikey-modal')">Done</button>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div id="confirm-modal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('confirm-modal')">&times;</span>
+    <h3 style="color:#f44336;margin-bottom:20px;" id="confirm-modal-title">Confirm Action</h3>
+    <p id="confirm-modal-message" style="margin-bottom:20px;"></p>
+    <button class="btn btn-danger" id="confirm-modal-btn" onclick="">Confirm</button>
+    <button class="btn" onclick="closeModal('confirm-modal')">Cancel</button>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// All available permissions
+const ALL_PERMISSIONS = [
+  'dashboard', 'echo-chat', 'scripts', 'web_ide', 'processes', 'services',
+  'addons', 'training', 'pipelines', 'cloud', 'secrets_read', 'secrets_write',
+  'resources', 'notifications', 'rbac', 'marketplace'
+];
+
+const BUILTIN_ROLES = ['admin', 'developer', 'operator', 'viewer'];
+
+// State
+let usersCache = [];
+let rolesCache = [];
+
+// ---- Toast notifications ----
+function showToast(message, type) {
+  var toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show toast-' + type;
+  setTimeout(function() { toast.className = 'toast'; }, 3000);
+}
+
+// ---- Tab switching ----
+function switchTab(tabName) {
+  var tabs = document.querySelectorAll('.tab-content');
+  var btns = document.querySelectorAll('.tab-btn');
+  for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+  for (var i = 0; i < btns.length; i++) { btns[i].classList.remove('active'); }
+  document.getElementById('tab-' + tabName).classList.add('active');
+  // Find the matching button
+  var labels = { users: 'Users', roles: 'Roles', sessions: 'Sessions', audit: 'Audit Log' };
+  for (var i = 0; i < btns.length; i++) {
+    if (btns[i].textContent === labels[tabName]) { btns[i].classList.add('active'); }
+  }
+  // Refresh data on tab switch
+  if (tabName === 'users') loadUsers();
+  else if (tabName === 'roles') loadRoles();
+  else if (tabName === 'sessions') loadSessions();
+  else if (tabName === 'audit') loadAuditLog();
+}
+
+// ---- Modal helpers ----
+function openModal(id) {
+  document.getElementById(id).style.display = 'block';
+}
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+// Close modal on outside click
+window.addEventListener('click', function(e) {
+  var modals = document.querySelectorAll('.modal');
+  for (var i = 0; i < modals.length; i++) {
+    if (e.target === modals[i]) { modals[i].style.display = 'none'; }
+  }
+});
+
+// ---- API helper ----
+function api(method, url, body) {
+  var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url, opts)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.ok) {
+        showToast(data.error || 'An error occurred', 'error');
+        return Promise.reject(data.error);
+      }
+      return data.result;
+    })
+    .catch(function(err) {
+      if (typeof err === 'string') throw err;
+      showToast('Network error: ' + err.message, 'error');
+      throw err;
+    });
+}
+
+// ---- Escape HTML ----
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(String(str)));
+  return div.innerHTML;
+}
+
+// ---- Format date ----
+function fmtDate(d) {
+  if (!d) return '-';
+  var dt = new Date(d);
+  return dt.toLocaleString();
+}
+
+// =============== USERS ===============
+
+function loadUsers() {
+  api('GET', '/api/rbac/users').then(function(users) {
+    usersCache = users || [];
+    renderUsers(usersCache);
+    populateAuditUserFilter(usersCache);
+  }).catch(function() {
+    document.getElementById('users-tbody').innerHTML =
+      '<tr><td colspan="5" class="empty-state">Failed to load users.</td></tr>';
+  });
+}
+
+function renderUsers(users) {
+  var tbody = document.getElementById('users-tbody');
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No users found.</td></tr>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < users.length; i++) {
+    var u = users[i];
+    var statusClass = u.status === 'active' ? 'status-running' : 'status-stopped';
+    var statusLabel = u.status === 'active' ? 'Active' : 'Inactive';
+    html += '<tr>';
+    html += '<td>' + esc(u.username) + '</td>';
+    html += '<td>' + esc(u.role) + '</td>';
+    html += '<td><span class="status-badge ' + statusClass + '">' + statusLabel + '</span></td>';
+    html += '<td>' + fmtDate(u.created) + '</td>';
+    html += '<td>';
+    html += '<button class="btn btn-info btn-sm" onclick="openEditUserModal(\'' + esc(u.id) + '\')">Edit</button>';
+    html += '<button class="btn btn-danger btn-sm" onclick="confirmDeleteUser(\'' + esc(u.id) + '\', \'' + esc(u.username) + '\')">Delete</button>';
+    html += '<button class="btn btn-warning btn-sm" onclick="generateApiKey(\'' + esc(u.id) + '\')">API Key</button>';
+    html += '</td>';
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function openAddUserModal() {
+  document.getElementById('user-modal-title').textContent = 'Add User';
+  document.getElementById('user-form-id').value = '';
+  document.getElementById('user-form-username').value = '';
+  document.getElementById('user-form-password').value = '';
+  document.getElementById('user-form-status').value = 'active';
+  document.getElementById('password-group').style.display = 'block';
+  document.getElementById('user-form-password').required = true;
+  populateRoleSelect();
+  openModal('user-modal');
+}
+
+function openEditUserModal(userId) {
+  var user = null;
+  for (var i = 0; i < usersCache.length; i++) {
+    if (String(usersCache[i].id) === String(userId)) { user = usersCache[i]; break; }
+  }
+  if (!user) { showToast('User not found', 'error'); return; }
+  document.getElementById('user-modal-title').textContent = 'Edit User';
+  document.getElementById('user-form-id').value = user.id;
+  document.getElementById('user-form-username').value = user.username;
+  document.getElementById('user-form-password').value = '';
+  document.getElementById('user-form-password').required = false;
+  document.getElementById('password-group').style.display = 'block';
+  document.getElementById('user-form-status').value = user.status || 'active';
+  populateRoleSelect(user.role);
+  openModal('user-modal');
+}
+
+function populateRoleSelect(selectedRole) {
+  var sel = document.getElementById('user-form-role');
+  sel.innerHTML = '<option value="">Select a role...</option>';
+  for (var i = 0; i < rolesCache.length; i++) {
+    var r = rolesCache[i];
+    var name = r.name || r;
+    var opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    if (name === selectedRole) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function saveUser(e) {
+  e.preventDefault();
+  var id = document.getElementById('user-form-id').value;
+  var payload = {
+    username: document.getElementById('user-form-username').value,
+    role: document.getElementById('user-form-role').value,
+    status: document.getElementById('user-form-status').value
+  };
+  var pw = document.getElementById('user-form-password').value;
+  if (pw) payload.password = pw;
+
+  if (id) {
+    // Edit
+    api('PUT', '/api/rbac/users/' + encodeURIComponent(id), payload).then(function() {
+      showToast('User updated successfully', 'success');
+      closeModal('user-modal');
+      loadUsers();
+    });
+  } else {
+    // Create
+    if (!pw) { showToast('Password is required for new users', 'error'); return; }
+    api('POST', '/api/rbac/users', payload).then(function() {
+      showToast('User created successfully', 'success');
+      closeModal('user-modal');
+      loadUsers();
+    });
+  }
+}
+
+function confirmDeleteUser(userId, username) {
+  document.getElementById('confirm-modal-title').textContent = 'Delete User';
+  document.getElementById('confirm-modal-message').textContent =
+    'Are you sure you want to delete user "' + username + '"? This action cannot be undone.';
+  document.getElementById('confirm-modal-btn').onclick = function() {
+    deleteUser(userId);
+  };
+  openModal('confirm-modal');
+}
+
+function deleteUser(userId) {
+  api('DELETE', '/api/rbac/users/' + encodeURIComponent(userId)).then(function() {
+    showToast('User deleted', 'success');
+    closeModal('confirm-modal');
+    loadUsers();
+  });
+}
+
+function generateApiKey(userId) {
+  api('POST', '/api/rbac/api_keys', { user_id: userId }).then(function(result) {
+    var key = result.key || result.api_key || result;
+    document.getElementById('apikey-display').textContent = key;
+    openModal('apikey-modal');
+    showToast('API key generated', 'success');
+  });
+}
+
+function copyApiKey() {
+  var text = document.getElementById('apikey-display').textContent;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Copied to clipboard', 'success');
+    });
+  } else {
+    // Fallback
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('Copied to clipboard', 'success');
+  }
+}
+
+// =============== ROLES ===============
+
+function loadRoles() {
+  api('GET', '/api/rbac/roles').then(function(roles) {
+    rolesCache = roles || [];
+    renderRoles(rolesCache);
+  }).catch(function() {
+    document.getElementById('roles-grid').innerHTML =
+      '<div class="empty-state" style="grid-column:1/-1;">Failed to load roles.</div>';
+  });
+}
+
+function renderRoles(roles) {
+  var grid = document.getElementById('roles-grid');
+  if (!roles || roles.length === 0) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">No roles found.</div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < roles.length; i++) {
+    var r = roles[i];
+    var name = r.name || r;
+    var perms = r.permissions || [];
+    var isBuiltin = BUILTIN_ROLES.indexOf(name) !== -1;
+    html += '<div class="role-card">';
+    html += '<h4>' + esc(name);
+    if (isBuiltin) html += ' <span class="builtin-badge">Built-in</span>';
+    html += '</h4>';
+    html += '<div class="perm-grid">';
+    for (var j = 0; j < ALL_PERMISSIONS.length; j++) {
+      var p = ALL_PERMISSIONS[j];
+      var checked = perms.indexOf(p) !== -1 ? 'checked' : '';
+      html += '<label class="perm-item">';
+      html += '<input type="checkbox" ' + checked + ' disabled>';
+      html += esc(p);
+      html += '</label>';
+    }
+    html += '</div>';
+    html += '<div class="role-actions">';
+    html += '<button class="btn btn-info btn-sm" onclick="openEditRoleModal(\'' + esc(name) + '\')">Edit</button>';
+    if (!isBuiltin) {
+      html += '<button class="btn btn-danger btn-sm" onclick="confirmDeleteRole(\'' + esc(name) + '\')">Delete</button>';
+    }
+    html += '</div>';
+    html += '</div>';
+  }
+  grid.innerHTML = html;
+}
+
+function openAddRoleModal() {
+  document.getElementById('role-modal-title').textContent = 'Add Role';
+  document.getElementById('role-form-original-name').value = '';
+  document.getElementById('role-form-name').value = '';
+  document.getElementById('role-form-name').disabled = false;
+  renderPermCheckboxes([]);
+  openModal('role-modal');
+}
+
+function openEditRoleModal(roleName) {
+  var role = null;
+  for (var i = 0; i < rolesCache.length; i++) {
+    if ((rolesCache[i].name || rolesCache[i]) === roleName) { role = rolesCache[i]; break; }
+  }
+  if (!role) { showToast('Role not found', 'error'); return; }
+  document.getElementById('role-modal-title').textContent = 'Edit Role';
+  document.getElementById('role-form-original-name').value = role.name;
+  document.getElementById('role-form-name').value = role.name;
+  // Disable name field for built-in roles
+  document.getElementById('role-form-name').disabled = BUILTIN_ROLES.indexOf(role.name) !== -1;
+  renderPermCheckboxes(role.permissions || []);
+  openModal('role-modal');
+}
+
+function renderPermCheckboxes(currentPerms) {
+  var container = document.getElementById('role-form-permissions');
+  var html = '';
+  for (var i = 0; i < ALL_PERMISSIONS.length; i++) {
+    var p = ALL_PERMISSIONS[i];
+    var checked = currentPerms.indexOf(p) !== -1 ? 'checked' : '';
+    html += '<label class="perm-item">';
+    html += '<input type="checkbox" name="perm" value="' + esc(p) + '" ' + checked + '>';
+    html += esc(p);
+    html += '</label>';
+  }
+  container.innerHTML = html;
+}
+
+function saveRole(e) {
+  e.preventDefault();
+  var originalName = document.getElementById('role-form-original-name').value;
+  var name = document.getElementById('role-form-name').value.trim();
+  var checkboxes = document.querySelectorAll('#role-form-permissions input[name="perm"]');
+  var permissions = [];
+  for (var i = 0; i < checkboxes.length; i++) {
+    if (checkboxes[i].checked) permissions.push(checkboxes[i].value);
+  }
+  var payload = { name: name, permissions: permissions };
+
+  if (originalName) {
+    // Edit
+    api('PUT', '/api/rbac/roles/' + encodeURIComponent(originalName), payload).then(function() {
+      showToast('Role updated successfully', 'success');
+      closeModal('role-modal');
+      loadRoles();
+    });
+  } else {
+    // Create
+    api('POST', '/api/rbac/roles', payload).then(function() {
+      showToast('Role created successfully', 'success');
+      closeModal('role-modal');
+      loadRoles();
+    });
+  }
+}
+
+function confirmDeleteRole(roleName) {
+  document.getElementById('confirm-modal-title').textContent = 'Delete Role';
+  document.getElementById('confirm-modal-message').textContent =
+    'Are you sure you want to delete role "' + roleName + '"? Users with this role will lose their permissions.';
+  document.getElementById('confirm-modal-btn').onclick = function() {
+    deleteRole(roleName);
+  };
+  openModal('confirm-modal');
+}
+
+function deleteRole(roleName) {
+  api('DELETE', '/api/rbac/roles/' + encodeURIComponent(roleName)).then(function() {
+    showToast('Role deleted', 'success');
+    closeModal('confirm-modal');
+    loadRoles();
+  });
+}
+
+// =============== SESSIONS ===============
+
+function loadSessions() {
+  api('GET', '/api/rbac/sessions').then(function(sessions) {
+    renderSessions(sessions || []);
+  }).catch(function() {
+    document.getElementById('sessions-tbody').innerHTML =
+      '<tr><td colspan="6" class="empty-state">Failed to load sessions.</td></tr>';
+  });
+}
+
+function renderSessions(sessions) {
+  var tbody = document.getElementById('sessions-tbody');
+  if (!sessions || sessions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No active sessions.</td></tr>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < sessions.length; i++) {
+    var s = sessions[i];
+    var sid = String(s.id || s.session_id || '');
+    var truncSid = sid.length > 16 ? sid.substring(0, 16) + '...' : sid;
+    html += '<tr>';
+    html += '<td><span class="truncated" title="' + esc(sid) + '">' + esc(truncSid) + '</span></td>';
+    html += '<td>' + esc(s.user || s.username) + '</td>';
+    html += '<td>' + fmtDate(s.created) + '</td>';
+    html += '<td>' + fmtDate(s.last_active) + '</td>';
+    html += '<td>' + esc(s.ip_address || s.ip || '-') + '</td>';
+    html += '<td>';
+    html += '<button class="btn btn-danger btn-sm" onclick="confirmForceLogout(\'' + esc(sid) + '\', \'' + esc(s.user || s.username) + '\')">Force Logout</button>';
+    html += '</td>';
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function confirmForceLogout(sessionId, username) {
+  document.getElementById('confirm-modal-title').textContent = 'Force Logout';
+  document.getElementById('confirm-modal-message').textContent =
+    'Force logout session for user "' + username + '"?';
+  document.getElementById('confirm-modal-btn').onclick = function() {
+    forceLogout(sessionId);
+  };
+  openModal('confirm-modal');
+}
+
+function forceLogout(sessionId) {
+  api('DELETE', '/api/rbac/sessions/' + encodeURIComponent(sessionId)).then(function() {
+    showToast('Session terminated', 'success');
+    closeModal('confirm-modal');
+    loadSessions();
+  });
+}
+
+function forceLogoutAll() {
+  document.getElementById('confirm-modal-title').textContent = 'Force Logout All';
+  document.getElementById('confirm-modal-message').textContent =
+    'Are you sure you want to terminate ALL active sessions? All users will be logged out.';
+  document.getElementById('confirm-modal-btn').onclick = function() {
+    api('DELETE', '/api/rbac/sessions/all').then(function() {
+      showToast('All sessions terminated', 'success');
+      closeModal('confirm-modal');
+      loadSessions();
+    });
+  };
+  openModal('confirm-modal');
+}
+
+// =============== AUDIT LOG ===============
+
+function loadAuditLog() {
+  var userFilter = document.getElementById('audit-filter-user').value;
+  var actionFilter = document.getElementById('audit-filter-action').value;
+  var params = [];
+  if (userFilter) params.push('user=' + encodeURIComponent(userFilter));
+  if (actionFilter) params.push('action=' + encodeURIComponent(actionFilter));
+  var url = '/api/rbac/audit';
+  if (params.length) url += '?' + params.join('&');
+
+  api('GET', url).then(function(entries) {
+    renderAuditLog(entries || []);
+  }).catch(function() {
+    document.getElementById('audit-tbody').innerHTML =
+      '<tr><td colspan="4" class="empty-state">Failed to load audit log.</td></tr>';
+  });
+}
+
+function renderAuditLog(entries) {
+  var tbody = document.getElementById('audit-tbody');
+  if (!entries || entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No audit log entries found.</td></tr>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    html += '<tr>';
+    html += '<td>' + fmtDate(e.timestamp) + '</td>';
+    html += '<td>' + esc(e.user || e.username) + '</td>';
+    html += '<td>' + esc(e.action) + '</td>';
+    html += '<td>' + esc(e.details || '-') + '</td>';
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function populateAuditUserFilter(users) {
+  var sel = document.getElementById('audit-filter-user');
+  // Keep the first option
+  var current = sel.value;
+  sel.innerHTML = '<option value="">All Users</option>';
+  for (var i = 0; i < users.length; i++) {
+    var opt = document.createElement('option');
+    opt.value = users[i].username;
+    opt.textContent = users[i].username;
+    if (users[i].username === current) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+// =============== INIT ===============
+
+function init() {
+  // Load roles first so role selects are populated, then load users
+  api('GET', '/api/rbac/roles').then(function(roles) {
+    rolesCache = roles || [];
+    renderRoles(rolesCache);
+    return api('GET', '/api/rbac/users');
+  }).then(function(users) {
+    usersCache = users || [];
+    renderUsers(usersCache);
+    populateAuditUserFilter(usersCache);
+  }).catch(function() {
+    // Silently handle - individual loaders will show errors
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
