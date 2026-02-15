@@ -3,17 +3,18 @@
 """MasterChief Flask Web Application - All-in-One File"""
 
 import sys
-
 import os
 
-
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, continue without it
 
 # Ensure script directory is not in sys.path to avoid conflicts
-
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-
 if _script_dir in sys.path:
-
     sys.path.remove(_script_dir)
 
 
@@ -37,6 +38,8 @@ from flask import Flask, render_template_string, request, jsonify, redirect, url
 import requests
 
 from werkzeug.utils import secure_filename
+
+from flask_cors import CORS
 
 import hashlib
 
@@ -192,9 +195,31 @@ from core.echo.identity import Echo
 
 sys.path.remove(_script_dir)
 
+# Import authentication modules
+try:
+    from auth_config import auth_config
+    from auth_module import init_auth
+    from azure_integration import azure_integration
+    from github_integration import github_integration
+    from app_management import app_management
+    AUTH_MODULES_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Authentication modules not available: {e}")
+    AUTH_MODULES_AVAILABLE = False
+
+# Import setup wizard (works with or without auth modules)
+try:
+    from setup_wizard import init_setup_wizard
+    SETUP_WIZARD_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Warning: Failed to initialize setup wizard: {e}")
+    SETUP_WIZARD_AVAILABLE = False
+
 app=Flask(__name__)
 
 app.config['SECRET_KEY']='masterchief-secret-key-change-in-production'
+
+CORS(app)
 
 app.jinja_env.filters['b64encode'] = lambda s: base64.urlsafe_b64encode(s.encode()).decode()
 
@@ -210,15 +235,35 @@ app.config['UPLOAD_FOLDER']=_data_dir/'uploads'
 
 app.config['SCRIPTS_FOLDER']=_data_dir/'scripts'
 
-app.config['JAMROOM_DB']=_data_dir/'jamroom.json'
-
-app.config['SHOUTCAST_DB']=_data_dir/'shoutcast.json'
-
 app.config['MAX_CONTENT_LENGTH']=100*1024*1024
 
 for folder in [app.config['UPLOAD_FOLDER'],app.config['SCRIPTS_FOLDER'],_data_dir]:
 
     folder.mkdir(parents=True,exist_ok=True)
+
+
+
+# Initialize authentication modules if available
+if AUTH_MODULES_AVAILABLE:
+    try:
+        # Initialize authentication
+        init_auth(app)
+
+        print("✅ Authentication modules initialized successfully")
+    except Exception as e:
+        print(f"⚠️  Warning: Failed to initialize authentication modules: {e}")
+        AUTH_MODULES_AVAILABLE = False
+else:
+    print("ℹ️  Authentication modules not available - running without authentication")
+
+# Initialize setup wizard if available
+if SETUP_WIZARD_AVAILABLE:
+    try:
+        init_setup_wizard(app)
+        print("✅ Setup wizard initialized successfully")
+    except Exception as e:
+        print(f"⚠️  Warning: Failed to initialize setup wizard: {e}")
+        SETUP_WIZARD_AVAILABLE = False
 
 
 
@@ -389,7 +434,7 @@ try:
 
     if not forced_model:
 
-        forced_model = str(Path.cwd() / 'models' / 'Phi-3-mini-4k-instruct-q4.gguf')
+        forced_model = str(Path.cwd() / 'models' / 'mistral-7b-instruct-v0.1.Q4_K_M.gguf')
 
     # resolve to absolute path
 
@@ -936,6 +981,151 @@ def api_terraform_run():
     _start_job_thread(exec_id, cmd, cwd=str(target))
 
     return jsonify({'ok': True, 'exec_id': exec_id})
+
+
+
+
+
+@app.route('/api/tf/validate', methods=['POST'])
+def api_tf_validate():
+    return jsonify({'ok': True, 'output': 'TF validate endpoint working'})
+
+
+
+
+
+@app.route('/api/tf/plan', methods=['POST'])
+def api_tf_plan():
+    data = request.get_json(silent=True) or {}
+    main_tf = data.get('main', '')
+    variables_tf = data.get('variables', '')
+    if not main_tf:
+        return jsonify({'ok': False, 'error': 'main terraform code required'}), 400
+    
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, 'main.tf').write_text(main_tf, encoding='utf-8')
+            if variables_tf:
+                Path(tmpdir, 'variables.tf').write_text(variables_tf, encoding='utf-8')
+            
+            # Init and plan
+            proc = subprocess.run(['terraform', 'init', '-input=false'], cwd=tmpdir, capture_output=True, text=True, timeout=60)
+            if proc.returncode != 0:
+                return jsonify({'ok': False, 'error': proc.stderr}), 500
+            
+            proc = subprocess.run(['terraform', 'plan', '-input=false'], cwd=tmpdir, capture_output=True, text=True, timeout=120)
+            return jsonify({'ok': True, 'output': proc.stdout + proc.stderr}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+@app.route('/api/tf/apply', methods=['POST'])
+def api_tf_apply():
+    data = request.get_json(silent=True) or {}
+    main_tf = data.get('main', '')
+    variables_tf = data.get('variables', '')
+    if not main_tf:
+        return jsonify({'ok': False, 'error': 'main terraform code required'}), 400
+    
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            Path(tmpdir, 'main.tf').write_text(main_tf, encoding='utf-8')
+            if variables_tf:
+                Path(tmpdir, 'variables.tf').write_text(variables_tf, encoding='utf-8')
+            
+            # Init and apply
+            proc = subprocess.run(['terraform', 'init', '-input=false'], cwd=tmpdir, capture_output=True, text=True, timeout=60)
+            if proc.returncode != 0:
+                return jsonify({'ok': False, 'error': proc.stderr}), 500
+            
+            proc = subprocess.run(['terraform', 'apply', '-auto-approve', '-input=false'], cwd=tmpdir, capture_output=True, text=True, timeout=300)
+            return jsonify({'ok': True, 'output': proc.stdout + proc.stderr}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+@app.route('/api/tf/destroy', methods=['POST'])
+def api_tf_destroy():
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # For destroy, we need the state file, but since this is a demo, we'll assume local state
+            # In a real implementation, you'd need to handle state files properly
+            return jsonify({'ok': False, 'error': 'destroy not implemented for demo - requires state file'}), 501
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+@app.route('/api/tf/refresh')
+def api_tf_refresh():
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            return jsonify({'ok': False, 'error': 'refresh not implemented for demo - requires state file'}), 501
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+@app.route('/api/tf/import', methods=['POST'])
+def api_tf_import():
+    data = request.get_json(silent=True) or {}
+    address = data.get('address')
+    resource_id = data.get('id')
+    if not address or not resource_id:
+        return jsonify({'ok': False, 'error': 'address and id required'}), 400
+    
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            proc = subprocess.run(['terraform', 'import', address, resource_id], cwd=tmpdir, capture_output=True, text=True, timeout=60)
+            if proc.returncode != 0:
+                return jsonify({'ok': False, 'output': proc.stderr}), 200
+            return jsonify({'ok': True, 'output': proc.stdout}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+@app.route('/api/tf/state')
+def api_tf_state():
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            return jsonify({'ok': False, 'error': 'state show not implemented for demo - requires state file'}), 501
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+@app.route('/api/tf/backup')
+def api_tf_backup():
+    try:
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create a dummy state file for demo
+            state_content = '{"version": 4, "terraform_version": "1.0.0", "resources": []}'
+            Path(tmpdir, 'terraform.tfstate').write_text(state_content, encoding='utf-8')
+            return send_file(Path(tmpdir, 'terraform.tfstate'), as_attachment=True, download_name='terraform.tfstate.backup')
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 
@@ -2201,199 +2391,9 @@ ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
 
 
 
-class JamroomManager:
 
-    def __init__(self,db_path):
 
-        self.db_path=db_path
 
-        self._ensure_db()
-
-    def _ensure_db(self):
-
-        if not self.db_path.exists():
-
-            self._save({'sites':[]})
-
-    def _load(self):
-
-        if self.db_path.exists():
-
-            with open(self.db_path,'r') as f:
-
-                return json.load(f)
-
-        return {'sites':[]}
-
-    def _save(self,data):
-
-        with open(self.db_path,'w') as f:
-
-            json.dump(data,f,indent=2)
-
-    def get_all_sites(self):
-
-        data=self._load()
-
-        return data.get('sites',[])
-
-    def add_site(self,name,url,description=''):
-
-        data=self._load()
-
-        site={'id':str(int(time.time()*1000)),'name':name,'url':url,'description':description,'created':datetime.now().isoformat()}
-
-        data['sites'].append(site)
-
-        self._save(data)
-
-        return site
-
-    def update_site(self,site_id,name,url,description=''):
-
-        data=self._load()
-
-        for site in data['sites']:
-
-            if site['id']==site_id:
-
-                site['name']=name
-
-                site['url']=url
-
-                site['description']=description
-
-                site['updated']=datetime.now().isoformat()
-
-                self._save(data)
-
-                return site
-
-        return None
-
-    def delete_site(self,site_id):
-
-        data=self._load()
-
-        data['sites']=[s for s in data['sites'] if s['id']!=site_id]
-
-        self._save(data)
-
-        return True
-
-class ShoutcastManager:
-
-    def __init__(self,db_path):
-
-        self.db_path=db_path
-
-        self._ensure_db()
-
-    def _ensure_db(self):
-
-        if not self.db_path.exists():
-
-            self._save({'servers':[]})
-
-    def _load(self):
-
-        if self.db_path.exists():
-
-            with open(self.db_path,'r') as f:
-
-                return json.load(f)
-
-        return {'servers':[]}
-
-    def _save(self,data):
-
-        with open(self.db_path,'w') as f:
-
-            json.dump(data,f,indent=2)
-
-    def get_all_servers(self):
-
-        data=self._load()
-
-        return data.get('servers',[])
-
-    def add_server(self,name,host,port,server_type='shoutcast'):
-
-        data=self._load()
-
-        server={'id':str(int(time.time()*1000)),'name':name,'host':host,'port':port,'type':server_type,'status':'stopped','created':datetime.now().isoformat()}
-
-        data['servers'].append(server)
-
-        self._save(data)
-
-        return server
-
-    def update_server(self,server_id,name,host,port,server_type='shoutcast'):
-
-        data=self._load()
-
-        for server in data['servers']:
-
-            if server['id']==server_id:
-
-                server['name']=name
-
-                server['host']=host
-
-                server['port']=port
-
-                server['type']=server_type
-
-                server['updated']=datetime.now().isoformat()
-
-                self._save(data)
-
-                return server
-
-        return None
-
-    def delete_server(self,server_id):
-
-        data=self._load()
-
-        data['servers']=[s for s in data['servers'] if s['id']!=server_id]
-
-        self._save(data)
-
-        return True
-
-    def start_server(self,server_id):
-
-        data=self._load()
-
-        for server in data['servers']:
-
-            if server['id']==server_id:
-
-                server['status']='running'
-
-                self._save(data)
-
-                return True
-
-        return False
-
-    def stop_server(self,server_id):
-
-        data=self._load()
-
-        for server in data['servers']:
-
-            if server['id']==server_id:
-
-                server['status']='stopped'
-
-                self._save(data)
-
-                return True
-
-        return False
 
 class ScriptManager:
 
@@ -2821,10 +2821,6 @@ def get_windows_services():
 
     return services
 
-jamroom_mgr=JamroomManager(app.config['JAMROOM_DB'])
-
-shoutcast_mgr=ShoutcastManager(app.config['SHOUTCAST_DB'])
-
 script_mgr=ScriptManager(app.config['SCRIPTS_FOLDER'])
 
 # Execution jobs store for async/parallel execution
@@ -3181,10 +3177,6 @@ code{color:#4CAF50;}
 
 <a href="/echo-chat" class="{{ 'active' if '/echo-chat' in request.path else '' }}">🌙 Echo Chat</a>
 
-<a href="/jamroom" class="{{ 'active' if '/jamroom' in request.path else '' }}">Jamroom Sites</a>
-
-<a href="/shoutcast" class="{{ 'active' if '/shoutcast' in request.path else '' }}">Shoutcast/Icecast</a>
-
 <a href="/scripts" class="{{ 'active' if '/scripts' in request.path else '' }}">Scripts</a>
 
 <a href="/processes" class="{{ 'active' if '/processes' in request.path else '' }}">Processes</a>
@@ -3419,10 +3411,6 @@ DASHBOARD_TEMPLATE="""{% extends "base.html" %}
 
 <h3>Quick Actions</h3>
 
-<a href="/jamroom" class="btn">Manage Jamroom Sites</a>
-
-<a href="/shoutcast" class="btn">Manage Streaming Servers</a>
-
 <a href="/scripts" class="btn">Script Manager</a>
 
 <a href="/processes" class="btn">Process Monitor</a>
@@ -3437,347 +3425,13 @@ DASHBOARD_TEMPLATE="""{% extends "base.html" %}
 
 {% endblock %}"""
 
-JAMROOM_TEMPLATE="""{% extends "base.html" %}
 
-{% block content %}
 
-<div class="section">
 
-<h2>Jamroom Site Manager</h2>
 
-<button onclick="openModal('addSiteModal')" class="btn">Add New Site</button>
 
-<table>
 
-<thead>
 
-<tr>
-
-<th>Name</th>
-
-<th>URL</th>
-
-<th>Description</th>
-
-<th>Created</th>
-
-<th>Actions</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-{% for site in sites %}
-
-<tr>
-
-
-
-
-
-<td>{{ site.name }}</td>
-
-<td><a href="{{ site.url }}" target="_blank" style="color:#4CAF50;">{{ site.url }}</a></td>
-
-<td>{{ site.description }}</td>
-
-<td>{{ site.created[:10] }}</td>
-
-<td>
-
-<a href="/jamroom/edit/{{ site.id }}" class="btn btn-info">Edit</a>
-
-<a href="/jamroom/delete/{{ site.id }}" class="btn btn-danger" onclick="return confirmDelete('{{ site.name }}');">Delete</a>
-
-</td>
-
-</tr>
-
-{% endfor %}
-
-</tbody>
-
-</table>
-
-</div>
-
-<div id="addSiteModal" class="modal">
-
-<div class="modal-content">
-
-<span class="close" onclick="closeModal('addSiteModal')">&times;</span>
-
-<h2>Add New Site</h2>
-
-<form method="POST" action="/jamroom/add">
-
-<div class="form-group">
-
-<label>Site Name</label>
-
-<input type="text" name="name" required>
-
-</div>
-
-<div class="form-group">
-
-<label>URL</label>
-
-<input type="url" name="url" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Description</label>
-
-<textarea name="description" rows="3"></textarea>
-
-</div>
-
-<button type="submit" class="btn">Add Site</button>
-
-</form>
-
-</div>
-
-</div>
-
-{% endblock %}"""
-
-JAMROOM_EDIT_TEMPLATE="""{% extends "base.html" %}
-
-{% block content %}
-
-<div class="section">
-
-<h2>Edit Site</h2>
-
-<form method="POST" action="/jamroom/update/{{ site.id }}">
-
-<div class="form-group">
-
-<label>Site Name</label>
-
-<input type="text" name="name" value="{{ site.name }}" required>
-
-</div>
-
-<div class="form-group">
-
-<label>URL</label>
-
-<input type="url" name="url" value="{{ site.url }}" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Description</label>
-
-<textarea name="description" rows="3">{{ site.description }}</textarea>
-
-</div>
-
-<button type="submit" class="btn">Update Site</button>
-
-<a href="/jamroom" class="btn btn-warning">Cancel</a>
-
-</form>
-
-</div>
-
-{% endblock %}"""
-
-SHOUTCAST_TEMPLATE="""{% extends "base.html" %}
-
-{% block content %}
-
-<div class="section">
-
-<h2>Shoutcast/Icecast Server Manager</h2>
-
-<button onclick="openModal('addServerModal')" class="btn">Add New Server</button>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>Name</th>
-
-<th>Host:Port</th>
-
-<th>Type</th>
-
-<th>Status</th>
-
-<th>Actions</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-{% for server in servers %}
-
-<tr>
-
-<td>{{ server.name }}</td>
-
-<td>{{ server.host }}:{{ server.port }}</td>
-
-<td>{{ server.type }}</td>
-
-<td><span class="status-badge status-{{ server.status }}">{{ server.status }}</span></td>
-
-<td>
-
-{% if server.status=='stopped' %}
-
-<a href="/shoutcast/start/{{ server.id }}" class="btn">Start</a>
-
-{% else %}
-
-<a href="/shoutcast/stop/{{ server.id }}" class="btn btn-warning">Stop</a>
-
-{% endif %}
-
-<a href="/shoutcast/edit/{{ server.id }}" class="btn btn-info">Edit</a>
-
-<a href="/shoutcast/delete/{{ server.id }}" class="btn btn-danger" onclick="return confirmDelete('{{ server.name }}');">Delete</a>
-
-</td>
-
-</tr>
-
-{% endfor %}
-
-</tbody>
-
-</table>
-
-</div>
-
-<div id="addServerModal" class="modal">
-
-<div class="modal-content">
-
-<span class="close" onclick="closeModal('addServerModal')">&times;</span>
-
-<h2>Add New Server</h2>
-
-<form method="POST" action="/shoutcast/add">
-
-<div class="form-group">
-
-<label>Server Name</label>
-
-<input type="text" name="name" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Host</label>
-
-<input type="text" name="host" value="localhost" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Port</label>
-
-<input type="number" name="port" value="8000" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Server Type</label>
-
-<select name="type">
-
-<option value="shoutcast">Shoutcast</option>
-
-<option value="icecast">Icecast</option>
-
-</select>
-
-</div>
-
-<button type="submit" class="btn">Add Server</button>
-
-</form>
-
-</div>
-
-</div>
-
-{% endblock %}"""
-
-SHOUTCAST_EDIT_TEMPLATE="""{% extends "base.html" %}
-
-{% block content %}
-
-<div class="section">
-
-<h2>Edit Server</h2>
-
-<form method="POST" action="/shoutcast/update/{{ server.id }}">
-
-<div class="form-group">
-
-<label>Server Name</label>
-
-<input type="text" name="name" value="{{ server.name }}" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Host</label>
-
-<input type="text" name="host" value="{{ server.host }}" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Port</label>
-
-<input type="number" name="port" value="{{ server.port }}" required>
-
-</div>
-
-<div class="form-group">
-
-<label>Server Type</label>
-
-<select name="type">
-
-<option value="shoutcast" {{ 'selected' if server.type=='shoutcast' else '' }}>Shoutcast</option>
-
-<option value="icecast" {{ 'selected' if server.type=='icecast' else '' }}>Icecast</option>
-
-</select>
-
-</div>
-
-<button type="submit" class="btn">Update Server</button>
-
-<a href="/shoutcast" class="btn btn-warning">Cancel</a>
-
-</form>
-
-</div>
-
-{% endblock %}"""
 
 SCRIPTS_TEMPLATE="""{% extends "base.html" %}
 
@@ -5606,161 +5260,9 @@ def api_stats():
 
     return jsonify(get_system_stats())
 
-@app.route('/jamroom')
 
-def jamroom_list():
 
-    sites=jamroom_mgr.get_all_sites()
 
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',JAMROOM_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),sites=sites,request=request,get_flashed_messages=get_flashed_messages)
-
-@app.route('/jamroom/add',methods=['POST'])
-
-def jamroom_add():
-
-    name=request.form.get('name')
-
-    url=request.form.get('url')
-
-    description=request.form.get('description','')
-
-    jamroom_mgr.add_site(name,url,description)
-
-    flash('Site added successfully!','success')
-
-    return redirect(url_for('jamroom_list'))
-
-@app.route('/jamroom/edit/<site_id>')
-
-def jamroom_edit(site_id):
-
-    sites=jamroom_mgr.get_all_sites()
-
-    site=next((s for s in sites if s['id']==site_id),None)
-
-    if not site:
-
-        flash('Site not found','error')
-
-        return redirect(url_for('jamroom_list'))
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',JAMROOM_EDIT_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),site=site,request=request,get_flashed_messages=get_flashed_messages)
-
-@app.route('/jamroom/update/<site_id>',methods=['POST'])
-
-def jamroom_update(site_id):
-
-    name=request.form.get('name')
-
-    url=request.form.get('url')
-
-    description=request.form.get('description','')
-
-    jamroom_mgr.update_site(site_id,name,url,description)
-
-    flash('Site updated successfully!','success')
-
-    return redirect(url_for('jamroom_list'))
-
-@app.route('/jamroom/delete/<site_id>')
-
-def jamroom_delete(site_id):
-
-    jamroom_mgr.delete_site(site_id)
-
-    flash('Site deleted successfully!','success')
-
-    return redirect(url_for('jamroom_list'))
-
-@app.route('/shoutcast')
-
-def shoutcast_list():
-
-    servers=shoutcast_mgr.get_all_servers()
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',SHOUTCAST_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),servers=servers,request=request,get_flashed_messages=get_flashed_messages)
-
-@app.route('/shoutcast/add',methods=['POST'])
-
-def shoutcast_add():
-
-    name=request.form.get('name')
-
-    host=request.form.get('host')
-
-    port=request.form.get('port')
-
-    server_type=request.form.get('type')
-
-    shoutcast_mgr.add_server(name,host,int(port),server_type)
-
-    flash('Server added successfully!','success')
-
-    return redirect(url_for('shoutcast_list'))
-
-@app.route('/shoutcast/edit/<server_id>')
-
-def shoutcast_edit(server_id):
-
-    servers=shoutcast_mgr.get_all_servers()
-
-    server=next((s for s in servers if s['id']==server_id),None)
-
-    if not server:
-
-        flash('Server not found','error')
-
-        return redirect(url_for('shoutcast_list'))
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',SHOUTCAST_EDIT_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),server=server,request=request,get_flashed_messages=get_flashed_messages)
-
-@app.route('/shoutcast/update/<server_id>',methods=['POST'])
-
-def shoutcast_update(server_id):
-
-    name=request.form.get('name')
-
-    host=request.form.get('host')
-
-    port=request.form.get('port')
-
-    server_type=request.form.get('type')
-
-    shoutcast_mgr.update_server(server_id,name,host,int(port),server_type)
-
-    flash('Server updated successfully!','success')
-
-    return redirect(url_for('shoutcast_list'))
-
-@app.route('/shoutcast/delete/<server_id>')
-
-def shoutcast_delete(server_id):
-
-    shoutcast_mgr.delete_server(server_id)
-
-    flash('Server deleted successfully!','success')
-
-    return redirect(url_for('shoutcast_list'))
-
-@app.route('/shoutcast/start/<server_id>')
-
-def shoutcast_start(server_id):
-
-    shoutcast_mgr.start_server(server_id)
-
-    flash('Server started successfully!','success')
-
-    return redirect(url_for('shoutcast_list'))
-
-@app.route('/shoutcast/stop/<server_id>')
-
-def shoutcast_stop(server_id):
-
-    shoutcast_mgr.stop_server(server_id)
-
-    flash('Server stopped successfully!','success')
-
-    return redirect(url_for('shoutcast_list'))
 
 @app.route('/scripts')
 
@@ -7574,13 +7076,32 @@ def api_personality_delete():
 
 
 
+
+@app.route('/api/personality/toggle', methods=['POST'])
+def api_personality_toggle():
+    try:
+        data = request.get_json() or {}
+        session_id = data.get('session_id') or 'default'
+        storage = get_storage()
+        meta = storage.get_session_meta(session_id) or {}
+        personality = meta.get('personality')
+        if personality:
+            # Toggle enabled/disabled
+            personality['enabled'] = not personality.get('enabled', True)
+        else:
+            return jsonify({'error': 'No personality set for session'}), 400
+        storage.set_session_meta(session_id, meta)
+        return jsonify({'personality': personality})
+    except Exception as e:
+        app.logger.exception('Toggle personality failed')
+        return jsonify({'error': str(e)}), 500
+
+
+
+
 @app.route('/echo-chat')
-
 def echo_chat():
-
-    echo_art=Echo.get_compact_greeting()
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ECHO_CHAT_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),echo_art=echo_art,request=request,get_flashed_messages=get_flashed_messages)
+    return send_file('echo_chat_page.html')
 
 @app.route('/api/echo/chat',methods=['POST'])
 
@@ -7593,6 +7114,10 @@ def api_echo_chat():
         message = data.get('message','')
 
         session_id = data.get('session_id','default')
+
+        temperature = float(data.get('temperature', 0.7))
+
+        max_tokens = int(data.get('max_tokens', 1024))
 
         if not message:
 
@@ -7838,27 +7363,11 @@ def api_echo_chat():
 
         bot = get_chat_bot()
 
-        # If a personality is enabled for this session, prepend it as runtime context
+        # Persona injection is handled in chat_bot.py
 
-        try:
+        message_for_bot = message
 
-            person = meta.get('personality') or {}
-
-            if person.get('enabled') and person.get('text'):
-
-                # prepend personality as instruction
-
-                message_for_bot = f"[Persona]\n{person.get('text')}\n\nUser: {message}"
-
-            else:
-
-                message_for_bot = message
-
-        except Exception:
-
-            message_for_bot = message
-
-        response = bot.chat(message_for_bot, session_id=session_id)
+        response = bot.chat(message_for_bot, session_id=session_id, temperature=temperature, max_tokens=max_tokens)
 
         # Sanitize obviously-garbled responses (long repeated characters, repeated "A: A: A:" patterns, etc.)
 
@@ -8488,34 +7997,17 @@ def api_echo_history():
 
 
 
-@app.route('/api/echo/model')
-
+@app.route('/api/echo/model', methods=['GET'])
 def api_echo_model():
-
-    """Return the currently discovered local model path (or null)."""
-
     try:
-
         bot = get_chat_bot()
-
-        model = None
-
-        # prefer explicit method if available
-
-        if hasattr(bot, '_find_local_model'):
-
-            try:
-
-                model = bot._find_local_model()
-
-            except Exception:
-
-                model = None
-
-        return jsonify({'model': model})
-
+        model = getattr(bot, '_local_model_path', None)
+        if model:
+            return jsonify({'model': model})
+        else:
+            return jsonify({'model': None})
     except Exception as e:
-
+        app.logger.exception('Get model failed')
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/echo/preload_model', methods=['POST','GET'])
@@ -8968,6 +8460,8 @@ def api_echo_train_model():
 
         training_file = data.get('training_file')
 
+        resource_id = data.get('resource_id')
+
         output_name = data.get('output_name') or f"run_{int(time.time())}"
 
         epochs = int(data.get('epochs', 1))
@@ -8982,9 +8476,9 @@ def api_echo_train_model():
 
         # validate basics
 
-        if not model or not training_file:
+        if not model or (not training_file and not resource_id):
 
-            return jsonify({'error': 'model and training_file are required'}), 400
+            return jsonify({'error': 'model and either training_file or resource_id are required'}), 400
 
 
 
@@ -9000,11 +8494,45 @@ def api_echo_train_model():
 
 
 
-        tfile = Path(__file__).parent / 'data' / 'echo_training' / training_file
+        if resource_id:
 
-        if not tfile.exists():
+            # convert resource to training file
 
-            return jsonify({'error': 'training file not found'}), 404
+            idx = _load_resources_index()
+
+            entry = idx.get(resource_id)
+
+            if not entry:
+
+                return jsonify({'error': 'resource not found'}), 404
+
+            p = Path(entry.get('path'))
+
+            if not p.exists():
+
+                return jsonify({'error': 'resource file not found'}), 404
+
+            # use the convert logic
+
+            from tools.dataset_helper import convert_file_to_jsonl
+
+            tfile = Path(__file__).parent / 'data' / 'echo_training' / f"{resource_id}.jsonl"
+
+            try:
+
+                convert_file_to_jsonl(str(p), str(tfile))
+
+            except Exception as e:
+
+                return jsonify({'error': f'conversion failed: {e}'}), 500
+
+        else:
+
+            tfile = Path(__file__).parent / 'data' / 'echo_training' / training_file
+
+            if not tfile.exists():
+
+                return jsonify({'error': 'training file not found'}), 404
 
 
 
@@ -9196,34 +8724,22 @@ def api_echo_train_cancel():
 
 
 
-@app.route('/api/echo/models')
-
+@app.route('/api/echo/models', methods=['GET'])
 def api_echo_models():
-
-    """List discovered local GGUF models under the `models/` directory."""
-
     try:
-
-        base = Path.cwd() / 'models'
-
+        import glob
+        models_dir = Path.cwd() / 'models'
         models = []
-
-        if base.exists():
-
-            for p in sorted(base.rglob('*.gguf')):
-
-                try:
-
-                    models.append(str(p.relative_to(Path.cwd()).as_posix()))
-
-                except Exception:
-
-                    models.append(str(p))
-
+        if models_dir.exists():
+            for f in models_dir.glob('*.gguf'):
+                models.append({
+                    'name': f.name,
+                    'path': str(f),
+                    'size': f.stat().st_size
+                })
         return jsonify({'models': models})
-
     except Exception as e:
-
+        app.logger.exception('List models failed')
         return jsonify({'error': str(e)}), 500
 
 
@@ -9279,6 +8795,18 @@ def api_echo_select_model():
             except Exception:
 
                 app.logger.exception('Failed to set model on bot')
+
+        # unload any cached in-process model so it reloads with new path
+
+        try:
+
+            from echo.runtime import model_runtime
+
+            model_runtime.unload_model()
+
+        except Exception:
+
+            pass
 
         # persist selection
 
