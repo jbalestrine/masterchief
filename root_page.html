@@ -60,6 +60,11 @@ code{color:#4CAF50;}
 <header>
 <h1>⚡ MasterChief</h1>
 <p class="subtitle">DevOps Automation Platform</p>
+<p class="subtitle" style="margin-top: 10px;">
+    <a href="https://github.com/jbalestrine/masterchief" target="_blank" style="color: #4CAF50; text-decoration: none; font-weight: bold;">
+        📂 GitHub Repository: jbalestrine/masterchief
+    </a>
+</p>
 </header>
 <!-- Global floating toolbar for quick access -->
 <div id="globalToolbar" style="position:fixed;top:18px;right:18px;z-index:2000;display:flex;flex-direction:column;gap:8px;">
@@ -73,15 +78,20 @@ code{color:#4CAF50;}
 <nav>
 <a href="/" class="active">Dashboard</a>
 <a href="/echo-chat" class="">🌙 Echo Chat</a>
-<a href="/jamroom" class="">Jamroom Sites</a>
-<a href="/shoutcast" class="">Shoutcast/Icecast</a>
+
 <a href="/scripts" class="">Scripts</a>
 <a href="/processes" class="">Processes</a>
 <a href="/services" class="">Services</a>
 <a href="/addons" class="">Addons</a>
-<a href="/demo/azure-ui" class="">Demo: Azure</a>
-<a href="/demo/ado-ui" class="">Demo: ADO</a>
-<a href="/ide/ado_admin" class="">ADO Admin</a>
+<a href="/about" class="">About</a>
+<a href="/pipelines" class="">Pipelines</a>
+<a href="/cloud" class="">Cloud</a>
+<a href="/secrets" class="">Secrets</a>
+<a href="/echo-memory" class="">Memory</a>
+<a href="/marketplace" class="">Marketplace</a>
+<a href="/notifications" class="">Alerts</a>
+<a href="/rbac" class="">Access</a>
+<a href="/tf_wizard" class="">🛠️ TF Wizard</a>
 </nav>
 
 
@@ -115,8 +125,7 @@ code{color:#4CAF50;}
 </div>
 <div class="section">
 <h3>Quick Actions</h3>
-<a href="/jamroom" class="btn">Manage Jamroom Sites</a>
-<a href="/shoutcast" class="btn">Manage Streaming Servers</a>
+
 <a href="/scripts" class="btn">Script Manager</a>
 <a href="/processes" class="btn">Process Monitor</a>
 <a href="/services" class="btn">Service Monitor</a>
@@ -738,7 +747,7 @@ function showFeatureResult(j, label){
 		} else {
 			let err = j && j.error ? _htmlEscape(String(j.error)) : 'Unknown error';
 			body = '<div>Error: '+err+'</div>';
-
+		}
 		box.innerHTML = title + body;
 		el.appendChild(box);
 		el.style.display='block';

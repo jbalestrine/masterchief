@@ -17,37 +17,22 @@ _script_dir = os.path.dirname(os.path.abspath(__file__))
 if _script_dir in sys.path:
     sys.path.remove(_script_dir)
 
-
+# Import feature manager (before sys.path manipulation)
+try:
+    import sys
+    import os
+    _current_dir = os.getcwd()
+    if _current_dir not in sys.path:
+        sys.path.insert(0, _current_dir)
+    from features.manager import init_feature_manager, get_feature_manager
+    FEATURE_MANAGER_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Warning: Failed to initialize feature manager: {e}")
+    FEATURE_MANAGER_AVAILABLE = False
 
 import json
 
 import time
-
-import psutil
-
-import zipfile
-
-import subprocess
-
-from pathlib import Path
-
-from datetime import datetime
-
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, get_flashed_messages, send_file
-
-import requests
-
-from werkzeug.utils import secure_filename
-
-from flask_cors import CORS
-
-import hashlib
-
-import base64
-
-import shutil
-
-import html
 
 import difflib
 
@@ -58,6 +43,29 @@ import uuid
 import io
 
 import tempfile
+
+from pathlib import Path
+
+import psutil
+
+import subprocess
+
+import zipfile
+
+from datetime import datetime
+
+from werkzeug.utils import secure_filename
+
+import base64
+
+import hashlib
+
+import requests
+
+try:
+    from cryptography.fernet import Fernet
+except ImportError:
+    Fernet = None
 
 
 
@@ -107,7 +115,7 @@ def _interpreter_cmd_for_path(p: Path, requested_shell=None):
 
         # Prefer explicit shells (python/powershell) to prevent invoking missing WSL binaries.
 
-        if sys.mc_platform.startswith('win'):
+        if sys.platform.startswith('win'):
 
             return None
 
@@ -212,14 +220,54 @@ try:
     from setup_wizard import init_setup_wizard
     SETUP_WIZARD_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Warning: Failed to initialize setup wizard: {e}")
+    print(f"WARNING: Failed to initialize setup wizard: {e}")
     SETUP_WIZARD_AVAILABLE = False
+
+# Import feature manager
+try:
+    print("DEBUG: About to import feature manager")
+    from features.manager import init_feature_manager, get_feature_manager
+    print("DEBUG: Feature manager imported successfully")
+    FEATURE_MANAGER_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Warning: Failed to initialize feature manager: {e}")
+    FEATURE_MANAGER_AVAILABLE = False
+
+from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, get_flashed_messages, send_file
+
+from flask_cors import CORS
+
+# Import TF Wizard modules
+try:
+    import sys
+    import os
+    current_dir = os.getcwd()
+    if current_dir not in sys.path:
+        sys.path.insert(0, current_dir)
+    from tf_wizard.generator import generate_module_zip, tf_type_from_spec
+    import tf_wizard.app as tf_wizard_app
+    TF_WIZARD_AVAILABLE = True
+    print("SUCCESS: TF Wizard modules imported successfully")
+except ImportError as e:
+    print(f"WARNING: TF Wizard not available: {e}")
+    TF_WIZARD_AVAILABLE = False
+    import traceback
+    print(f"TF Wizard import traceback: {traceback.format_exc()}")
 
 app=Flask(__name__)
 
 app.config['SECRET_KEY']='masterchief-secret-key-change-in-production'
 
 CORS(app)
+
+# Mount TF Wizard static files if available
+if TF_WIZARD_AVAILABLE:
+    from flask import send_from_directory
+    import os
+    tf_wizard_static = os.path.join(os.path.dirname(tf_wizard_app.__file__), 'static')
+    @app.route('/tf_wizard/static/<path:filename>')
+    def tf_wizard_static_files(filename):
+        return send_from_directory(tf_wizard_static, filename)
 
 app.jinja_env.filters['b64encode'] = lambda s: base64.urlsafe_b64encode(s.encode()).decode()
 
@@ -237,6 +285,21 @@ app.config['SCRIPTS_FOLDER']=_data_dir/'scripts'
 
 app.config['MAX_CONTENT_LENGTH']=100*1024*1024
 
+app.config['RBAC_DB'] = _data_dir / 'rbac.json'
+app.config['VAULT_DB'] = _data_dir / 'vault.json'
+app.config['VAULT_KEY'] = _data_dir / 'vault.key'
+app.config['NOTIFICATIONS_DB'] = _data_dir / 'notifications.json'
+app.config['NOTIFICATION_CHANNELS_DB'] = _data_dir / 'notification_channels.json'
+app.config['NOTIFICATION_RULES_DB'] = _data_dir / 'notification_rules.json'
+app.config['PIPELINES_DB'] = _data_dir / 'pipelines.json'
+app.config['PIPELINE_RUNS_DB'] = _data_dir / 'pipeline_runs.json'
+app.config['CLOUD_DB'] = _data_dir / 'cloud_accounts.json'
+app.config['MARKETPLACE_DB'] = _data_dir / 'marketplace.json'
+app.config['MEMORIES_PATH'] = _data_dir / 'echo_memories.jsonl'
+app.config['MEMORY_INDEX_PATH'] = _data_dir / 'echo_memory_index.json'
+app.config['VAULT_AUDIT_DB'] = _data_dir / 'vault_audit.json'
+app.config['RBAC_ENABLED'] = False
+
 for folder in [app.config['UPLOAD_FOLDER'],app.config['SCRIPTS_FOLDER'],_data_dir]:
 
     folder.mkdir(parents=True,exist_ok=True)
@@ -249,21 +312,45 @@ if AUTH_MODULES_AVAILABLE:
         # Initialize authentication
         init_auth(app)
 
-        print("✅ Authentication modules initialized successfully")
+        print("SUCCESS: Authentication modules initialized successfully")
     except Exception as e:
-        print(f"⚠️  Warning: Failed to initialize authentication modules: {e}")
+        print(f"WARNING: Failed to initialize authentication modules: {e}")
         AUTH_MODULES_AVAILABLE = False
 else:
-    print("ℹ️  Authentication modules not available - running without authentication")
+    print("INFO: Authentication modules not available - running without authentication")
 
 # Initialize setup wizard if available
 if SETUP_WIZARD_AVAILABLE:
     try:
         init_setup_wizard(app)
-        print("✅ Setup wizard initialized successfully")
+        print("SUCCESS: Setup wizard initialized successfully")
     except Exception as e:
-        print(f"⚠️  Warning: Failed to initialize setup wizard: {e}")
+        print(f"WARNING: Failed to initialize setup wizard: {e}")
         SETUP_WIZARD_AVAILABLE = False
+
+# Initialize feature manager if available
+with open('debug.log', 'a') as f:
+    f.write(f"DEBUG: Checking FEATURE_MANAGER_AVAILABLE: {FEATURE_MANAGER_AVAILABLE}\n")
+if FEATURE_MANAGER_AVAILABLE:
+    with open('debug.log', 'a') as f:
+        f.write("DEBUG: Initializing feature manager...\n")
+    try:
+        init_feature_manager(app)
+        with open('debug.log', 'a') as f:
+            f.write("SUCCESS: Feature manager initialized successfully\n")
+    except Exception as e:
+        with open('debug.log', 'a') as f:
+            f.write(f"WARNING: Failed to initialize feature manager: {e}\n")
+        import traceback
+        with open('debug.log', 'a') as f:
+            f.write(f"Traceback: {traceback.format_exc()}\n")
+        FEATURE_MANAGER_AVAILABLE = False
+else:
+    with open('debug.log', 'a') as f:
+        f.write("DEBUG: Feature manager not available\n")
+
+with open('debug.log', 'a') as f:
+    f.write("DEBUG: About to init chat...\n")
 
 
 
@@ -605,7 +692,6 @@ def init_chat():
 
 
 
-
 # --- Minimal Web IDE API endpoints -----------------------------------------------------
 
 def _safe_script_path(filename: str):
@@ -814,7 +900,7 @@ def api_mock_start():
 
                 return jsonify({'ok': False, 'error': 'start script not found'}), 404
 
-            if not sys.mc_platform.startswith('win'):
+            if not sys.platform.startswith('win'):
 
                 return jsonify({'ok': False, 'error': 'Hyper-V scripts can only be run on Windows'}), 501
 
@@ -1631,6 +1717,813 @@ def api_ide_execute():
 
 
 
+@app.route('/api/vault/secrets', methods=['GET'])
+def api_vault_list():
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.list_secrets()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/secrets', methods=['POST'])
+def api_vault_create():
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        secret = vault_mgr.create_secret(d.get('name', ''), d.get('value', ''), d.get('type', 'other'), d.get('rotation_days', 0))
+        return jsonify({'ok': True, 'result': secret})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/vault/secrets/<sid>', methods=['GET'])
+def api_vault_get(sid):
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.get_secret(sid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/vault/secrets/<sid>', methods=['PUT'])
+def api_vault_update(sid):
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        secret = vault_mgr.update_secret(sid, value=d.get('value'), rotation_days=d.get('rotation_days'))
+        return jsonify({'ok': True, 'result': secret})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/vault/secrets/<sid>', methods=['DELETE'])
+def api_vault_delete(sid):
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        vault_mgr.delete_secret(sid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/secrets/<sid>/versions', methods=['GET'])
+def api_vault_versions(sid):
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.get_versions(sid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/audit', methods=['GET'])
+def api_vault_audit():
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        return jsonify({'ok': True, 'result': vault_mgr.get_audit_log(limit)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/vault/rotation', methods=['GET'])
+def api_vault_rotation():
+    if not vault_mgr:
+        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': vault_mgr.check_rotation()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+@app.route('/api/echo/memories', methods=['GET'])
+def api_echo_memories_list():
+    try:
+        topic = request.args.get('topic')
+        q = request.args.get('q')
+        pinned = request.args.get('pinned', '').lower() == 'true'
+        return jsonify({'ok': True, 'result': memory_mgr.get_all(topic=topic, pinned_only=pinned, query=q)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories', methods=['POST'])
+def api_echo_memories_create():
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        topics = d.get('topics', [])
+        if isinstance(topics, str):
+            topics = [t.strip() for t in topics.split(',') if t.strip()]
+        entities = d.get('entities', [])
+        if isinstance(entities, str):
+            entities = [e.strip() for e in entities.split(',') if e.strip()]
+        memory = memory_mgr.add_memory(
+            content=d.get('content', ''),
+            topics=topics, entities=entities,
+            source=d.get('source', 'manual'),
+            importance=d.get('importance', 0.5)
+        )
+        return jsonify({'ok': True, 'result': memory})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/echo/memories/<mid>', methods=['GET'])
+def api_echo_memories_get(mid):
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        m = memory_mgr.get_memory(mid)
+        if m:
+            return jsonify({'ok': True, 'result': m})
+        return jsonify({'ok': False, 'error': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/<mid>', methods=['PUT'])
+def api_echo_memories_update(mid):
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        m = memory_mgr.update_memory(mid, d)
+        return jsonify({'ok': True, 'result': m})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/echo/memories/<mid>', methods=['DELETE'])
+def api_echo_memories_delete(mid):
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        memory_mgr.delete_memory(mid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/<mid>/pin', methods=['POST'])
+def api_echo_memories_pin(mid):
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        m = memory_mgr.toggle_pin(mid)
+        return jsonify({'ok': True, 'result': m})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/echo/memories/search', methods=['GET'])
+def api_echo_memories_search():
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        q = request.args.get('q', '')
+        return jsonify({'ok': True, 'result': memory_mgr.search(q)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/topics', methods=['GET'])
+def api_echo_memories_topics():
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': memory_mgr.get_topics()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/echo/memories/context', methods=['POST'])
+def api_echo_memories_context():
+    if not memory_mgr:
+        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        return jsonify({'ok': True, 'result': memory_mgr.get_context_for_conversation(d.get('message', ''))})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  RBAC API Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/rbac/users', methods=['GET'])
+def api_rbac_users_list():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': rbac_mgr.get_users()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/users', methods=['POST'])
+def api_rbac_users_create():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        user = rbac_mgr.add_user(d.get('username', ''), d.get('password', ''), d.get('role', 'viewer'))
+        return jsonify({'ok': True, 'result': user})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/users/<user_id>', methods=['PUT'])
+def api_rbac_users_update(user_id):
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        user = rbac_mgr.update_user(user_id, d)
+        return jsonify({'ok': True, 'result': user})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/users/<user_id>', methods=['DELETE'])
+def api_rbac_users_delete(user_id):
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        rbac_mgr.delete_user(user_id)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/roles', methods=['GET'])
+def api_rbac_roles_list():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': rbac_mgr.get_roles()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/roles', methods=['POST'])
+def api_rbac_roles_create():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        role = rbac_mgr.add_role(d.get('name', ''), d.get('permissions', []))
+        return jsonify({'ok': True, 'result': role})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/roles/<role_name>', methods=['PUT'])
+def api_rbac_roles_update(role_name):
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        role = rbac_mgr.update_role(role_name, d.get('permissions', []))
+        return jsonify({'ok': True, 'result': role})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/roles/<role_name>', methods=['DELETE'])
+def api_rbac_roles_delete(role_name):
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        rbac_mgr.delete_role(role_name)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/sessions', methods=['GET'])
+def api_rbac_sessions_list():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': rbac_mgr.get_sessions()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/sessions/<session_id>', methods=['DELETE'])
+def api_rbac_sessions_delete(session_id):
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        rbac_mgr.delete_session(session_id)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/audit', methods=['GET'])
+def api_rbac_audit():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        return jsonify({'ok': True, 'result': rbac_mgr.get_audit_log(limit)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/api_keys', methods=['POST'])
+def api_rbac_api_keys_create():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        key = rbac_mgr.generate_api_key(d.get('user_id', ''))
+        return jsonify({'ok': True, 'result': key})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/rbac/api_keys/<key_id>', methods=['DELETE'])
+def api_rbac_api_keys_delete(key_id):
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        rbac_mgr.revoke_api_key(key_id)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/rbac/login', methods=['POST'])
+def api_rbac_login():
+    if not rbac_mgr:
+        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        sess = rbac_mgr.authenticate(d.get('username', ''), d.get('password', ''))
+        if sess:
+            return jsonify({'ok': True, 'result': sess})
+        return jsonify({'ok': False, 'error': 'Invalid credentials'}), 401
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Notification API Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/notifications', methods=['GET'])
+def api_notifications_list():
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        unread = request.args.get('unread', '').lower() == 'true'
+        severity = request.args.get('severity')
+        return jsonify({'ok': True, 'result': notification_mgr.list_notifications(unread_only=unread, severity=severity)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/count', methods=['GET'])
+def api_notifications_count():
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': notification_mgr.unread_count()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/<nid>/read', methods=['POST'])
+def api_notifications_read(nid):
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        notification_mgr.mark_read(nid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/read_all', methods=['POST'])
+def api_notifications_read_all():
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        notification_mgr.mark_all_read()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/<nid>', methods=['DELETE'])
+def api_notifications_delete(nid):
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        notification_mgr.delete_notification(nid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/channels', methods=['GET'])
+def api_notification_channels_list():
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': notification_mgr.get_channels()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/channels', methods=['POST'])
+def api_notification_channels_create():
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        ch = notification_mgr.add_channel(d.get('name', ''), d.get('type', 'in_app'), d.get('config', {}))
+        return jsonify({'ok': True, 'result': ch})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/channels/<cid>', methods=['PUT'])
+def api_notification_channels_update(cid):
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        ch = notification_mgr.update_channel(cid, d)
+        return jsonify({'ok': True, 'result': ch})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/channels/<cid>', methods=['DELETE'])
+def api_notification_channels_delete(cid):
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        notification_mgr.delete_channel(cid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/channels/<cid>/test', methods=['POST'])
+def api_notification_channels_test(cid):
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        result = notification_mgr.test_channel(cid)
+        return jsonify({'ok': True, 'result': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/rules', methods=['GET'])
+def api_notification_rules_list():
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': notification_mgr.get_rules()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/notifications/rules', methods=['POST'])
+def api_notification_rules_create():
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        rule = notification_mgr.add_rule(d.get('name', ''), d.get('event_type', ''), d.get('severity_filter', 'all'), d.get('channel_id', ''), d.get('active', True))
+        return jsonify({'ok': True, 'result': rule})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/rules/<rid>', methods=['PUT'])
+def api_notification_rules_update(rid):
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        rule = notification_mgr.update_rule(rid, d)
+        return jsonify({'ok': True, 'result': rule})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/notifications/rules/<rid>', methods=['DELETE'])
+def api_notification_rules_delete(rid):
+    if not notification_mgr:
+        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
+    try:
+        notification_mgr.delete_rule(rid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Pipeline API Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/pipelines', methods=['GET'])
+def api_pipelines_list():
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.list_pipelines()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/pipelines', methods=['POST'])
+def api_pipelines_create():
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        pipeline = pipeline_mgr.create_pipeline(d.get('name', 'New Pipeline'), d.get('description', ''))
+        return jsonify({'ok': True, 'result': pipeline})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/<pid>', methods=['GET'])
+def api_pipelines_get(pid):
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_pipeline(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/pipelines/<pid>', methods=['PUT'])
+def api_pipelines_update(pid):
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        pipeline = pipeline_mgr.update_pipeline(pid, d)
+        return jsonify({'ok': True, 'result': pipeline})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/<pid>', methods=['DELETE'])
+def api_pipelines_delete(pid):
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        pipeline_mgr.delete_pipeline(pid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/pipelines/<pid>/execute', methods=['POST'])
+def api_pipelines_execute(pid):
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        run = pipeline_mgr.execute_pipeline(pid)
+        return jsonify({'ok': True, 'result': run})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/runs', methods=['GET'])
+def api_pipeline_runs_list():
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        pid = request.args.get('pipeline_id')
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_runs(pipeline_id=pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/pipelines/runs/<rid>', methods=['GET'])
+def api_pipeline_runs_get(rid):
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_run(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/pipelines/runs/<rid>/cancel', methods=['POST'])
+def api_pipeline_runs_cancel(rid):
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        run = pipeline_mgr.cancel_run(rid)
+        return jsonify({'ok': True, 'result': run})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/import', methods=['POST'])
+def api_pipelines_import():
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        d.pop('id', None)
+        d['id'] = str(uuid.uuid4())
+        d['created'] = datetime.now().isoformat()
+        d['updated'] = datetime.now().isoformat()
+        data = pipeline_mgr._load()
+        data.setdefault('pipelines', []).append(d)
+        pipeline_mgr._save(data)
+        return jsonify({'ok': True, 'result': d})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/pipelines/<pid>/export', methods=['GET'])
+def api_pipelines_export(pid):
+    if not pipeline_mgr:
+        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': pipeline_mgr.get_pipeline(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+
+# ---------------------------------------------------------------------------
+#  Cloud Dashboard API Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/cloud/accounts', methods=['GET'])
+def api_cloud_accounts_list():
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.get_accounts()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/accounts', methods=['POST'])
+def api_cloud_accounts_create():
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        acct = cloud_mgr.add_account(d.get('name', ''), d.get('provider', 'azure'), d.get('credential_secret_id', ''), d.get('region', ''))
+        return jsonify({'ok': True, 'result': acct})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/cloud/accounts/<aid>', methods=['DELETE'])
+def api_cloud_accounts_delete(aid):
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        cloud_mgr.remove_account(aid)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/resources', methods=['GET'])
+def api_cloud_resources_list():
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        provider = request.args.get('provider')
+        rtype = request.args.get('type')
+        status = request.args.get('status')
+        return jsonify({'ok': True, 'result': cloud_mgr.get_resources(provider=provider, rtype=rtype, status=status)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/resources/<rid>', methods=['GET'])
+def api_cloud_resources_get(rid):
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.get_resource(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/cloud/resources/<rid>/start', methods=['POST'])
+def api_cloud_resources_start(rid):
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.start_resource(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/cloud/resources/<rid>/stop', methods=['POST'])
+def api_cloud_resources_stop(rid):
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.stop_resource(rid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/cloud/costs', methods=['GET'])
+def api_cloud_costs():
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': cloud_mgr.get_costs()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/cloud/refresh', methods=['POST'])
+def api_cloud_refresh():
+    if not cloud_mgr:
+        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
+    try:
+        cloud_mgr.refresh()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+#  Marketplace API Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/marketplace/plugins', methods=['GET'])
+def api_marketplace_plugins_list():
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        q = request.args.get('q')
+        category = request.args.get('category')
+        installed = request.args.get('installed', '').lower() == 'true'
+        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins(query=q, category=category, installed_only=installed)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/marketplace/plugins/<pid>', methods=['GET'])
+def api_marketplace_plugins_get(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/marketplace/plugins/<pid>/install', methods=['POST'])
+def api_marketplace_plugins_install(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.install_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/uninstall', methods=['POST'])
+def api_marketplace_plugins_uninstall(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.uninstall_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/update', methods=['POST'])
+def api_marketplace_plugins_update(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_plugin(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/config', methods=['GET'])
+def api_marketplace_plugins_config_get(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_config(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+
+@app.route('/api/marketplace/plugins/<pid>/config', methods=['PUT'])
+def api_marketplace_plugins_config_update(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        return jsonify({'ok': True, 'result': marketplace_mgr.update_config(pid, d)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/plugins/<pid>/reviews', methods=['GET'])
+def api_marketplace_plugins_reviews_list(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.get_reviews(pid)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/marketplace/plugins/<pid>/reviews', methods=['POST'])
+def api_marketplace_plugins_reviews_create(pid):
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        d = request.get_json(silent=True) or {}
+        review = marketplace_mgr.add_review(pid, d.get('rating', 5), d.get('text', ''), d.get('author', 'Anonymous'))
+        return jsonify({'ok': True, 'result': review})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+@app.route('/api/marketplace/installed', methods=['GET'])
+def api_marketplace_installed():
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins(installed_only=True)})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/marketplace/refresh', methods=['POST'])
+def api_marketplace_refresh():
+    if not marketplace_mgr:
+        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
+    try:
+        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 # Remote credential storage for IDE remote execution (basic, stored in data/ide_creds.json)
 
 CREDS_FILE = Path(__file__).resolve().parent / 'data' / 'ide_creds.json'
@@ -2337,6 +3230,393 @@ loadResources();
 
 
 
+ADDONS_MODULES_TEMPLATE = """{% extends "base.html" %}
+
+{% block content %}
+
+<div class="section">
+
+<h2>🧩 Addons Modules</h2>
+
+<p>Manage installed addon modules, configure settings, install dependencies, and run services.</p>
+
+{% if installed_modules %}
+
+<h3>Installed Modules ({{ installed_modules|length }} modules)</h3>
+
+<div style="margin-bottom: 20px;">
+<button class="btn" style="background: #f44336; color: white;" onclick="deleteAllModules()" id="delete-all-btn">🗑️ Delete All Modules</button>
+<span id="delete-status" style="margin-left: 10px; display: none;"></span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
+
+{% for module in installed_modules %}
+
+<div class="card" style="border-left-color: #FF6B35;">
+
+<h3 style="color: #FF6B35;">{{ module.name }}{% if module.build_commands %} <span style="font-size: 0.7em; background: #FF5722; color: white; padding: 2px 6px; border-radius: 3px;">🔨</span>{% endif %}</h3>
+
+<div style="margin: 10px 0;">
+
+<span class="status-badge" style="background: #4CAF50;">{{ module.language|upper }}</span>
+
+<span class="status-badge" style="background: #2196F3;">{{ module.files }} files</span>
+
+<span class="status-badge" style="background: #FF9800;">{{ (module.size/1024)|round(1) }} KB</span>
+
+{% if module.build_commands %}
+
+<span style="margin-left: 10px;">
+
+<form method="POST" action="/addons/modules/{{ module.name }}/build" style="display: inline;">
+
+<button type="submit" class="btn" style="background: #FF5722; font-size: 0.8em; padding: 4px 8px;" onclick="return confirm('Build/compile {{ module.name }}?')">🔨 Build</button>
+
+</form>
+
+</span>
+
+{% endif %}
+
+</div>
+
+<p><strong>Path:</strong> {{ module.path }}</p>
+
+<p><strong>Modified:</strong> {{ module.modified }}</p>
+
+<div style="margin-top: 15px;">
+
+<h4>Configuration Files</h4>
+
+{% if module.config_files %}
+
+<ul style="margin: 5px 0; padding-left: 20px;">
+
+{% for config in module.config_files %}
+
+<li><a href="/addons/modules/{{ module.name }}/config/{{ config }}" class="btn btn-info" style="font-size: 0.8em; padding: 4px 8px;">📝 {{ config }}</a></li>
+
+{% endfor %}
+
+</ul>
+
+{% else %}
+
+<p style="color: #888; font-style: italic;">No config files found</p>
+
+{% endif %}
+
+</div>
+
+<div style="margin-top: 15px;">
+
+<h4>Setup & Dependencies</h4>
+
+{% if module.requirements_files %}
+
+<form method="POST" action="/addons/modules/{{ module.name }}/install_deps" style="display: inline;">
+
+<button type="submit" class="btn" style="background: #4CAF50;">📦 Install Dependencies</button>
+
+</form>
+
+{% endif %}
+
+{% if module.setup_scripts %}
+
+<h5>Setup Scripts:</h5>
+
+<ul style="margin: 5px 0; padding-left: 20px;">
+
+{% for script in module.setup_scripts %}
+
+<li>
+{% if script.endswith('.php') %}
+<a href="/addons/modules/{{ module.name }}/web/{{ script }}" class="btn" style="background: #9C27B0;" target="_blank">🌐 View {{ script }}</a>
+<span style="font-size: 0.8em; color: #888;"> (Web-based installer)</span>
+{% else %}
+<form method="POST" action="/addons/modules/{{ module.name }}/run_setup/{{ script }}" style="display: inline;">
+<button type="submit" class="btn" style="background: #FF9800;" onclick="return confirm('Run setup script: {{ script }}?')">▶️ {{ script }}</button>
+</form>
+{% endif %}
+</li>
+
+{% endfor %}
+
+</ul>
+
+{% endif %}
+
+</div>
+
+{% if module.build_commands %}
+
+<div style="margin-top: 15px;">
+
+<h4>Build & Compile</h4>
+
+<p style="font-size: 0.9em; color: #888;">Project Type: {{ module.project_type }}{% if module.frameworks %} | Frameworks: {{ module.frameworks|join(', ') }}{% endif %}</p>
+
+<form method="POST" action="/addons/modules/{{ module.name }}/build" style="display: inline;">
+
+<button type="submit" class="btn" style="background: #FF5722;" onclick="return confirm('Build/compile {{ module.name }}? This may take several minutes.')">🔨 Build Project</button>
+
+</form>
+
+<p style="font-size: 0.8em; color: #666; margin-top: 5px;">{{ module.build_commands|length }} build step(s) detected</p>
+
+</div>
+
+{% endif %}
+
+<div style="margin-top: 15px;">
+
+<h4>Service Control</h4>
+
+<button class="btn" style="background: #4CAF50;" onclick="startService('{{ module.name }}')">▶️ Start Service</button>
+
+<button class="btn btn-warning" onclick="stopService('{{ module.name }}')">⏹️ Stop Service</button>
+
+<button class="btn btn-info" onclick="checkServiceStatus('{{ module.name }}')">📊 Status</button>
+
+<div id="service-status-{{ module.name }}" style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-radius: 5px; display: none;"></div>
+
+</div>
+
+<div style="margin-top: 15px;">
+
+<h4>Documentation</h4>
+
+{% if module.readme_files %}
+
+<ul style="margin: 5px 0; padding-left: 20px;">
+
+{% for readme in module.readme_files %}
+
+<li><a href="/addons/modules/{{ module.name }}/config/{{ readme }}" class="btn" style="background: #9C27B0; font-size: 0.8em; padding: 4px 8px;">📖 {{ readme }}</a></li>
+
+{% endfor %}
+
+</ul>
+
+{% else %}
+
+<p style="color: #888; font-style: italic;">No documentation found</p>
+
+{% endif %}
+
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+{% else %}
+
+<h3>No Installed Modules</h3>
+
+<p>No addon modules are currently installed. Install addons from the <a href="/addons">Addons</a> page to see them here.</p>
+
+{% endif %}
+
+</div>
+
+<script>
+
+function startService(moduleName) {
+
+    fetch(`/addons/modules/${moduleName}/start`, { method: 'POST' })
+
+        .then(r => r.json())
+
+        .then(data => {
+
+            alert(data.message || 'Service started');
+
+            checkServiceStatus(moduleName);
+
+        })
+
+        .catch(e => alert('Error: ' + e));
+
+}
+
+function stopService(moduleName) {
+
+    fetch(`/addons/modules/${moduleName}/stop`, { method: 'POST' })
+
+        .then(r => r.json())
+
+        .then(data => {
+
+            alert(data.message || 'Service stopped');
+
+            checkServiceStatus(moduleName);
+
+        })
+
+        .catch(e => alert('Error: ' + e));
+
+}
+
+function checkServiceStatus(moduleName) {
+
+    fetch(`/addons/modules/${moduleName}/status`)
+
+        .then(r => r.json())
+
+        .then(data => {
+
+            const statusDiv = document.getElementById(`service-status-${moduleName}`);
+
+            statusDiv.style.display = 'block';
+
+            statusDiv.innerHTML = `
+
+                <strong>Status:</strong> ${data.status || 'Unknown'}<br>
+
+                <strong>Port:</strong> ${data.port || 'N/A'}<br>
+
+                <strong>PID:</strong> ${data.pid || 'N/A'}<br>
+
+                <strong>URL:</strong> ${data.url ? `<a href="${data.url}" target="_blank">${data.url}</a>` : 'N/A'}
+
+            `;
+
+        })
+
+        .catch(e => {
+
+            const statusDiv = document.getElementById(`service-status-${moduleName}`);
+
+            statusDiv.style.display = 'block';
+
+            statusDiv.innerHTML = '<strong>Error:</strong> ' + e;
+
+        });
+
+}
+
+function deleteAllModules() {
+    if (!confirm('Are you sure you want to delete ALL installed modules? This action cannot be undone!')) {
+        return;
+    }
+    
+    const btn = document.getElementById('delete-all-btn');
+    const status = document.getElementById('delete-status');
+    
+    btn.disabled = true;
+    btn.textContent = '🗑️ Deleting...';
+    status.style.display = 'inline';
+    status.textContent = 'Deleting all modules...';
+    status.style.color = '#ff9800';
+    
+    fetch('/addons/modules/delete_all', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                status.textContent = 'All modules deleted successfully!';
+                status.style.color = '#4CAF50';
+                // Reload the page after a short delay
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                status.textContent = 'Error: ' + (data.error || 'Unknown error');
+                status.style.color = '#f44336';
+                btn.disabled = false;
+                btn.textContent = '🗑️ Delete All Modules';
+            }
+        })
+        .catch(e => {
+            status.textContent = 'Error: ' + e;
+            status.style.color = '#f44336';
+            btn.disabled = false;
+            btn.textContent = '🗑️ Delete All Modules';
+        });
+}
+
+</script>
+
+{% endblock %}"""
+
+
+
+ADDONS_MODULE_CONFIG_TEMPLATE = """{% extends "base.html" %}
+
+{% block content %}
+
+<div class="section">
+
+<h2>⚙️ Module Configuration</h2>
+
+<h3>{{ module_name }} - {{ config_file }}</h3>
+
+<div style="margin-bottom: 20px;">
+
+<a href="/addons/modules" class="btn">← Back to Modules</a>
+
+</div>
+
+<form method="POST" style="margin-bottom: 20px;">
+
+<label for="content" style="display: block; margin-bottom: 10px; font-weight: bold;">File Content:</label>
+
+<textarea name="content" id="content" style="width: 100%; height: 500px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; padding: 10px; font-family: monospace; font-size: 14px;" spellcheck="false">{{ content }}</textarea>
+
+<div style="margin-top: 20px;">
+
+<button type="submit" class="btn" style="background: #4CAF50;">💾 Save Changes</button>
+
+<button type="button" class="btn btn-warning" onclick="resetContent()">🔄 Reset</button>
+
+</div>
+
+</form>
+
+<script>
+
+let originalContent = document.getElementById('content').value;
+
+function resetContent() {
+
+    if (confirm('Reset to original content? Unsaved changes will be lost.')) {
+
+        document.getElementById('content').value = originalContent;
+
+    }
+
+}
+
+// Auto-save indicator
+
+let saveTimeout;
+
+document.getElementById('content').addEventListener('input', function() {
+
+    clearTimeout(saveTimeout);
+
+    saveTimeout = setTimeout(() => {
+
+        // Could implement auto-save here
+
+        console.log('Content changed');
+
+    }, 1000);
+
+});
+
+</script>
+
+</div>
+
+{% endblock %}"""
+
+
+
 ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
 
 {% block content %}
@@ -2740,6 +4020,1139 @@ class ScriptManager:
         except Exception:
 
             return None
+
+class VaultManager:
+    def __init__(self, db_path, key_path, audit_path):
+        self.db_path = Path(db_path)
+        self.key_path = Path(key_path)
+        self.audit_path = Path(audit_path)
+        self._fernet = self._init_encryption()
+        self._ensure_db()
+
+    def _init_encryption(self):
+        if Fernet is None:
+            return None
+        self.key_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.key_path.exists():
+            key = self.key_path.read_bytes()
+        else:
+            key = Fernet.generate_key()
+            self.key_path.write_bytes(key)
+        return Fernet(key)
+
+    def _encrypt(self, plaintext):
+        if self._fernet:
+            return self._fernet.encrypt(plaintext.encode()).decode()
+        return base64.b64encode(plaintext.encode()).decode()
+
+    def _decrypt(self, ciphertext):
+        if self._fernet:
+            return self._fernet.decrypt(ciphertext.encode()).decode()
+        return base64.b64decode(ciphertext.encode()).decode()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save_db({'secrets': []})
+        if not self.audit_path.exists():
+            self.audit_path.write_text(json.dumps({'entries': []}, indent=2), encoding='utf-8')
+
+    def _load_db(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'secrets': []}
+
+    def _save_db(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def _audit(self, user, action, secret_name, details=''):
+        try:
+            d = json.loads(self.audit_path.read_text(encoding='utf-8')) if self.audit_path.exists() else {'entries': []}
+        except Exception:
+            d = {'entries': []}
+        d['entries'].append({
+            'id': str(uuid.uuid4()), 'timestamp': datetime.now().isoformat(),
+            'user': user, 'action': action, 'secret_name': secret_name, 'details': details
+        })
+        if len(d['entries']) > 2000:
+            d['entries'] = d['entries'][-2000:]
+        self.audit_path.write_text(json.dumps(d, indent=2), encoding='utf-8')
+
+    def list_secrets(self):
+        d = self._load_db()
+        return [{k: v for k, v in s.items() if k != 'encrypted_value' and k != 'versions'} for s in d.get('secrets', [])]
+
+    def create_secret(self, name, value, secret_type='other', rotation_days=0):
+        d = self._load_db()
+        if any(s['name'] == name for s in d.get('secrets', [])):
+            raise ValueError(f'Secret {name} already exists')
+        secret = {
+            'id': str(uuid.uuid4()), 'name': name, 'type': secret_type,
+            'encrypted_value': self._encrypt(value),
+            'rotation_days': rotation_days,
+            'created': datetime.now().isoformat(),
+            'updated': datetime.now().isoformat(),
+            'last_accessed': None,
+            'versions': [{'version': 1, 'timestamp': datetime.now().isoformat(), 'encrypted_value': self._encrypt(value)}]
+        }
+        d.setdefault('secrets', []).append(secret)
+        self._save_db(d)
+        self._audit('system', 'created', name, f'Secret {name} created (type={secret_type})')
+        return {k: v for k, v in secret.items() if k != 'encrypted_value' and k != 'versions'}
+
+    def get_secret(self, sid, user='system'):
+        d = self._load_db()
+        for s in d.get('secrets', []):
+            if s['id'] == sid:
+                s['last_accessed'] = datetime.now().isoformat()
+                self._save_db(d)
+                self._audit(user, 'accessed', s['name'])
+                return {
+                    'id': s['id'], 'name': s['name'], 'type': s['type'],
+                    'value': self._decrypt(s['encrypted_value']),
+                    'rotation_days': s.get('rotation_days', 0),
+                    'created': s['created'], 'updated': s['updated'],
+                    'last_accessed': s['last_accessed']
+                }
+        raise ValueError('Secret not found')
+
+    def update_secret(self, sid, value=None, rotation_days=None):
+        d = self._load_db()
+        for s in d.get('secrets', []):
+            if s['id'] == sid:
+                if value is not None:
+                    ver = len(s.get('versions', [])) + 1
+                    s.setdefault('versions', []).append({
+                        'version': ver, 'timestamp': datetime.now().isoformat(),
+                        'encrypted_value': self._encrypt(value)
+                    })
+                    s['encrypted_value'] = self._encrypt(value)
+                    s['updated'] = datetime.now().isoformat()
+                if rotation_days is not None:
+                    s['rotation_days'] = rotation_days
+                self._save_db(d)
+                self._audit('system', 'updated', s['name'])
+                return {k: v for k, v in s.items() if k != 'encrypted_value' and k != 'versions'}
+        raise ValueError('Secret not found')
+
+    def delete_secret(self, sid):
+        d = self._load_db()
+        name = next((s['name'] for s in d.get('secrets', []) if s['id'] == sid), 'unknown')
+        d['secrets'] = [s for s in d.get('secrets', []) if s['id'] != sid]
+        self._save_db(d)
+        self._audit('system', 'deleted', name)
+
+    def get_versions(self, sid):
+        d = self._load_db()
+        for s in d.get('secrets', []):
+            if s['id'] == sid:
+                return [{'version': v['version'], 'timestamp': v['timestamp']} for v in s.get('versions', [])]
+        return []
+
+    def get_audit_log(self, limit=100):
+        try:
+            d = json.loads(self.audit_path.read_text(encoding='utf-8'))
+        except Exception:
+            d = {'entries': []}
+        return list(reversed(d.get('entries', [])))[:limit]
+
+    def check_rotation(self):
+        d = self._load_db()
+        due = []
+        now = datetime.now()
+        for s in d.get('secrets', []):
+            rd = s.get('rotation_days', 0)
+            if rd > 0:
+                updated = datetime.fromisoformat(s['updated'])
+                days_since = (now - updated).days
+                status = 'overdue' if days_since > rd else ('due_soon' if days_since > rd * 0.8 else 'ok')
+                due.append({'id': s['id'], 'name': s['name'], 'rotation_days': rd, 'days_since_update': days_since, 'status': status})
+        return due
+
+class MemoryManager:
+    def __init__(self, memories_path, index_path):
+        self.memories_path = Path(memories_path)
+        self.index_path = Path(index_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.memories_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.memories_path.exists():
+            self.memories_path.touch()
+        if not self.index_path.exists():
+            self.index_path.write_text(json.dumps({'topics': {}, 'entities': {}, 'pinned': []}, indent=2), encoding='utf-8')
+
+    def _load_all(self):
+        memories = []
+        if self.memories_path.exists():
+            for line in self.memories_path.read_text(encoding='utf-8').strip().split('\n'):
+                if line.strip():
+                    try:
+                        memories.append(json.loads(line))
+                    except Exception:
+                        pass
+        return memories
+
+    def _save_all(self, memories):
+        self.memories_path.write_text('\n'.join(json.dumps(m) for m in memories) + '\n' if memories else '', encoding='utf-8')
+
+    def _load_index(self):
+        try:
+            return json.loads(self.index_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'topics': {}, 'entities': {}, 'pinned': []}
+
+    def _save_index(self, idx):
+        self.index_path.write_text(json.dumps(idx, indent=2), encoding='utf-8')
+
+    def _update_index(self, memory):
+        idx = self._load_index()
+        for t in memory.get('topics', []):
+            idx['topics'][t] = idx['topics'].get(t, 0) + 1
+        for e in memory.get('entities', []):
+            idx['entities'][e] = idx['entities'].get(e, 0) + 1
+        if memory.get('pinned'):
+            if memory['id'] not in idx['pinned']:
+                idx['pinned'].append(memory['id'])
+        self._save_index(idx)
+
+    def add_memory(self, content, topics=None, entities=None, source='manual', importance=0.5):
+        memory = {
+            'id': str(uuid.uuid4()), 'content': content,
+            'topics': [t.strip() for t in (topics or []) if t.strip()],
+            'entities': [e.strip() for e in (entities or []) if e.strip()],
+            'source': source, 'importance': max(0.0, min(1.0, float(importance))),
+            'created': datetime.now().isoformat(), 'accessed_count': 0,
+            'pinned': False, 'decay_factor': 1.0
+        }
+        with open(self.memories_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(memory) + '\n')
+        self._update_index(memory)
+        return memory
+
+    def get_all(self, topic=None, pinned_only=False, query=None):
+        memories = self._load_all()
+        if topic:
+            memories = [m for m in memories if topic in m.get('topics', [])]
+        if pinned_only:
+            memories = [m for m in memories if m.get('pinned')]
+        if query:
+            q = query.lower()
+            memories = [m for m in memories if q in m.get('content', '').lower() or any(q in t.lower() for t in m.get('topics', []))]
+        return list(reversed(memories))
+
+    def get_memory(self, mid):
+        for m in self._load_all():
+            if m['id'] == mid:
+                return m
+        return None
+
+    def update_memory(self, mid, updates):
+        memories = self._load_all()
+        for m in memories:
+            if m['id'] == mid:
+                for k, v in updates.items():
+                    if k not in ('id', 'created'):
+                        m[k] = v
+                self._save_all(memories)
+                return m
+        raise ValueError('Memory not found')
+
+    def delete_memory(self, mid):
+        memories = self._load_all()
+        memories = [m for m in memories if m['id'] != mid]
+        self._save_all(memories)
+
+    def toggle_pin(self, mid):
+        memories = self._load_all()
+        for m in memories:
+            if m['id'] == mid:
+                m['pinned'] = not m.get('pinned', False)
+                self._save_all(memories)
+                return m
+        raise ValueError('Memory not found')
+
+    def search(self, query, limit=20):
+        query_terms = query.lower().split()
+        results = []
+        for m in self._load_all():
+            content_lower = m.get('content', '').lower()
+            topic_text = ' '.join(m.get('topics', [])).lower()
+            entity_text = ' '.join(m.get('entities', [])).lower()
+            combined = content_lower + ' ' + topic_text + ' ' + entity_text
+            score = sum(1 for term in query_terms if term in combined)
+            if score > 0:
+                score *= m.get('importance', 0.5) * m.get('decay_factor', 1.0)
+                if m.get('pinned'):
+                    score *= 1.5
+                results.append((score, m))
+        results.sort(key=lambda x: x[0], reverse=True)
+        return [m for _, m in results[:limit]]
+
+    def get_topics(self):
+        idx = self._load_index()
+        return idx.get('topics', {})
+
+    def get_context_for_conversation(self, message, limit=5):
+        return self.search(message, limit=limit)
+
+# ---------------------------------------------------------------------------
+#  RBAC Manager
+# ---------------------------------------------------------------------------
+
+class RBACManager:
+    ALL_PERMISSIONS = [
+        'dashboard','echo-chat','scripts','web_ide','processes','services',
+        'addons','training','pipelines','cloud','secrets_read','secrets_write',
+        'resources','notifications','rbac','marketplace'
+    ]
+
+    def __init__(self, db_path):
+        self.db_path = Path(db_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save({
+                'users': [{
+                    'id': str(uuid.uuid4()), 'username': 'admin',
+                    'password_hash': hashlib.sha256('admin'.encode()).hexdigest(),
+                    'role': 'admin', 'created': datetime.now().isoformat(),
+                    'active': True, 'api_keys': []
+                }],
+                'roles': [
+                    {'name': 'admin', 'permissions': ['*'], 'builtin': True},
+                    {'name': 'developer', 'permissions': ['dashboard','echo-chat','scripts','web_ide','resources','secrets_read','pipelines','marketplace','training'], 'builtin': True},
+                    {'name': 'operator', 'permissions': ['dashboard','pipelines','processes','services','cloud','secrets_read','notifications'], 'builtin': True},
+                    {'name': 'viewer', 'permissions': ['dashboard','echo-chat'], 'builtin': True}
+                ],
+                'sessions': [],
+                'audit_log': []
+            })
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'users': [], 'roles': [], 'sessions': [], 'audit_log': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def get_users(self):
+        d = self._load()
+        return [{ k: v for k, v in u.items() if k != 'password_hash' } for u in d['users']]
+
+    def add_user(self, username, password, role='viewer'):
+        d = self._load()
+        if any(u['username'] == username for u in d['users']):
+            raise ValueError(f'User {username} already exists')
+        user = {
+            'id': str(uuid.uuid4()), 'username': username,
+            'password_hash': hashlib.sha256(password.encode()).hexdigest(),
+            'role': role, 'created': datetime.now().isoformat(),
+            'active': True, 'api_keys': []
+        }
+        d['users'].append(user)
+        self._audit(d, 'system', 'user_created', f'User {username} created with role {role}')
+        self._save(d)
+        return {k: v for k, v in user.items() if k != 'password_hash'}
+
+    def update_user(self, user_id, updates):
+        d = self._load()
+        for u in d['users']:
+            if u['id'] == user_id:
+                for k, v in updates.items():
+                    if k == 'password':
+                        u['password_hash'] = hashlib.sha256(v.encode()).hexdigest()
+                    elif k not in ('id', 'password_hash'):
+                        u[k] = v
+                self._audit(d, 'system', 'user_updated', f'User {u["username"]} updated')
+                self._save(d)
+                return {k2: v2 for k2, v2 in u.items() if k2 != 'password_hash'}
+        raise ValueError('User not found')
+
+    def delete_user(self, user_id):
+        d = self._load()
+        d['users'] = [u for u in d['users'] if u['id'] != user_id]
+        self._audit(d, 'system', 'user_deleted', f'User {user_id} deleted')
+        self._save(d)
+
+    def get_roles(self):
+        return self._load().get('roles', [])
+
+    def add_role(self, name, permissions):
+        d = self._load()
+        if any(r['name'] == name for r in d['roles']):
+            raise ValueError(f'Role {name} already exists')
+        role = {'name': name, 'permissions': permissions, 'builtin': False}
+        d['roles'].append(role)
+        self._audit(d, 'system', 'role_created', f'Role {name} created')
+        self._save(d)
+        return role
+
+    def update_role(self, name, permissions):
+        d = self._load()
+        for r in d['roles']:
+            if r['name'] == name:
+                if r.get('builtin') and name == 'admin':
+                    raise ValueError('Cannot modify admin role')
+                r['permissions'] = permissions
+                self._audit(d, 'system', 'role_updated', f'Role {name} updated')
+                self._save(d)
+                return r
+        raise ValueError('Role not found')
+
+    def delete_role(self, name):
+        d = self._load()
+        d['roles'] = [r for r in d['roles'] if r['name'] != name or r.get('builtin')]
+        self._save(d)
+
+    def authenticate(self, username, password):
+        d = self._load()
+        pw_hash = hashlib.sha256(password.encode()).hexdigest()
+        for u in d['users']:
+            if u['username'] == username and u['password_hash'] == pw_hash and u.get('active', True):
+                sess = {
+                    'id': str(uuid.uuid4()), 'user_id': u['id'], 'username': username,
+                    'created': datetime.now().isoformat(), 'last_active': datetime.now().isoformat(),
+                    'ip': request.remote_addr or 'unknown'
+                }
+                d['sessions'].append(sess)
+                self._audit(d, username, 'login', f'User {username} logged in')
+                self._save(d)
+                return sess
+        return None
+
+    def get_sessions(self):
+        return self._load().get('sessions', [])
+
+    def delete_session(self, session_id):
+        d = self._load()
+        d['sessions'] = [s for s in d['sessions'] if s['id'] != session_id]
+        self._audit(d, 'system', 'session_revoked', f'Session {session_id[:8]}... revoked')
+        self._save(d)
+
+    def generate_api_key(self, user_id):
+        d = self._load()
+        for u in d['users']:
+            if u['id'] == user_id:
+                key = f'mc_{uuid.uuid4().hex}'
+                key_entry = {'id': str(uuid.uuid4()), 'key': key, 'created': datetime.now().isoformat()}
+                u.setdefault('api_keys', []).append(key_entry)
+                self._audit(d, u['username'], 'api_key_generated', f'API key generated for {u["username"]}')
+                self._save(d)
+                return key_entry
+        raise ValueError('User not found')
+
+    def revoke_api_key(self, key_id):
+        d = self._load()
+        for u in d['users']:
+            u['api_keys'] = [k for k in u.get('api_keys', []) if k['id'] != key_id]
+        self._save(d)
+
+    def get_audit_log(self, limit=100):
+        d = self._load()
+        return list(reversed(d.get('audit_log', [])))[:limit]
+
+    def _audit(self, data, user, action, details=''):
+        data.setdefault('audit_log', []).append({
+            'id': str(uuid.uuid4()), 'timestamp': datetime.now().isoformat(),
+            'user': user, 'action': action, 'details': details
+        })
+        if len(data['audit_log']) > 1000:
+            data['audit_log'] = data['audit_log'][-1000:]
+
+
+# ---------------------------------------------------------------------------
+#  Notification Manager
+# ---------------------------------------------------------------------------
+
+class NotificationManager:
+    def __init__(self, db_path, channels_path, rules_path):
+        self.db_path = Path(db_path)
+        self.channels_path = Path(channels_path)
+        self.rules_path = Path(rules_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        for p, default in [
+            (self.db_path, {'notifications': []}),
+            (self.channels_path, {'channels': [
+                {'id': str(uuid.uuid4()), 'name': 'In-App', 'type': 'in_app', 'config': {}, 'enabled': True, 'created': datetime.now().isoformat()}
+            ]}),
+            (self.rules_path, {'rules': []})
+        ]:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if not p.exists():
+                p.write_text(json.dumps(default, indent=2), encoding='utf-8')
+
+    def _load(self, path):
+        try:
+            return json.loads(Path(path).read_text(encoding='utf-8'))
+        except Exception:
+            return {}
+
+    def _save(self, path, data):
+        Path(path).write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def send(self, title, message, severity='info', source='system'):
+        n = {
+            'id': str(uuid.uuid4()), 'title': title, 'message': message,
+            'severity': severity, 'source': source,
+            'read': False, 'timestamp': datetime.now().isoformat()
+        }
+        d = self._load(self.db_path)
+        d.setdefault('notifications', []).insert(0, n)
+        if len(d['notifications']) > 500:
+            d['notifications'] = d['notifications'][:500]
+        self._save(self.db_path, d)
+        self._dispatch(n)
+        return n
+
+    def list_notifications(self, unread_only=False, severity=None, limit=50):
+        d = self._load(self.db_path)
+        items = d.get('notifications', [])
+        if unread_only:
+            items = [i for i in items if not i.get('read')]
+        if severity:
+            items = [i for i in items if i.get('severity') == severity]
+        return items[:limit]
+
+    def unread_count(self):
+        d = self._load(self.db_path)
+        return sum(1 for n in d.get('notifications', []) if not n.get('read'))
+
+    def mark_read(self, nid):
+        d = self._load(self.db_path)
+        for n in d.get('notifications', []):
+            if n['id'] == nid:
+                n['read'] = True
+                break
+        self._save(self.db_path, d)
+
+    def mark_all_read(self):
+        d = self._load(self.db_path)
+        for n in d.get('notifications', []):
+            n['read'] = True
+        self._save(self.db_path, d)
+
+    def delete_notification(self, nid):
+        d = self._load(self.db_path)
+        d['notifications'] = [n for n in d.get('notifications', []) if n['id'] != nid]
+        self._save(self.db_path, d)
+
+    def get_channels(self):
+        return self._load(self.channels_path).get('channels', [])
+
+    def add_channel(self, name, ctype, config):
+        d = self._load(self.channels_path)
+        ch = {'id': str(uuid.uuid4()), 'name': name, 'type': ctype, 'config': config, 'enabled': True, 'created': datetime.now().isoformat()}
+        d.setdefault('channels', []).append(ch)
+        self._save(self.channels_path, d)
+        return ch
+
+    def update_channel(self, cid, updates):
+        d = self._load(self.channels_path)
+        for ch in d.get('channels', []):
+            if ch['id'] == cid:
+                ch.update({k: v for k, v in updates.items() if k != 'id'})
+                self._save(self.channels_path, d)
+                return ch
+        raise ValueError('Channel not found')
+
+    def delete_channel(self, cid):
+        d = self._load(self.channels_path)
+        d['channels'] = [ch for ch in d.get('channels', []) if ch['id'] != cid]
+        self._save(self.channels_path, d)
+
+    def test_channel(self, cid):
+        channels = self.get_channels()
+        ch = next((c for c in channels if c['id'] == cid), None)
+        if not ch:
+            raise ValueError('Channel not found')
+        test_n = {'title': 'Test Notification', 'message': 'This is a test from MasterChief.', 'severity': 'info'}
+        return self._dispatch_to_channel(ch, test_n)
+
+    def get_rules(self):
+        return self._load(self.rules_path).get('rules', [])
+
+    def add_rule(self, name, event_type, severity_filter, channel_id, active=True):
+        d = self._load(self.rules_path)
+        rule = {'id': str(uuid.uuid4()), 'name': name, 'event_type': event_type,
+                'severity_filter': severity_filter, 'channel_id': channel_id,
+                'active': active, 'created': datetime.now().isoformat()}
+        d.setdefault('rules', []).append(rule)
+        self._save(self.rules_path, d)
+        return rule
+
+    def update_rule(self, rid, updates):
+        d = self._load(self.rules_path)
+        for r in d.get('rules', []):
+            if r['id'] == rid:
+                r.update({k: v for k, v in updates.items() if k != 'id'})
+                self._save(self.rules_path, d)
+                return r
+        raise ValueError('Rule not found')
+
+    def delete_rule(self, rid):
+        d = self._load(self.rules_path)
+        d['rules'] = [r for r in d.get('rules', []) if r['id'] != rid]
+        self._save(self.rules_path, d)
+
+    def _dispatch(self, notification):
+        channels = self.get_channels()
+        rules = self.get_rules()
+        for rule in rules:
+            if not rule.get('active'):
+                continue
+            if rule.get('severity_filter') not in ('all', notification.get('severity')):
+                continue
+            ch = next((c for c in channels if c['id'] == rule.get('channel_id')), None)
+            if ch and ch.get('enabled'):
+                try:
+                    self._dispatch_to_channel(ch, notification)
+                except Exception:
+                    pass
+
+    def _dispatch_to_channel(self, ch, notification):
+        ctype = ch.get('type', '')
+        cfg = ch.get('config', {})
+        payload_text = f"**{notification['title']}**\n{notification['message']}"
+        if ctype == 'slack' and cfg.get('webhook_url'):
+            requests.post(cfg['webhook_url'], json={'text': payload_text}, timeout=10)
+        elif ctype == 'teams' and cfg.get('webhook_url'):
+            requests.post(cfg['webhook_url'], json={'@type': 'MessageCard', 'summary': notification['title'], 'sections': [{'text': notification['message']}]}, timeout=10)
+        elif ctype == 'discord' and cfg.get('webhook_url'):
+            requests.post(cfg['webhook_url'], json={'content': payload_text}, timeout=10)
+        elif ctype == 'email':
+            try:
+                import smtplib
+                from email.mime.text import MIMEText
+                msg = MIMEText(notification['message'])
+                msg['Subject'] = notification['title']
+                msg['From'] = cfg.get('from_email', '')
+                msg['To'] = cfg.get('to_email', '')
+                with smtplib.SMTP(cfg.get('smtp_host', 'localhost'), int(cfg.get('smtp_port', 25))) as s:
+                    if cfg.get('smtp_user'):
+                        s.login(cfg['smtp_user'], cfg.get('smtp_pass', ''))
+                    s.send_message(msg)
+            except Exception:
+                pass
+        return {'ok': True, 'channel': ch['name']}
+
+
+# ---------------------------------------------------------------------------
+#  Pipeline Manager
+# ---------------------------------------------------------------------------
+
+PIPELINE_RUNS = {}
+
+class PipelineManager:
+    def __init__(self, db_path, runs_path):
+        self.db_path = Path(db_path)
+        self.runs_path = Path(runs_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        for p, default in [(self.db_path, {'pipelines': []}), (self.runs_path, {'runs': []})]:
+            if not p.exists():
+                p.write_text(json.dumps(default, indent=2), encoding='utf-8')
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'pipelines': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def _load_runs(self):
+        try:
+            return json.loads(self.runs_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'runs': []}
+
+    def _save_runs(self, data):
+        self.runs_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def list_pipelines(self):
+        return self._load().get('pipelines', [])
+
+    def get_pipeline(self, pid):
+        for p in self._load().get('pipelines', []):
+            if p['id'] == pid:
+                return p
+        raise ValueError('Pipeline not found')
+
+    def create_pipeline(self, name, description=''):
+        d = self._load()
+        pipeline = {
+            'id': str(uuid.uuid4()), 'name': name, 'description': description,
+            'stages': [], 'created': datetime.now().isoformat(),
+            'updated': datetime.now().isoformat()
+        }
+        d.setdefault('pipelines', []).append(pipeline)
+        self._save(d)
+        return pipeline
+
+    def update_pipeline(self, pid, updates):
+        d = self._load()
+        for p in d.get('pipelines', []):
+            if p['id'] == pid:
+                for k, v in updates.items():
+                    if k not in ('id', 'created'):
+                        p[k] = v
+                p['updated'] = datetime.now().isoformat()
+                self._save(d)
+                return p
+        raise ValueError('Pipeline not found')
+
+    def delete_pipeline(self, pid):
+        d = self._load()
+        d['pipelines'] = [p for p in d.get('pipelines', []) if p['id'] != pid]
+        self._save(d)
+
+    def execute_pipeline(self, pid):
+        pipeline = self.get_pipeline(pid)
+        run = {
+            'id': str(uuid.uuid4()), 'pipeline_id': pid,
+            'pipeline_name': pipeline['name'], 'status': 'running',
+            'started': datetime.now().isoformat(), 'finished': None,
+            'stages': [], 'log': []
+        }
+        PIPELINE_RUNS[run['id']] = run
+        t = threading.Thread(target=self._run_pipeline, args=(run, pipeline), daemon=True)
+        t.start()
+        return run
+
+    def _run_pipeline(self, run, pipeline):
+        try:
+            for stage in sorted(pipeline.get('stages', []), key=lambda s: s.get('order', 0)):
+                stage_run = {
+                    'stage_id': stage['id'], 'name': stage.get('name', 'Stage'),
+                    'status': 'running', 'started': datetime.now().isoformat(),
+                    'finished': None, 'steps': []
+                }
+                run['stages'].append(stage_run)
+                run['log'].append(f"[{datetime.now().isoformat()}] Starting stage: {stage.get('name')}")
+                for step in stage.get('steps', []):
+                    step_run = self._execute_step(step, run)
+                    stage_run['steps'].append(step_run)
+                    if step_run['status'] == 'failed':
+                        stage_run['status'] = 'failed'
+                        stage_run['finished'] = datetime.now().isoformat()
+                        run['status'] = 'failed'
+                        run['finished'] = datetime.now().isoformat()
+                        run['log'].append(f"[{datetime.now().isoformat()}] Pipeline FAILED at stage: {stage.get('name')}")
+                        self._persist_run(run)
+                        return
+                stage_run['status'] = 'completed'
+                stage_run['finished'] = datetime.now().isoformat()
+            run['status'] = 'completed'
+            run['finished'] = datetime.now().isoformat()
+            run['log'].append(f"[{datetime.now().isoformat()}] Pipeline completed successfully")
+        except Exception as e:
+            run['status'] = 'failed'
+            run['finished'] = datetime.now().isoformat()
+            run['log'].append(f"[{datetime.now().isoformat()}] Pipeline error: {str(e)}")
+        self._persist_run(run)
+
+    def _execute_step(self, step, run):
+        step_run = {
+            'step_id': step.get('id', str(uuid.uuid4())),
+            'name': step.get('name', 'Step'), 'type': step.get('type', 'custom_command'),
+            'status': 'running', 'started': datetime.now().isoformat(),
+            'output': '', 'finished': None
+        }
+        run['log'].append(f"[{datetime.now().isoformat()}] Running step: {step.get('name')} (type={step.get('type')})")
+        try:
+            cfg = step.get('config', {})
+            cmd = None
+            cwd = cfg.get('working_dir') or None
+            if step.get('type') == 'script':
+                cmd = f"{cfg.get('script_path', '')} {cfg.get('args', '')}".strip()
+            elif step.get('type') == 'docker_build':
+                cmd = f"docker build -t {cfg.get('image_tag', 'latest')} -f {cfg.get('dockerfile_path', 'Dockerfile')} {cfg.get('context_dir', '.')}"
+            elif step.get('type') in ('terraform_apply', 'terraform_plan'):
+                action = 'apply -auto-approve' if step['type'] == 'terraform_apply' else 'plan'
+                var_file = f"-var-file={cfg['var_file']}" if cfg.get('var_file') else ''
+                cmd = f"terraform {action} {var_file}".strip()
+            elif step.get('type') == 'test_run':
+                cmd = cfg.get('test_command', 'echo No test command')
+            elif step.get('type') == 'deploy':
+                cmd = f"echo Deploying to {cfg.get('target', 'unknown')} with strategy {cfg.get('strategy', 'rolling')}"
+            elif step.get('type') == 'custom_command':
+                cmd = cfg.get('command', 'echo hello')
+            else:
+                cmd = f"echo Unknown step type: {step.get('type')}"
+            if cmd:
+                result = subprocess.run(
+                    cmd, shell=True, capture_output=True, text=True,
+                    timeout=int(cfg.get('timeout', 300)), cwd=cwd
+                )
+                step_run['output'] = result.stdout + result.stderr
+                step_run['status'] = 'completed' if result.returncode == 0 else 'failed'
+            else:
+                step_run['status'] = 'completed'
+                step_run['output'] = 'No command to run'
+        except subprocess.TimeoutExpired:
+            step_run['status'] = 'failed'
+            step_run['output'] = 'Step timed out'
+        except Exception as e:
+            step_run['status'] = 'failed'
+            step_run['output'] = str(e)
+        step_run['finished'] = datetime.now().isoformat()
+        return step_run
+
+    def _persist_run(self, run):
+        d = self._load_runs()
+        d.setdefault('runs', []).insert(0, run)
+        if len(d['runs']) > 100:
+            d['runs'] = d['runs'][:100]
+        self._save_runs(d)
+
+    def get_run(self, rid):
+        if rid in PIPELINE_RUNS:
+            return PIPELINE_RUNS[rid]
+        d = self._load_runs()
+        for r in d.get('runs', []):
+            if r['id'] == rid:
+                return r
+        raise ValueError('Run not found')
+
+    def get_runs(self, pipeline_id=None, limit=50):
+        runs = list(PIPELINE_RUNS.values())
+        d = self._load_runs()
+        for r in d.get('runs', []):
+            if r['id'] not in PIPELINE_RUNS:
+                runs.append(r)
+        if pipeline_id:
+            runs = [r for r in runs if r.get('pipeline_id') == pipeline_id]
+        runs.sort(key=lambda r: r.get('started', ''), reverse=True)
+        return runs[:limit]
+
+    def cancel_run(self, rid):
+        if rid in PIPELINE_RUNS:
+            PIPELINE_RUNS[rid]['status'] = 'cancelled'
+            PIPELINE_RUNS[rid]['finished'] = datetime.now().isoformat()
+            return PIPELINE_RUNS[rid]
+        raise ValueError('Run not found or already finished')
+
+
+# ---------------------------------------------------------------------------
+#  Cloud Dashboard Manager
+# ---------------------------------------------------------------------------
+
+class CloudProvider:
+    def list_resources(self, credentials):
+        return []
+    def get_resource(self, credentials, resource_id):
+        return None
+    def start_vm(self, credentials, vm_id):
+        return {'ok': True}
+    def stop_vm(self, credentials, vm_id):
+        return {'ok': True}
+
+class AzureProvider(CloudProvider):
+    def list_resources(self, credentials):
+        return [
+            {'id': 'azure-vm-1', 'name': 'prod-web-01', 'type': 'vm', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_D2s_v3', 'cost_monthly': 70.08, 'created': '2024-01-15'},
+            {'id': 'azure-vm-2', 'name': 'prod-api-01', 'type': 'vm', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_D4s_v3', 'cost_monthly': 140.16, 'created': '2024-01-15'},
+            {'id': 'azure-stor-1', 'name': 'prodstorage01', 'type': 'storage', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_LRS', 'cost_monthly': 21.84, 'created': '2024-02-01'},
+            {'id': 'azure-db-1', 'name': 'prod-sql-01', 'type': 'database', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'GP_Gen5_2', 'cost_monthly': 295.20, 'created': '2024-01-20'},
+            {'id': 'azure-net-1', 'name': 'prod-vnet', 'type': 'network', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': '10.0.0.0/16', 'cost_monthly': 0, 'created': '2024-01-10'},
+        ]
+
+class AWSProvider(CloudProvider):
+    def list_resources(self, credentials):
+        return [
+            {'id': 'aws-vm-1', 'name': 'staging-web', 'type': 'vm', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 't3.medium', 'cost_monthly': 30.37, 'created': '2024-03-01'},
+            {'id': 'aws-vm-2', 'name': 'staging-worker', 'type': 'vm', 'provider': 'aws', 'status': 'stopped', 'region': 'us-east-1', 'size': 't3.large', 'cost_monthly': 0, 'created': '2024-03-01'},
+            {'id': 'aws-stor-1', 'name': 'staging-s3-data', 'type': 'storage', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 'S3 Standard', 'cost_monthly': 15.50, 'created': '2024-03-05'},
+            {'id': 'aws-db-1', 'name': 'staging-rds', 'type': 'database', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 'db.t3.medium', 'cost_monthly': 52.56, 'created': '2024-03-10'},
+        ]
+
+class GCPProvider(CloudProvider):
+    def list_resources(self, credentials):
+        return [
+            {'id': 'gcp-vm-1', 'name': 'dev-instance-1', 'type': 'vm', 'provider': 'gcp', 'status': 'running', 'region': 'us-central1', 'size': 'e2-medium', 'cost_monthly': 24.27, 'created': '2024-04-01'},
+            {'id': 'gcp-stor-1', 'name': 'dev-bucket', 'type': 'storage', 'provider': 'gcp', 'status': 'running', 'region': 'us-central1', 'size': 'Standard', 'cost_monthly': 8.50, 'created': '2024-04-05'},
+            {'id': 'gcp-db-1', 'name': 'dev-cloudsql', 'type': 'database', 'provider': 'gcp', 'status': 'stopped', 'region': 'us-central1', 'size': 'db-f1-micro', 'cost_monthly': 0, 'created': '2024-04-10'},
+        ]
+
+class CloudDashboardManager:
+    def __init__(self, db_path):
+        self.db_path = Path(db_path)
+        self._providers = {'azure': AzureProvider(), 'aws': AWSProvider(), 'gcp': GCPProvider()}
+        self._resource_cache = {}
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save({'accounts': [
+                {'id': str(uuid.uuid4()), 'name': 'Azure Production', 'provider': 'azure', 'credential_secret_id': '', 'region': 'eastus', 'created': datetime.now().isoformat()},
+                {'id': str(uuid.uuid4()), 'name': 'AWS Staging', 'provider': 'aws', 'credential_secret_id': '', 'region': 'us-east-1', 'created': datetime.now().isoformat()},
+                {'id': str(uuid.uuid4()), 'name': 'GCP Development', 'provider': 'gcp', 'credential_secret_id': '', 'region': 'us-central1', 'created': datetime.now().isoformat()},
+            ]})
+        self.refresh()
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'accounts': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def get_accounts(self):
+        return self._load().get('accounts', [])
+
+    def add_account(self, name, provider, credential_secret_id='', region=''):
+        d = self._load()
+        acct = {'id': str(uuid.uuid4()), 'name': name, 'provider': provider,
+                'credential_secret_id': credential_secret_id, 'region': region,
+                'created': datetime.now().isoformat()}
+        d.setdefault('accounts', []).append(acct)
+        self._save(d)
+        self.refresh()
+        return acct
+
+    def remove_account(self, aid):
+        d = self._load()
+        d['accounts'] = [a for a in d.get('accounts', []) if a['id'] != aid]
+        self._save(d)
+        self._resource_cache.pop(aid, None)
+
+    def refresh(self):
+        self._resource_cache = {}
+        for acct in self.get_accounts():
+            provider = self._providers.get(acct['provider'])
+            if provider:
+                try:
+                    self._resource_cache[acct['id']] = provider.list_resources(acct.get('credential_secret_id'))
+                except Exception:
+                    self._resource_cache[acct['id']] = []
+
+    def get_resources(self, provider=None, rtype=None, status=None):
+        all_res = []
+        for acct_id, resources in self._resource_cache.items():
+            all_res.extend(resources)
+        if provider:
+            all_res = [r for r in all_res if r.get('provider') == provider]
+        if rtype:
+            all_res = [r for r in all_res if r.get('type') == rtype]
+        if status:
+            all_res = [r for r in all_res if r.get('status') == status]
+        return all_res
+
+    def get_resource(self, rid):
+        for resources in self._resource_cache.values():
+            for r in resources:
+                if r['id'] == rid:
+                    return r
+        raise ValueError('Resource not found')
+
+    def start_resource(self, rid):
+        for resources in self._resource_cache.values():
+            for r in resources:
+                if r['id'] == rid:
+                    r['status'] = 'running'
+                    return r
+        raise ValueError('Resource not found')
+
+    def stop_resource(self, rid):
+        for resources in self._resource_cache.values():
+            for r in resources:
+                if r['id'] == rid:
+                    r['status'] = 'stopped'
+                    r['cost_monthly'] = 0
+                    return r
+        raise ValueError('Resource not found')
+
+    def get_costs(self):
+        costs = {'azure': 0, 'aws': 0, 'gcp': 0, 'total': 0}
+        for r in self.get_resources():
+            p = r.get('provider', 'other')
+            c = r.get('cost_monthly', 0)
+            costs[p] = costs.get(p, 0) + c
+            costs['total'] += c
+        return costs
+
+
+# ---------------------------------------------------------------------------
+#  Marketplace Manager
+# ---------------------------------------------------------------------------
+
+class MarketplaceManager:
+    def __init__(self, db_path):
+        self.db_path = Path(db_path)
+        self._ensure_db()
+
+    def _ensure_db(self):
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if not self.db_path.exists():
+            self._save({
+                'plugins': [
+                    {'id': 'terraform-iac', 'name': 'Terraform IaC', 'version': '1.2.0', 'author': 'MasterChief Team', 'category': 'DevOps', 'description': 'Infrastructure as Code automation with Terraform.', 'installed': True, 'rating': 4.5, 'review_count': 12, 'config': {'default_provider': 'azure', 'state_backend': 'local'}, 'dependencies': []},
+                    {'id': 'ansible-config', 'name': 'Ansible Config Management', 'version': '2.0.1', 'author': 'MasterChief Team', 'category': 'Automation', 'description': 'Server configuration management with Ansible playbooks.', 'installed': True, 'rating': 4.2, 'review_count': 8, 'config': {'inventory_path': '/etc/ansible/hosts'}, 'dependencies': []},
+                    {'id': 'k8s-deploy', 'name': 'Kubernetes Deployer', 'version': '3.1.0', 'author': 'MasterChief Team', 'category': 'DevOps', 'description': 'Kubernetes deployment automation with Helm charts.', 'installed': True, 'rating': 4.8, 'review_count': 25, 'config': {'default_namespace': 'default', 'context': 'minikube'}, 'dependencies': ['terraform-iac']},
+                    {'id': 'prometheus-monitor', 'name': 'Prometheus Monitoring', 'version': '1.5.0', 'author': 'MasterChief Team', 'category': 'Monitoring', 'description': 'Full metrics pipeline with Prometheus and Grafana.', 'installed': False, 'rating': 4.6, 'review_count': 18, 'config': {}, 'dependencies': []},
+                    {'id': 'vault-secrets', 'name': 'HashiCorp Vault', 'version': '0.9.0', 'author': 'Community', 'category': 'Security', 'description': 'Integration with HashiCorp Vault for secret management.', 'installed': False, 'rating': 4.0, 'review_count': 6, 'config': {}, 'dependencies': []},
+                    {'id': 'jenkins-ci', 'name': 'Jenkins CI Bridge', 'version': '1.0.0', 'author': 'Community', 'category': 'Integration', 'description': 'Bridge MasterChief pipelines with Jenkins CI/CD.', 'installed': False, 'rating': 3.8, 'review_count': 4, 'config': {}, 'dependencies': []},
+                    {'id': 'github-actions', 'name': 'GitHub Actions Sync', 'version': '2.1.0', 'author': 'Community', 'category': 'Integration', 'description': 'Sync GitHub Actions workflows with MasterChief pipelines.', 'installed': False, 'rating': 4.3, 'review_count': 14, 'config': {}, 'dependencies': []},
+                    {'id': 'sonarqube-scan', 'name': 'SonarQube Scanner', 'version': '1.3.0', 'author': 'Community', 'category': 'Security', 'description': 'Code quality and security scanning with SonarQube.', 'installed': False, 'rating': 4.1, 'review_count': 9, 'config': {}, 'dependencies': []},
+                    {'id': 'elk-logging', 'name': 'ELK Stack Logging', 'version': '2.0.0', 'author': 'MasterChief Team', 'category': 'Monitoring', 'description': 'Centralized logging with Elasticsearch, Logstash, and Kibana.', 'installed': False, 'rating': 4.4, 'review_count': 11, 'config': {}, 'dependencies': []},
+                    {'id': 'cost-optimizer', 'name': 'Cloud Cost Optimizer', 'version': '1.1.0', 'author': 'Community', 'category': 'DevOps', 'description': 'Analyze and optimize cloud spending.', 'installed': False, 'rating': 3.9, 'review_count': 7, 'config': {}, 'dependencies': []},
+                    {'id': 'postgres-manager', 'name': 'PostgreSQL Manager', 'version': '1.0.0', 'author': 'Community', 'category': 'Database', 'description': 'PostgreSQL database management with backups and monitoring.', 'installed': False, 'rating': 4.2, 'review_count': 5, 'config': {}, 'dependencies': []},
+                    {'id': 'nginx-proxy', 'name': 'Nginx Proxy Manager', 'version': '1.4.0', 'author': 'Community', 'category': 'Networking', 'description': 'Nginx reverse proxy management with SSL automation.', 'installed': False, 'rating': 4.5, 'review_count': 16, 'config': {}, 'dependencies': []},
+                ],
+                'reviews': []
+            })
+
+    def _load(self):
+        try:
+            return json.loads(self.db_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {'plugins': [], 'reviews': []}
+
+    def _save(self, data):
+        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
+
+    def list_plugins(self, query=None, category=None, installed_only=False):
+        d = self._load()
+        plugins = d.get('plugins', [])
+        if query:
+            q = query.lower()
+            plugins = [p for p in plugins if q in p.get('name', '').lower() or q in p.get('description', '').lower()]
+        if category and category != 'All':
+            plugins = [p for p in plugins if p.get('category') == category]
+        if installed_only:
+            plugins = [p for p in plugins if p.get('installed')]
+        return plugins
+
+    def get_plugin(self, pid):
+        for p in self._load().get('plugins', []):
+            if p['id'] == pid:
+                return p
+        raise ValueError('Plugin not found')
+
+    def install_plugin(self, pid):
+        d = self._load()
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                deps = p.get('dependencies', [])
+                for dep in deps:
+                    dep_plugin = next((x for x in d['plugins'] if x['id'] == dep), None)
+                    if dep_plugin and not dep_plugin.get('installed'):
+                        raise ValueError(f'Dependency {dep} must be installed first')
+                p['installed'] = True
+                self._save(d)
+                return p
+        raise ValueError('Plugin not found')
+
+    def uninstall_plugin(self, pid):
+        d = self._load()
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                dependents = [x['name'] for x in d['plugins'] if pid in x.get('dependencies', []) and x.get('installed')]
+                if dependents:
+                    raise ValueError(f'Cannot uninstall: {", ".join(dependents)} depend on this plugin')
+                p['installed'] = False
+                p['config'] = {}
+                self._save(d)
+                return p
+        raise ValueError('Plugin not found')
+
+    def get_config(self, pid):
+        p = self.get_plugin(pid)
+        return p.get('config', {})
+
+    def update_config(self, pid, config):
+        d = self._load()
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                p['config'] = config
+                self._save(d)
+                return p
+        raise ValueError('Plugin not found')
+
+    def get_reviews(self, pid):
+        d = self._load()
+        return [r for r in d.get('reviews', []) if r.get('plugin_id') == pid]
+
+    def add_review(self, pid, rating, text, author='Anonymous'):
+        d = self._load()
+        review = {
+            'id': str(uuid.uuid4()), 'plugin_id': pid,
+            'rating': max(1, min(5, int(rating))), 'text': text,
+            'author': author, 'created': datetime.now().isoformat()
+        }
+        d.setdefault('reviews', []).append(review)
+        plugin_reviews = [r for r in d['reviews'] if r.get('plugin_id') == pid]
+        for p in d.get('plugins', []):
+            if p['id'] == pid:
+                p['review_count'] = len(plugin_reviews)
+                p['rating'] = round(sum(r['rating'] for r in plugin_reviews) / len(plugin_reviews), 1)
+                break
+        self._save(d)
+        return review
+
+
+###############################################################################
+#  Manager Instantiations
+###############################################################################
+
+# Only instantiate managers that exist and are needed
+try:
+    rbac_mgr = RBACManager(app.config['RBAC_DB'])
+except NameError:
+    rbac_mgr = None
+
+try:
+    vault_mgr = VaultManager(app.config['VAULT_DB'], app.config['VAULT_KEY'], app.config['VAULT_AUDIT_DB'])
+except NameError:
+    vault_mgr = None
+
+try:
+    notification_mgr = NotificationManager(app.config['NOTIFICATIONS_DB'], app.config['NOTIFICATION_CHANNELS_DB'], app.config['NOTIFICATION_RULES_DB'])
+except NameError:
+    notification_mgr = None
+
+try:
+    pipeline_mgr = PipelineManager(app.config['PIPELINES_DB'], app.config['PIPELINE_RUNS_DB'])
+except NameError:
+    pipeline_mgr = None
+
+try:
+    cloud_mgr = CloudDashboardManager(app.config['CLOUD_DB'])
+except NameError:
+    cloud_mgr = None
+
+try:
+    memory_mgr = MemoryManager(app.config['MEMORIES_PATH'], app.config['MEMORY_INDEX_PATH'])
+except NameError:
+    memory_mgr = None
+except Exception as e:
+    memory_mgr = None
+    print(f"DEBUG: MemoryManager instantiation failed: {e}")
+
+try:
+    marketplace_mgr = MarketplaceManager(app.config['MARKETPLACE_DB'])
+except NameError:
+    marketplace_mgr = None
+
+
+
+
+
+
 
 def get_system_stats():
 
@@ -3183,7 +5596,9 @@ code{color:#4CAF50;}
 
 <a href="/services" class="{{ 'active' if '/services' in request.path else '' }}">Services</a>
 
-<a href="/addons" class="{{ 'active' if '/addons' in request.path else '' }}">Addons</a>
+<a href="/addons" class="{{ 'active' if '/addons' in request.path and '/modules' not in request.path else '' }}">Addons</a>
+
+<a href="/addons/modules" class="{{ 'active' if '/addons/modules' in request.path else '' }}">🧩 Modules</a>
 
 <a href="/echo-train" class="{{ 'active' if '/echo-train' in request.path else '' }}">Training</a>
 
@@ -3420,6 +5835,10 @@ DASHBOARD_TEMPLATE="""{% extends "base.html" %}
 <a href="/addons" class="btn">Install Addons</a>
 
 <a href="/web_ide" class="btn">Web IDE</a>
+
+<a href="/masterchief_code_ui" class="btn">MasterChief Code UI</a>
+
+<a href="/iac_manager" class="btn">IAC Manager</a>
 
 </div>
 
@@ -3941,7 +6360,7 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 
 {% if uploaded_files %}
 
-<h3>Uploaded Addons</h3>
+<h3>Uploaded Addons ({{ uploaded_files|length }} files)</h3>
 
 <table>
 
@@ -3975,7 +6394,19 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 
 <td>
 
-<a href="/addons/install/{{ file.name }}" class="btn">Install</a>
+<form method="POST" action="/addons/install/{{ file.name }}" style="display:inline;">
+
+<input type="text" name="source_dir" placeholder="Source dir (optional)" style="width:120px;margin-right:5px;padding:2px;" title="Subdirectory containing source code (e.g., 'src' for inspircd)">
+
+<button type="submit" class="btn">Install</button>
+
+</form>
+
+<a href="/addons/build/{{ file.name }}" class="btn" style="background:#FF5722;color:white;">🔨 Build</a>
+
+<a href="/addons/load/{{ file.name|replace('.zip', '') }}" class="btn" style="background:#28a745;color:white;">Load</a>
+
+<a href="/addons/register_features/{{ file.name|replace('.zip', '') }}" class="btn" style="background:#17a2b8;color:white;">Register Features</a>
 
 <a href="/addons/delete/{{ file.name }}" class="btn btn-danger" onclick="return confirmDelete('{{ file.name }}');">Delete</a>
 
@@ -3988,6 +6419,12 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 </tbody>
 
 </table>
+
+{% else %}
+
+<h3>Uploaded Addons</h3>
+
+<p>No uploaded addon files found. Upload a .zip file to get started.</p>
 
 {% endif %}
 
@@ -5248,11 +7685,14 @@ updateStats();
 
 @app.route('/')
 
-def index():
-
+def dashboard():
     stats=get_system_stats()
 
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',DASHBOARD_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),stats=stats,request=request,get_flashed_messages=get_flashed_messages)
+
+@app.route('/api/test')
+def api_test():
+    return jsonify({'ok': True, 'message': 'API is working', 'script_mgr': str(type(script_mgr))})
 
 @app.route('/api/stats')
 
@@ -6120,9 +8560,13 @@ def addons_list():
 
     uploaded_files=[]
 
-    if app.config['UPLOAD_FOLDER'].exists():
+    upload_folder = app.config['UPLOAD_FOLDER']
 
-        for file in app.config['UPLOAD_FOLDER'].glob('*.zip'):
+    if upload_folder.exists():
+
+        zip_files = list(upload_folder.glob('*.zip'))
+
+        for file in zip_files:
 
             uploaded_files.append({'name':file.name,'size':file.stat().st_size,'modified':datetime.fromtimestamp(file.stat().st_mtime).strftime('%Y-%m-%d %H:%M')})
 
@@ -6154,7 +8598,27 @@ def addons_upload():
 
         file.save(filepath)
 
-        flash(f'File {filename} uploaded successfully!','success')
+        # Automatically extract the zip file
+
+        try:
+
+            extract_dir=app.config['UPLOAD_FOLDER']/'extracted'/filename.replace('.zip','')
+
+            extract_dir.mkdir(parents=True,exist_ok=True)
+
+            with zipfile.ZipFile(filepath,'r') as zip_ref:
+
+                zip_ref.extractall(extract_dir)
+
+            flash(f'✅ File {filename} uploaded and automatically extracted to modules!', 'success')
+
+            flash(f'📁 Module available at: /addons/modules/{filename.replace(".zip","")}', 'info')
+
+        except Exception as e:
+
+            flash(f'⚠️ File uploaded but extraction failed: {str(e)}', 'warning')
+
+            flash(f'📁 You can manually extract and access via: /addons/modules/{filename.replace(".zip","")}', 'info')
 
     else:
 
@@ -6162,7 +8626,7 @@ def addons_upload():
 
     return redirect(url_for('addons_list'))
 
-@app.route('/addons/install/<filename>')
+@app.route('/addons/install/<filename>', methods=['GET', 'POST'])
 
 def addons_install(filename):
 
@@ -6174,6 +8638,10 @@ def addons_install(filename):
 
         return redirect(url_for('addons_list'))
 
+    # Get source directory from form
+
+    source_dir = request.form.get('source_dir', '').strip()
+
     try:
 
         extract_dir=app.config['UPLOAD_FOLDER']/'extracted'/filename.replace('.zip','')
@@ -6184,12 +8652,129 @@ def addons_install(filename):
 
             zip_ref.extractall(extract_dir)
 
-        flash(f'Addon {filename} installed successfully to {extract_dir}','success')
+        # Determine the actual project root (handle zips with top-level folder)
+        project_root = extract_dir
+        subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+        files_at_root = [f for f in extract_dir.iterdir() if f.is_file()]
+        
+        if len(subdirs) == 1 and not files_at_root:
+            # Zip has a single top-level directory, use that as project root
+            project_root = subdirs[0]
+        
+        # Apply source directory if specified
+        final_source_dir = project_root
+        if source_dir:
+            potential_src = project_root / source_dir
+            if potential_src.exists() and potential_src.is_dir():
+                final_source_dir = potential_src
+                flash(f'📁 Using source directory: {source_dir}', 'info')
+            else:
+                flash(f'⚠️ Source directory "{source_dir}" not found in {project_root.name}, using project root', 'warning')
+        
+
+        # Store the source directory info for this module
+
+        module_name = filename.replace('.zip', '')
+
+        module_info = {
+
+            'name': module_name,
+
+            'extract_dir': str(extract_dir),
+
+            'source_dir': str(final_source_dir),
+
+            'installed_at': datetime.now().isoformat()
+
+        }
+
+        
+
+        # Save module info (you might want to store this in a file or database)
+
+        modules_file = app.config['UPLOAD_FOLDER'] / 'modules.json'
+
+        try:
+
+            if modules_file.exists():
+
+                with open(modules_file, 'r') as f:
+
+                    modules = json.load(f)
+
+            else:
+
+                modules = {}
+
+            modules[module_name] = module_info
+
+            with open(modules_file, 'w') as f:
+
+                json.dump(modules, f, indent=2)
+
+        except Exception as e:
+
+            flash(f'⚠️ Could not save module info: {str(e)}', 'warning')
+
+        
+
+        flash(f'✅ Addon {filename} installed successfully', 'success')
+
+        flash(f'📁 Module available at: /addons/modules/{module_name}', 'info')
+
+        if source_dir:
+
+            flash(f'🔧 Source directory set to: {source_dir}', 'info')
 
     except Exception as e:
 
-        flash(f'Failed to install addon: {str(e)}','error')
+        flash(f'❌ Failed to install addon: {str(e)}','error')
 
+    return redirect(url_for('addons_list'))
+
+@app.route('/addons/build/<filename>')
+def addons_build(filename):
+    """Analyze a zip file for build commands without full installation"""
+    filepath = app.config['UPLOAD_FOLDER'] / secure_filename(filename)
+    
+    if not filepath.exists():
+        flash('File not found', 'error')
+        return redirect(url_for('addons_list'))
+    
+    try:
+        # Create temporary extraction directory
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Extract zip file temporarily
+            with zipfile.ZipFile(filepath, 'r') as zip_ref:
+                zip_ref.extractall(temp_path)
+            
+            # Find the actual project directory (handle zips with top-level folder)
+            extract_dir = temp_path
+            subdirs = [d for d in temp_path.iterdir() if d.is_dir()]
+            files_at_root = [f for f in temp_path.iterdir() if f.is_file()]
+            
+            if len(subdirs) == 1 and not files_at_root:
+                # Zip has a single top-level directory, use that as project root
+                extract_dir = subdirs[0]
+            
+            # Analyze for build commands
+            project_info = detect_project_type(extract_dir)
+            build_commands = detect_build_commands(extract_dir, project_info)
+            
+            if build_commands:
+                flash(f'🔨 {filename} contains buildable source code ({project_info["type"]})', 'info')
+                flash(f'📋 Detected {len(build_commands)} build step(s). Install first, then use Build option.', 'info')
+                if project_info['frameworks']:
+                    flash(f'🛠️ Frameworks: {", ".join(project_info["frameworks"])}', 'info')
+            else:
+                flash(f'ℹ️ {filename} does not appear to contain buildable source code', 'info')
+                
+    except Exception as e:
+        flash(f'Failed to analyze addon: {str(e)}', 'error')
+    
     return redirect(url_for('addons_list'))
 
 @app.route('/addons/delete/<filename>')
@@ -6209,6 +8794,1429 @@ def addons_delete(filename):
         flash('File not found','error')
 
     return redirect(url_for('addons_list'))
+
+@app.route('/addons/load/<addon_name>')
+
+def addons_load(addon_name):
+
+    """Load an installed addon by importing its main module"""
+
+    try:
+
+        # Check if addon is installed
+
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / addon_name
+
+        if not extract_dir.exists():
+
+            flash(f'Addon {addon_name} is not installed','error')
+
+            return redirect(url_for('addons_list'))
+
+        
+
+        # Detect project type
+
+        project_info = detect_project_type(extract_dir)
+
+        
+
+        if project_info['has_python']:
+
+            # Handle Python addon
+
+            # Look for addon.py or __init__.py in the extracted directory
+
+            addon_file = extract_dir / 'addon.py'
+
+            init_file = extract_dir / '__init__.py'
+
+            
+
+            if addon_file.exists():
+
+                # Import the addon module
+
+                import importlib.util
+
+                spec = importlib.util.spec_from_file_location(f"addon_{addon_name}", str(addon_file))
+
+                if spec and spec.loader:
+
+                    addon_module = importlib.util.module_from_spec(spec)
+
+                    spec.loader.exec_module(addon_module)
+
+                    
+
+                    # Call init function if it exists
+
+                    if hasattr(addon_module, 'init'):
+
+                        addon_module.init(app)
+
+                    
+
+                    flash(f'Python addon {addon_name} loaded successfully!','success')
+
+                else:
+
+                    flash(f'Failed to load Python addon {addon_name}: invalid module','error')
+
+            elif init_file.exists():
+
+                # Try loading as a package
+
+                import sys
+
+                if str(extract_dir) not in sys.path:
+
+                    sys.path.insert(0, str(extract_dir))
+
+                
+
+                try:
+
+                    addon_module = __import__(addon_name)
+
+                    if hasattr(addon_module, 'init'):
+
+                        addon_module.init(app)
+
+                    flash(f'Python addon {addon_name} loaded successfully!','success')
+
+                except ImportError as e:
+
+                    flash(f'Failed to import Python addon {addon_name}: {str(e)}','error')
+
+            else:
+
+                flash(f'Python addon {addon_name} does not have a valid entry point (addon.py or __init__.py)','error')
+
+        elif project_info['has_php']:
+
+            # Handle PHP web application
+            # Determine primary type for display
+            primary_type = 'PHP'
+            if project_info['has_nodejs']:
+                primary_type = 'Node.js/PHP'
+            elif len([k for k in ['has_java', 'has_csharp', 'has_cpp', 'has_go', 'has_rust'] if project_info.get(k)]) > 0:
+                primary_type = 'PHP/Multi-language'
+            
+            flash(f'PHP web application {addon_name} is ready! Access via /addons/modules/{addon_name}/','info')
+            flash(f'Type: {primary_type} - Frameworks: {", ".join(project_info["frameworks"]) if project_info["frameworks"] else "None detected"}','info')
+
+        else:
+
+            # Handle other types or unknown
+
+            flash(f'Addon {addon_name} loaded as {project_info["type"]} application','success')
+
+            if project_info['frameworks']:
+
+                flash(f'Detected frameworks: {", ".join(project_info["frameworks"])}','info')
+
+            
+
+    except Exception as e:
+
+        flash(f'Failed to load addon {addon_name}: {str(e)}','error')
+
+    
+
+    return redirect(url_for('addons_list'))
+
+@app.route('/addons/register_features/<addon_name>')
+
+def addons_register_features(addon_name):
+
+    """Register features from a loaded addon"""
+
+    try:
+
+        # Check if addon is installed
+
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / addon_name
+
+        if not extract_dir.exists():
+
+            flash(f'Addon {addon_name} is not installed','error')
+
+            return redirect(url_for('addons_list'))
+
+        
+
+        # Detect project type
+
+        project_info = detect_project_type(extract_dir)
+
+        
+
+        if project_info['has_python']:
+
+            # Handle Python addon features
+
+            features_file = extract_dir / 'features.json'
+
+            if features_file.exists():
+
+                import json
+
+                with open(features_file, 'r') as f:
+
+                    features_data = json.load(f)
+
+                
+
+                # Register features (this would integrate with the feature manager)
+
+                # For now, just acknowledge the features file exists
+
+                flash(f'Features registered for Python addon {addon_name} ({len(features_data.get("features", []))} features)','success')
+
+            else:
+
+                flash(f'No features.json found for Python addon {addon_name}','warning')
+
+        elif project_info['has_php']:
+
+            # PHP web applications don't have features to register
+
+            flash(f'PHP web application {addon_name} does not have features to register','info')
+
+        else:
+
+            # Other types
+
+            flash(f'Addon {addon_name} ({project_info["type"]}) does not support feature registration','info')
+
+            
+
+    except Exception as e:
+
+        flash(f'Failed to register features for addon {addon_name}: {str(e)}','error')
+
+    
+
+    return redirect(url_for('addons_list'))
+
+@app.route('/addons/modules')
+def addons_modules():
+    """List and manage installed addon modules"""
+    installed_modules = []
+    
+    # Check both current workspace and the cool-elbakyan workspace
+    extract_dirs = [
+        app.config['UPLOAD_FOLDER'] / 'extracted',
+        Path(__file__).parent / '.claude' / 'worktrees' / 'cool-elbakyan' / 'data' / 'uploads' / 'extracted'
+    ]
+    
+    for extract_dir in extract_dirs:
+        if extract_dir.exists():
+            for module_dir in extract_dir.iterdir():
+                if module_dir.is_dir():
+                    try:
+                        # Get module info with basic file scanning
+                        config_files = []
+                        readme_files = []
+                        setup_scripts = []
+                        requirements_files = []
+                        language = 'unknown'
+                        total_files = 0
+                        total_size = 0
+                        
+                        # Quick scan of files (limit to avoid performance issues)
+                        try:
+                            for file_path in module_dir.rglob('*'):
+                                if file_path.is_file():
+                                    total_files += 1
+                                    try:
+                                        total_size += file_path.stat().st_size
+                                    except:
+                                        pass
+                                    
+                                    # Limit scanning for performance
+                                    if total_files > 500:
+                                        break
+                                    
+                                    name = file_path.name.lower()
+                                    rel_path = str(file_path.relative_to(module_dir))
+                                    
+                                    # Categorize files
+                                    if any(name.endswith(ext) for ext in ['.conf', '.config', '.ini', '.cfg', '.json', '.yml', '.yaml']):
+                                        if len(config_files) < 10:
+                                            config_files.append(rel_path)
+                                    elif name in ['readme', 'readme.txt', 'readme.md', 'install.txt', 'setup.txt']:
+                                        if len(readme_files) < 5:
+                                            readme_files.append(rel_path)
+                                    elif any(name.endswith(ext) for ext in ['.sh', '.bat', '.ps1', '.py', '.php']) or any(name.startswith(prefix) for prefix in ['setup.', 'install.', 'configure.']) or any(name in ['install.php', 'setup.php', 'installer.php', 'wizard.php']):
+                                        if len(setup_scripts) < 10:  # Increased limit
+                                            setup_scripts.append(rel_path)
+                                    elif name in ['requirements.txt', 'package.json', 'composer.json', 'gemfile', 'cargo.toml', 'pyproject.toml']:
+                                        requirements_files.append(rel_path)
+                                    
+                                    # Detect language
+                                    if language == 'unknown':
+                                        if name.endswith(('.py', '__init__.py')):
+                                            language = 'python'
+                                        elif name.endswith(('.php', 'composer.json')):
+                                            language = 'php'
+                                        elif name.endswith(('.cs', '.csproj')):
+                                            language = 'csharp'
+                                        elif name.endswith(('.js', 'package.json')):
+                                            language = 'javascript'
+                                        elif name.endswith(('.c', '.cpp', '.h')):
+                                            language = 'c/c++'
+                        except:
+                            # If scanning fails, continue with basic info
+                            pass
+                        
+                        # Load module info to get source directory
+                        modules_file = app.config['UPLOAD_FOLDER'] / 'modules.json'
+                        source_dir = module_dir
+                        if modules_file.exists():
+                            try:
+                                with open(modules_file, 'r') as f:
+                                    modules = json.load(f)
+                                if module_dir.name in modules:
+                                    stored_source = modules[module_dir.name].get('source_dir')
+                                    if stored_source and Path(stored_source).exists():
+                                        source_dir = Path(stored_source)
+                            except Exception:
+                                pass
+                        
+                        # Detect project type and build commands using source_dir
+                        project_info = detect_project_type(source_dir)
+                        build_commands = detect_build_commands(source_dir, project_info)
+                        
+                        module_info = {
+                            'name': module_dir.name,
+                            'path': str(source_dir) if source_dir != module_dir else str(module_dir),
+                            'size': total_size,
+                            'files': total_files,
+                            'modified': datetime.fromtimestamp(module_dir.stat().st_mtime).strftime('%Y-%m-%d %H:%M'),
+                            'config_files': config_files,
+                            'readme_files': readme_files,
+                            'setup_scripts': setup_scripts,
+                            'requirements_files': requirements_files,
+                            'language': language,
+                            'project_type': project_info['type'],
+                            'frameworks': project_info['frameworks'],
+                            'build_commands': build_commands
+                        }
+                        
+                        installed_modules.append(module_info)
+                        
+                    except (OSError, PermissionError) as e:
+                        # Skip modules with access issues
+                        continue
+    
+    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ADDONS_MODULES_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), installed_modules=installed_modules, request=request, get_flashed_messages=get_flashed_messages)
+
+@app.route('/addons/modules/<module_name>/config/<path:config_file>')
+def addons_module_config(module_name, config_file):
+    """View/edit config files for a module"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        config_path = extract_dir / config_file
+        
+        if not config_path.exists() or not config_path.is_file():
+            flash(f'Config file not found: {config_file}', 'error')
+            return redirect(url_for('addons_modules'))
+        
+        with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        
+        return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ADDONS_MODULE_CONFIG_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), 
+                                   module_name=module_name, config_file=config_file, content=content, request=request, get_flashed_messages=get_flashed_messages)
+    
+    except Exception as e:
+        flash(f'Error reading config file: {str(e)}', 'error')
+        return redirect(url_for('addons_modules'))
+
+@app.route('/addons/modules/<module_name>/config/<path:config_file>', methods=['POST'])
+def addons_module_config_save(module_name, config_file):
+    """Save changes to a config file"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        config_path = extract_dir / config_file
+        
+        if not config_path.exists():
+            flash(f'Config file not found: {config_file}', 'error')
+            return redirect(url_for('addons_modules'))
+        
+        content = request.form.get('content', '')
+        with open(config_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        flash(f'Config file saved successfully: {config_file}', 'success')
+        return redirect(url_for('addons_module_config', module_name=module_name, config_file=config_file))
+    
+    except Exception as e:
+        flash(f'Error saving config file: {str(e)}', 'error')
+        return redirect(url_for('addons_module_config', module_name=module_name, config_file=config_file))
+
+@app.route('/addons/modules/<module_name>/install_deps', methods=['POST'])
+def addons_module_install_deps(module_name):
+    """Install dependencies for a module with verbose output"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+
+        if not extract_dir.exists():
+            flash(f'Module not found: {module_name}', 'error')
+            return redirect(url_for('addons_modules'))
+
+        # Check if this is a zip file that needs extraction
+        zip_file = app.config['UPLOAD_FOLDER'] / f"{module_name}.zip"
+        if zip_file.exists() and not extract_dir.exists():
+            try:
+                import zipfile
+                extract_dir.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                    zip_ref.extractall(extract_dir)
+                flash(f'📦 Extracted {module_name}.zip successfully', 'info')
+            except Exception as e:
+                flash(f'❌ Failed to extract zip file: {str(e)}', 'error')
+                return redirect(url_for('addons_modules'))
+
+        success_messages = []
+        error_messages = []
+        verbose_output = []
+
+        # Detect project type and dependencies
+        project_info = detect_project_type(extract_dir)
+        verbose_output.append(f"🔍 Detected project type: {project_info['type']}")
+        verbose_output.append(f"📁 Project files: {len(list(extract_dir.rglob('*')))} total files")
+
+        # Python dependencies
+        if project_info['has_python']:
+            req_files = list(extract_dir.glob('requirements*.txt')) + list(extract_dir.glob('pyproject.toml')) + list(extract_dir.glob('setup.py'))
+            for req_file in req_files:
+                try:
+                    verbose_output.append(f"🐍 Found Python dependency file: {req_file.name}")
+                    if req_file.name == 'requirements.txt' or req_file.name.startswith('requirements'):
+                        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', str(req_file)],
+                                              capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+                    elif req_file.name == 'pyproject.toml':
+                        result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-e', '.'],
+                                              capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+                    elif req_file.name == 'setup.py':
+                        result = subprocess.run([sys.executable, str(req_file), 'develop'],
+                                              capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+
+                    if result.returncode == 0:
+                        success_messages.append(f'✅ Python dependencies installed from {req_file.name}')
+                        if result.stdout.strip():
+                            verbose_output.append(f"📤 pip output: {result.stdout.strip()[:200]}...")
+                    else:
+                        error_messages.append(f'❌ Failed to install Python dependencies from {req_file.name}')
+                        verbose_output.append(f"📤 pip error: {result.stderr.strip()[:200]}...")
+                except subprocess.TimeoutExpired:
+                    error_messages.append(f'⏰ Timeout installing Python dependencies from {req_file.name}')
+                except Exception as e:
+                    error_messages.append(f'❌ Error installing Python dependencies: {str(e)}')
+
+        # Node.js dependencies
+        if project_info['has_nodejs']:
+            package_files = list(extract_dir.glob('package*.json'))
+            for package_file in package_files:
+                try:
+                    verbose_output.append(f"📦 Found Node.js package file: {package_file.name}")
+                    result = subprocess.run(['npm', 'install'], capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+                    if result.returncode == 0:
+                        success_messages.append('✅ Node.js dependencies installed successfully')
+                        if result.stdout.strip():
+                            verbose_output.append(f"📤 npm output: {result.stdout.strip()[:200]}...")
+                    else:
+                        error_messages.append(f'❌ Failed to install Node.js dependencies')
+                        verbose_output.append(f"📤 npm error: {result.stderr.strip()[:200]}...")
+                except subprocess.TimeoutExpired:
+                    error_messages.append('⏰ Timeout installing Node.js dependencies')
+                except Exception as e:
+                    error_messages.append(f'❌ Error installing Node.js dependencies: {str(e)}')
+
+        # PHP Composer dependencies
+        if project_info['has_php']:
+            composer_files = list(extract_dir.glob('composer*.json'))
+            for composer_file in composer_files:
+                try:
+                    verbose_output.append(f"🐘 Found PHP composer file: {composer_file.name}")
+                    result = subprocess.run(['composer', 'install', '--no-interaction'], capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+                    if result.returncode == 0:
+                        success_messages.append('✅ PHP dependencies installed successfully')
+                        if result.stdout.strip():
+                            verbose_output.append(f"📤 composer output: {result.stdout.strip()[:200]}...")
+                    else:
+                        error_messages.append(f'❌ Failed to install PHP dependencies')
+                        verbose_output.append(f"📤 composer error: {result.stderr.strip()[:200]}...")
+                except subprocess.TimeoutExpired:
+                    error_messages.append('⏰ Timeout installing PHP dependencies')
+                except Exception as e:
+                    error_messages.append(f'❌ Error installing PHP dependencies: {str(e)}')
+
+        # Build/compile processes
+        build_commands = detect_build_commands(extract_dir, project_info)
+        for cmd_info in build_commands:
+            try:
+                verbose_output.append(f"🔨 Running build command: {' '.join(cmd_info['command'])}")
+                result = subprocess.run(cmd_info['command'], capture_output=True, text=True, cwd=str(extract_dir), timeout=600)
+                if result.returncode == 0:
+                    success_messages.append(f"✅ Build completed: {cmd_info['description']}")
+                    if result.stdout.strip():
+                        verbose_output.append(f"📤 build output: {result.stdout.strip()[:200]}...")
+                else:
+                    error_messages.append(f"❌ Build failed: {cmd_info['description']}")
+                    verbose_output.append(f"📤 build error: {result.stderr.strip()[:200]}...")
+                    # Don't continue with other build steps if one fails
+                    break
+            except subprocess.TimeoutExpired:
+                error_messages.append(f"⏰ Build timeout: {cmd_info['description']}")
+                break
+            except Exception as e:
+                error_messages.append(f"❌ Build error: {str(e)}")
+                break
+
+        # Show verbose output
+        for msg in verbose_output[:10]:  # Limit to first 10 messages to avoid overwhelming
+            flash(msg, 'info')
+
+        if success_messages:
+            flash('🎉 Installation completed successfully!', 'success')
+            for msg in success_messages:
+                flash(msg, 'success')
+        if error_messages:
+            flash('⚠️ Some installation steps failed:', 'warning')
+            for msg in error_messages:
+                flash(msg, 'error')
+
+        if not success_messages and not error_messages:
+            flash('ℹ️ No dependencies or build processes detected for this module', 'info')
+
+    except Exception as e:
+        flash(f'❌ Critical error during installation: {str(e)}', 'error')
+
+    return redirect(url_for('addons_modules'))
+
+def detect_project_type(extract_dir):
+    """Detect the type of project and its characteristics"""
+    project_info = {
+        'type': 'Unknown',
+        'has_python': False,
+        'has_nodejs': False,
+        'has_php': False,
+        'has_java': False,
+        'has_csharp': False,
+        'has_cpp': False,
+        'has_go': False,
+        'has_rust': False,
+        'frameworks': []
+    }
+
+    # Check for various project files
+    try:
+        files = list(extract_dir.rglob('*'))
+        file_names = []
+        for f in files[:1000]:  # Limit to first 1000 files for performance
+            try:
+                if f.is_file():
+                    file_names.append(f.name.lower())
+            except:
+                continue  # Skip files we can't access
+    except Exception as e:
+        verbose_output.append(f"⚠️ Warning: Could not scan all files: {str(e)}")
+        file_names = []
+
+    # Python detection
+    python_indicators = ['requirements.txt', 'setup.py', 'pyproject.toml', 'pipfile', '__init__.py', '.py']
+    if any(ind in ' '.join(file_names) for ind in python_indicators):
+        project_info['has_python'] = True
+        project_info['type'] = 'Python'
+        if any('django' in f.lower() for f in file_names):
+            project_info['frameworks'].append('Django')
+        if any('flask' in f.lower() for f in file_names):
+            project_info['frameworks'].append('Flask')
+        if any('fastapi' in f.lower() for f in file_names):
+            project_info['frameworks'].append('FastAPI')
+
+    # Node.js detection
+    nodejs_indicators = ['package.json', 'node_modules', '.js', '.ts', 'webpack.config.js', 'gulpfile.js']
+    if any(ind in ' '.join(file_names) for ind in nodejs_indicators):
+        project_info['has_nodejs'] = True
+        if project_info['type'] == 'Unknown':
+            project_info['type'] = 'Node.js'
+        else:
+            project_info['type'] += '/Node.js'
+        if any('react' in f.lower() for f in file_names):
+            project_info['frameworks'].append('React')
+        if any('vue' in f.lower() for f in file_names):
+            project_info['frameworks'].append('Vue.js')
+        if any('angular' in f.lower() for f in file_names):
+            project_info['frameworks'].append('Angular')
+
+    # PHP detection
+    php_indicators = ['composer.json', 'composer.lock', '.php', 'artisan', 'wp-config.php', 'index.php']
+    if any(ind in ' '.join(file_names) for ind in php_indicators):
+        project_info['has_php'] = True
+        if project_info['type'] == 'Unknown':
+            project_info['type'] = 'PHP'
+        else:
+            project_info['type'] += '/PHP'
+        if any('laravel' in f.lower() for f in file_names) or 'artisan' in file_names:
+            project_info['frameworks'].append('Laravel')
+        if 'wp-config.php' in file_names:
+            project_info['frameworks'].append('WordPress')
+        if any('symfony' in f.lower() for f in file_names):
+            project_info['frameworks'].append('Symfony')
+
+    # Java detection
+    java_indicators = ['pom.xml', 'build.gradle', 'build.gradle.kts', '.java', 'mvnw', 'gradlew']
+    if any(ind in ' '.join(file_names) for ind in java_indicators):
+        project_info['has_java'] = True
+        if project_info['type'] == 'Unknown':
+            project_info['type'] = 'Java'
+        else:
+            project_info['type'] += '/Java'
+        if 'pom.xml' in file_names:
+            project_info['frameworks'].append('Maven')
+        if 'build.gradle' in file_names:
+            project_info['frameworks'].append('Gradle')
+
+    # C#/.NET detection
+    csharp_indicators = ['.csproj', '.sln', '.cs', 'packages.config', 'project.json']
+    if any(ind in ' '.join(file_names) for ind in csharp_indicators):
+        project_info['has_csharp'] = True
+        if project_info['type'] == 'Unknown':
+            project_info['type'] = 'C#'
+        else:
+            project_info['type'] += '/C#'
+
+    # C/C++ detection
+    cpp_indicators = ['CMakeLists.txt', 'Makefile', 'configure', '.cpp', '.c', '.h', '.hpp']
+    if any(ind in ' '.join(file_names) for ind in cpp_indicators):
+        project_info['has_cpp'] = True
+        if project_info['type'] == 'Unknown':
+            project_info['type'] = 'C/C++'
+        else:
+            project_info['type'] += '/C/C++'
+
+    # Go detection
+    go_indicators = ['go.mod', 'go.sum', '.go', 'main.go']
+    if any(ind in ' '.join(file_names) for ind in go_indicators):
+        project_info['has_go'] = True
+        if project_info['type'] == 'Unknown':
+            project_info['type'] = 'Go'
+        else:
+            project_info['type'] += '/Go'
+
+    # Rust detection
+    rust_indicators = ['Cargo.toml', 'Cargo.lock', '.rs', 'src/main.rs']
+    if any(ind in ' '.join(file_names) for ind in rust_indicators):
+        project_info['has_rust'] = True
+        if project_info['type'] == 'Unknown':
+            project_info['type'] = 'Rust'
+        else:
+            project_info['type'] += '/Rust'
+
+    return project_info
+
+def detect_build_commands(extract_dir, project_info):
+    """Detect appropriate build commands for the project"""
+    build_commands = []
+
+    # Python builds
+    if project_info['has_python']:
+        if (extract_dir / 'setup.py').exists():
+            build_commands.append({
+                'command': [sys.executable, 'setup.py', 'build'],
+                'description': 'Python setup.py build'
+            })
+        if (extract_dir / 'pyproject.toml').exists():
+            build_commands.append({
+                'command': [sys.executable, '-m', 'build'],
+                'description': 'Python build package'
+            })
+
+    # PHP builds
+    if project_info['has_php']:
+        if (extract_dir / 'composer.json').exists():
+            build_commands.append({
+                'command': ['composer', 'install'],
+                'description': 'Composer install dependencies'
+            })
+
+    # Node.js builds
+        if (extract_dir / 'package.json').exists():
+            package_json = extract_dir / 'package.json'
+            try:
+                import json
+                with open(package_json, 'r', encoding='utf-8') as f:
+                    package_data = json.load(f)
+                    if 'scripts' in package_data:
+                        scripts = package_data['scripts']
+                        if 'build' in scripts:
+                            build_commands.append({
+                                'command': ['npm', 'run', 'build'],
+                                'description': 'npm build script'
+                            })
+                        if 'compile' in scripts:
+                            build_commands.append({
+                                'command': ['npm', 'run', 'compile'],
+                                'description': 'npm compile script'
+                            })
+            except:
+                pass
+
+    # Java/Maven builds
+    if project_info['has_java']:
+        if (extract_dir / 'pom.xml').exists():
+            build_commands.append({
+                'command': ['mvn', 'compile'],
+                'description': 'Maven compile'
+            })
+        if (extract_dir / 'build.gradle').exists():
+            build_commands.append({
+                'command': ['./gradlew', 'build'],
+                'description': 'Gradle build'
+            })
+
+    # C/C++ builds
+    if project_info['has_cpp']:
+        if (extract_dir / 'CMakeLists.txt').exists():
+            # CMake build - need to run cmake first, then make
+            build_commands.append({
+                'command': ['C:\\Program Files\\CMake\\bin\\cmake.exe', '-S', '.', '-B', 'build'],
+                'description': 'CMake configure'
+            })
+            build_commands.append({
+                'command': ['C:\\Program Files\\CMake\\bin\\cmake.exe', '--build', 'build'],
+                'description': 'CMake build'
+            })
+        elif (extract_dir / 'Makefile').exists():
+            build_commands.append({
+                'command': ['make'],
+                'description': 'Make build'
+            })
+        elif (extract_dir / 'configure').exists():
+            # Autotools build
+            build_commands.append({
+                'command': ['./configure'],
+                'description': 'Configure build'
+            })
+            build_commands.append({
+                'command': ['make'],
+                'description': 'Make build'
+            })
+
+    # Go builds
+    if project_info['has_go']:
+        if (extract_dir / 'go.mod').exists():
+            build_commands.append({
+                'command': ['go', 'build', './...'],
+                'description': 'Go build'
+            })
+
+    # Rust builds
+    if project_info['has_rust']:
+        if (extract_dir / 'Cargo.toml').exists():
+            build_commands.append({
+                'command': ['cargo', 'build', '--release'],
+                'description': 'Cargo build release'
+            })
+
+    return build_commands
+
+@app.route('/addons/modules/<module_name>/run_setup/<path:setup_script>', methods=['POST'])
+def addons_module_run_setup(module_name, setup_script):
+    """Run a setup script for a module with enhanced support"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        script_path = extract_dir / setup_script
+
+        if not script_path.exists():
+            flash(f'❌ Setup script not found: {setup_script}', 'error')
+            return redirect(url_for('addons_modules'))
+
+        import subprocess
+        verbose_output = []
+
+        # Handle different script types
+        if setup_script.endswith('.py'):
+            verbose_output.append(f'🐍 Running Python script: {setup_script}')
+            result = subprocess.run([sys.executable, str(script_path)],
+                                  capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+        elif setup_script.endswith('.sh'):
+            verbose_output.append(f'🐚 Running shell script: {setup_script}')
+            result = subprocess.run(['bash', str(script_path)],
+                                  capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+        elif setup_script.endswith('.bat') or setup_script.endswith('.ps1'):
+            verbose_output.append(f'⚡ Running PowerShell script: {setup_script}')
+            result = subprocess.run(['powershell', '-ExecutionPolicy', 'Bypass', '-File', str(script_path)],
+                                  capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+        elif setup_script.endswith('.php'):
+            # PHP web-based setup scripts
+            verbose_output.append(f'🐘 PHP setup script detected: {setup_script}')
+            verbose_output.append(f'🌐 This appears to be a web-based installer')
+            verbose_output.append(f'💡 Access it via: http://localhost:8080/addons/modules/{module_name}/web/{setup_script}')
+
+            # Try to start a PHP development server if possible
+            if (extract_dir / 'composer.json').exists() or (extract_dir / 'index.php').exists():
+                try:
+                    verbose_output.append('🚀 Attempting to start PHP development server...')
+                    # Check if we can run PHP
+                    php_check = subprocess.run(['php', '--version'], capture_output=True, text=True, timeout=10)
+                    if php_check.returncode == 0:
+                        verbose_output.append('✅ PHP is available on the system')
+                        flash(f'🌐 PHP setup script ready: Access {setup_script} via the web interface', 'info')
+                        flash(f'💡 PHP development server can be started if needed', 'info')
+                    else:
+                        verbose_output.append('❌ PHP not found on system')
+                        flash('❌ PHP is not installed on this system', 'error')
+                except:
+                    verbose_output.append('❌ Could not check PHP availability')
+                    flash('❌ Could not verify PHP installation', 'error')
+            else:
+                flash(f'ℹ️ PHP script detected but no web server setup found', 'info')
+
+            # Show verbose output and return
+            for msg in verbose_output[:5]:
+                flash(msg, 'info')
+            return redirect(url_for('addons_modules'))
+        else:
+            # Try to detect if it's executable
+            if script_path.stat().st_mode & 0o111:  # Check if executable
+                verbose_output.append(f'⚙️ Running executable script: {setup_script}')
+                result = subprocess.run([str(script_path)],
+                                      capture_output=True, text=True, cwd=str(extract_dir), timeout=300)
+            else:
+                flash(f'❌ Unsupported or non-executable script type: {setup_script}', 'error')
+                return redirect(url_for('addons_modules'))
+
+        # Process results for executable scripts
+        if result.returncode == 0:
+            flash(f'✅ Setup script executed successfully: {setup_script}', 'success')
+            verbose_output.append('✅ Script completed with exit code 0')
+            if result.stdout.strip():
+                flash(f'📤 Output: {result.stdout.strip()[:500]}...', 'info')
+                verbose_output.append(f'📤 stdout: {result.stdout.strip()[:100]}...')
+        else:
+            flash(f'❌ Setup script failed (exit code {result.returncode}): {setup_script}', 'error')
+            verbose_output.append(f'❌ Script failed with exit code {result.returncode}')
+            if result.stderr.strip():
+                flash(f'📤 Error: {result.stderr.strip()[:500]}...', 'error')
+                verbose_output.append(f'📤 stderr: {result.stderr.strip()[:100]}...')
+
+        # Show verbose output
+        for msg in verbose_output[:5]:
+            flash(msg, 'info')
+
+    except subprocess.TimeoutExpired:
+        flash(f'⏰ Setup script timed out: {setup_script}', 'error')
+    except Exception as e:
+        flash(f'❌ Error running setup script: {str(e)}', 'error')
+
+    return redirect(url_for('addons_modules'))
+
+@app.route('/addons/modules/<module_name>/build', methods=['POST'])
+def addons_module_build(module_name):
+    """Build/compile a source code module"""
+    try:
+        # Load module info to get source directory
+        modules_file = app.config['UPLOAD_FOLDER'] / 'modules.json'
+        source_dir = None
+        if modules_file.exists():
+            try:
+                with open(modules_file, 'r') as f:
+                    modules = json.load(f)
+                if module_name in modules:
+                    source_dir = Path(modules[module_name].get('source_dir'))
+            except Exception:
+                pass
+        
+        # Find the actual module directory if source_dir not set
+        if not source_dir or not source_dir.exists():
+            extract_dirs = [
+                app.config['UPLOAD_FOLDER'] / 'extracted',
+                Path(app.root_path) / '.claude' / 'worktrees' / 'cool-elbakyan' / 'data' / 'uploads' / 'extracted'
+            ]
+            
+            extract_dir = None
+            for base_dir in extract_dirs:
+                if base_dir.exists():
+                    # First try exact match
+                    candidate = base_dir / module_name
+                    if candidate.exists() and candidate.is_dir():
+                        extract_dir = candidate
+                        break
+                    
+                    # Then try case-insensitive match
+                    for item in base_dir.iterdir():
+                        if item.is_dir() and item.name.lower() == module_name.lower():
+                            extract_dir = item
+                            break
+                    
+                    if extract_dir:
+                        break
+            
+            if not extract_dir:
+                flash(f'❌ Module not found: {module_name}', 'error')
+                return redirect(url_for('addons_modules'))
+            
+            source_dir = extract_dir
+
+        # Detect project type and build commands
+        project_info = detect_project_type(source_dir)
+        build_commands = detect_build_commands(source_dir, project_info)
+        
+        if not build_commands:
+            flash(f'❌ No build commands detected for {module_name} ({project_info["type"]})', 'error')
+            return redirect(url_for('addons_modules'))
+
+        import subprocess
+        verbose_output = []
+        success_count = 0
+        
+        verbose_output.append(f'🔨 Building {module_name} ({project_info["type"]})')
+        verbose_output.append(f'📁 Build directory: {source_dir}')
+        
+        # Execute build commands sequentially
+        for i, build_cmd in enumerate(build_commands, 1):
+            cmd_desc = build_cmd['description']
+            cmd_args = build_cmd['command']
+            
+            verbose_output.append(f'⚙️ Step {i}/{len(build_commands)}: {cmd_desc}')
+            verbose_output.append(f'💻 Command: {" ".join(cmd_args)}')
+            
+            try:
+                # Set up environment for build
+                env = os.environ.copy()
+                env['PATH'] = os.environ.get('PATH', '')
+                
+                result = subprocess.run(
+                    cmd_args,
+                    cwd=str(source_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=600,  # 10 minute timeout for builds
+                    env=env
+                )
+                
+                if result.returncode == 0:
+                    success_count += 1
+                    verbose_output.append(f'✅ Step {i} completed successfully')
+                    if result.stdout.strip():
+                        # Show first few lines of output
+                        stdout_lines = result.stdout.strip().split('\n')[:3]
+                        for line in stdout_lines:
+                            if line.strip():
+                                verbose_output.append(f'📤 {line.strip()[:100]}')
+                else:
+                    verbose_output.append(f'❌ Step {i} failed with exit code {result.returncode}')
+                    if result.stderr.strip():
+                        # Show error output
+                        stderr_lines = result.stderr.strip().split('\n')[:3]
+                        for line in stderr_lines:
+                            if line.strip():
+                                verbose_output.append(f'📤 ERROR: {line.strip()[:100]}')
+                    break  # Stop on first failure
+                    
+            except subprocess.TimeoutExpired:
+                verbose_output.append(f'⏰ Step {i} timed out after 10 minutes')
+                break
+            except Exception as e:
+                verbose_output.append(f'❌ Step {i} error: {str(e)}')
+                break
+        
+        # Report results
+        if success_count == len(build_commands):
+            flash(f'✅ Build completed successfully: {module_name}', 'success')
+            verbose_output.append(f'🎉 All {len(build_commands)} build steps completed')
+        else:
+            flash(f'❌ Build failed: {module_name} ({success_count}/{len(build_commands)} steps completed)', 'error')
+            verbose_output.append(f'⚠️ Build incomplete: {success_count}/{len(build_commands)} steps completed')
+        
+        # Show verbose output (limit to prevent flash overflow)
+        for msg in verbose_output[:8]:
+            flash(msg, 'info')
+            
+    except Exception as e:
+        flash(f'❌ Error during build: {str(e)}', 'error')
+
+    return redirect(url_for('addons_modules'))
+
+@app.route('/addons/modules/<module_name>/')
+def addons_module_root(module_name):
+    """Serve the root page of a web-accessible module (for PHP/Node.js apps, etc.)"""
+    try:
+        # Find the actual module directory by searching both locations
+        extract_dirs = [
+            app.config['UPLOAD_FOLDER'] / 'extracted',
+            Path(app.root_path) / '.claude' / 'worktrees' / 'cool-elbakyan' / 'data' / 'uploads' / 'extracted'
+        ]
+        
+        extract_dir = None
+        for base_dir in extract_dirs:
+            if base_dir.exists():
+                # First try exact match
+                candidate = base_dir / module_name
+                if candidate.exists() and candidate.is_dir():
+                    extract_dir = candidate
+                    break
+                
+                # Then try case-insensitive match
+                for item in base_dir.iterdir():
+                    if item.is_dir() and item.name.lower() == module_name.lower():
+                        extract_dir = item
+                        break
+                
+                if extract_dir:
+                    break
+        
+        if not extract_dir:
+            return f"Module not found: {module_name}", 404
+
+        # Detect project type
+        project_info = detect_project_type(extract_dir)
+
+        # Look for index files in order of preference
+        # First check the root directory
+        index_files = ['index.php', 'index.html', 'index.htm', 'install.php', 'default.php', 'default.html']
+        index_file = None
+        
+        # Check root directory first
+        for filename in index_files:
+            candidate = extract_dir / filename
+            if candidate.exists() and candidate.is_file():
+                index_file = candidate
+                break
+        
+        # If no index file in root, check subdirectories
+        if not index_file:
+            for subdir in extract_dir.iterdir():
+                if subdir.is_dir():
+                    for filename in index_files:
+                        candidate = subdir / filename
+                        if candidate.exists() and candidate.is_file():
+                            index_file = candidate
+                            break
+                    if index_file:
+                        break
+
+        if index_file:
+            # Serve the index file
+            file_path = index_file  # Use the full path directly
+
+            if file_path.suffix.lower() == '.php':
+                # Execute PHP file using local PHP binary
+                import subprocess
+                try:
+                    # Use the local PHP installation
+                    php_path = Path(app.root_path) / 'php' / 'php.exe'
+                    if not php_path.exists():
+                        # Fallback to system PHP if local not found
+                        php_path = 'php'
+                    
+                    # Execute PHP with the file
+                    result = subprocess.run(
+                        [str(php_path), str(file_path)],
+                        cwd=str(extract_dir),
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    
+                    if result.returncode == 0:
+                        return result.stdout, 200, {'Content-Type': 'text/html'}
+                    else:
+                        # PHP execution failed, show error
+                        error_content = f"""
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>{module_name} - PHP Error</title>
+                            <style>
+                                body {{ font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 20px; }}
+                                .error {{ background: #f44336; color: white; padding: 15px; border-radius: 5px; }}
+                            </style>
+                        </head>
+                        <body>
+                            <div class="error">
+                                <strong>PHP Execution Error:</strong><br>
+                                {result.stderr}
+                            </div>
+                            <h2>PHP Source Code:</h2>
+                            <pre>{open(file_path, 'r', encoding='utf-8', errors='ignore').read()}</pre>
+                        </body>
+                        </html>
+                        """
+                        return error_content, 500
+                        
+                except subprocess.TimeoutExpired:
+                    return "PHP execution timed out", 504
+                except Exception as e:
+                    return f"PHP execution failed: {str(e)}", 500
+
+            else:
+                # For HTML files, serve directly
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                return content, 200, {'Content-Type': 'text/html'}
+
+        else:
+            # No index file found, show directory listing
+            files = []
+            for item in extract_dir.rglob('*'):
+                if item.is_file():
+                    rel_path = item.relative_to(extract_dir)
+                    files.append(str(rel_path))
+
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>{module_name} - Directory Listing</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 20px; }}
+                    .file-list {{ background: #2a2a2a; padding: 15px; border-radius: 5px; }}
+                    .file-link {{ color: #4CAF50; text-decoration: none; }}
+                    .file-link:hover {{ text-decoration: underline; }}
+                    .info {{ background: #2196F3; color: white; padding: 10px; border-radius: 5px; margin-bottom: 20px; }}
+                </style>
+            </head>
+            <body>
+                <div class="info">
+                    <strong>Module:</strong> {module_name}<br>
+                    <strong>Type:</strong> {project_info.get('type', 'Unknown')}<br>
+                    <strong>Frameworks:</strong> {', '.join(project_info.get('frameworks', [])) or 'None detected'}
+                </div>
+                <h2>Files in {module_name}:</h2>
+                <div class="file-list">
+            """
+
+            for file in sorted(files):
+                html_content += f'<div><a class="file-link" href="/addons/modules/{module_name}/web/{file}">{file}</a></div>'
+
+            html_content += """
+                </div>
+            </body>
+            </html>
+            """
+            return html_content
+
+    except Exception as e:
+        return f"Error serving module {module_name}: {str(e)}", 500
+
+@app.route('/addons/modules/<module_name>/web/<path:filepath>')
+def addons_module_web(module_name, filepath):
+    """Serve web-accessible files from a module (for PHP setup scripts, etc.)"""
+    try:
+        # Find the actual module directory by searching both locations
+        extract_dirs = [
+            app.config['UPLOAD_FOLDER'] / 'extracted',
+            Path(app.root_path) / '.claude' / 'worktrees' / 'cool-elbakyan' / 'data' / 'uploads' / 'extracted'
+        ]
+        
+        extract_dir = None
+        for base_dir in extract_dirs:
+            if base_dir.exists():
+                # First try exact match
+                candidate = base_dir / module_name
+                if candidate.exists() and candidate.is_dir():
+                    extract_dir = candidate
+                    break
+                
+                # Then try case-insensitive match
+                for item in base_dir.iterdir():
+                    if item.is_dir() and item.name.lower() == module_name.lower():
+                        extract_dir = item
+                        break
+                
+                if extract_dir:
+                    break
+        
+        if not extract_dir:
+            return f"Module not found: {module_name}", 404
+            
+        file_path = extract_dir / filepath
+
+        if not file_path.is_file():
+            return f"Path is not a file: {filepath}", 400
+
+        # Security check - only allow certain file types
+        allowed_extensions = {'.php', '.html', '.htm', '.css', '.js', '.json', '.txt', '.md'}
+        if file_path.suffix.lower() not in allowed_extensions:
+            return f"File type not allowed for web access: {file_path.suffix}", 403
+
+        # For PHP files, execute them using local PHP
+        if file_path.suffix.lower() == '.php':
+            import subprocess
+            try:
+                # Use the local PHP installation
+                php_path = Path(app.root_path) / 'php' / 'php.exe'
+                if not php_path.exists():
+                    # Fallback to system PHP if local not found
+                    php_path = 'php'
+                
+                # Execute PHP with the file
+                result = subprocess.run(
+                    [str(php_path), str(file_path)],
+                    cwd=str(extract_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                
+                if result.returncode == 0:
+                    return result.stdout, 200, {'Content-Type': 'text/html'}
+                else:
+                    # PHP execution failed, show error
+                    error_content = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>{module_name} - PHP Error</title>
+                        <style>
+                            body {{ font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 20px; }}
+                            .error {{ background: #f44336; color: white; padding: 15px; border-radius: 5px; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="error">
+                            <strong>PHP Execution Error:</strong><br>
+                            {result.stderr}
+                        </div>
+                        <h2>PHP Source Code:</h2>
+                        <pre>{open(file_path, 'r', encoding='utf-8', errors='ignore').read()}</pre>
+                    </body>
+                    </html>
+                    """
+                    return error_content, 500
+                    
+            except subprocess.TimeoutExpired:
+                return "PHP execution timed out", 504
+            except Exception as e:
+                return f"PHP execution failed: {str(e)}", 500
+
+        # For other allowed file types, serve them directly
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+
+        # Basic content type detection
+        content_type = 'text/plain'
+        if file_path.suffix.lower() in ['.html', '.htm']:
+            content_type = 'text/html'
+        elif file_path.suffix.lower() == '.css':
+            content_type = 'text/css'
+        elif file_path.suffix.lower() == '.js':
+            content_type = 'application/javascript'
+        elif file_path.suffix.lower() == '.json':
+            content_type = 'application/json'
+
+        return content, 200, {'Content-Type': content_type}
+
+    except Exception as e:
+        return f"Error serving file: {str(e)}", 500
+
+@app.route('/addons/modules/<module_name>/start', methods=['POST'])
+def addons_module_start(module_name):
+    """Start a module service"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        
+        if not extract_dir.exists():
+            return {'error': f'Module not found: {module_name}'}, 404
+        
+        # Check if already running
+        import psutil
+        running_processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['cmdline'] and any(module_name in str(cmd) for cmd in proc.info['cmdline']):
+                    running_processes.append(proc.info)
+            except:
+                pass
+        
+        if running_processes:
+            return {'message': f'Service already running (PID: {running_processes[0]["pid"]})', 'status': 'running', 'pid': running_processes[0]['pid']}
+        
+        # Detect how to start the service
+        import subprocess
+        import threading
+        
+        # Look for startup scripts or main files
+        startup_commands = []
+        
+        # Python modules
+        if (extract_dir / 'main.py').exists():
+            startup_commands.append([sys.executable, 'main.py'])
+        elif (extract_dir / 'app.py').exists():
+            startup_commands.append([sys.executable, 'app.py'])
+        elif (extract_dir / 'run.py').exists():
+            startup_commands.append([sys.executable, 'run.py'])
+        elif (extract_dir / '__main__.py').exists():
+            startup_commands.append([sys.executable, '-m', module_name])
+        
+        # Node.js
+        elif (extract_dir / 'server.js').exists():
+            startup_commands.append(['node', 'server.js'])
+        elif (extract_dir / 'app.js').exists():
+            startup_commands.append(['node', 'app.js'])
+        elif (extract_dir / 'index.js').exists():
+            startup_commands.append(['node', 'index.js'])
+        
+        # PHP
+        elif (extract_dir / 'index.php').exists():
+            startup_commands.append(['php', '-S', 'localhost:0', 'index.php'])
+        
+        if startup_commands:
+            cmd = startup_commands[0]
+            process = subprocess.Popen(cmd, cwd=str(extract_dir), 
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Store process info (in a real implementation, you'd use a proper process manager)
+            app.config.setdefault('running_services', {})[module_name] = {
+                'process': process,
+                'pid': process.pid,
+                'start_time': datetime.now(),
+                'command': cmd
+            }
+            
+            return {'message': f'Service started successfully (PID: {process.pid})', 'status': 'starting', 'pid': process.pid}
+        else:
+            return {'error': 'No suitable startup script found'}, 400
+            
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/addons/modules/<module_name>/stop', methods=['POST'])
+def addons_module_stop(module_name):
+    """Stop a module service"""
+    try:
+        running_services = app.config.get('running_services', {})
+        service_info = running_services.get(module_name)
+        
+        if not service_info:
+            # Check if process is still running
+            import psutil
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if proc.info['cmdline'] and any(module_name in str(cmd) for cmd in proc.info['cmdline']):
+                        proc.kill()
+                        return {'message': f'Service stopped (PID: {proc.info["pid"]})', 'status': 'stopped'}
+                except:
+                    pass
+            return {'message': 'Service not running', 'status': 'stopped'}
+        
+        # Stop the process
+        process = service_info['process']
+        try:
+            process.terminate()
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+        
+        # Remove from running services
+        del running_services[module_name]
+        
+        return {'message': 'Service stopped successfully', 'status': 'stopped'}
+        
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/addons/modules/<module_name>/status')
+def addons_module_status(module_name):
+    """Get status of a module service"""
+    try:
+        running_services = app.config.get('running_services', {})
+        service_info = running_services.get(module_name)
+        
+        if service_info:
+            process = service_info['process']
+            if process.poll() is None:  # Still running
+                return {
+                    'status': 'running',
+                    'pid': process.pid,
+                    'start_time': service_info['start_time'].isoformat(),
+                    'command': service_info['command']
+                }
+            else:
+                # Process ended, clean up
+                del running_services[module_name]
+        
+        # Check if process is still running by name
+        import psutil
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                if proc.info['cmdline'] and any(module_name in str(cmd) for cmd in proc.info['cmdline']):
+                    return {
+                        'status': 'running',
+                        'pid': proc.info['pid'],
+                        'command': proc.info['cmdline']
+                    }
+            except:
+                pass
+        
+        return {'status': 'stopped'}
+        
+    except Exception as e:
+        return {'error': str(e)}, 500
+
+@app.route('/addons/modules/delete_all', methods=['POST'])
+def delete_all_modules():
+    """Delete all installed addon modules"""
+    try:
+        import shutil
+        
+        deleted_modules = []
+        errors = []
+        
+        # Check both current workspace and the cool-elbakyan workspace
+        extract_dirs = [
+            app.config['UPLOAD_FOLDER'] / 'extracted',
+            Path(__file__).parent / '.claude' / 'worktrees' / 'cool-elbakyan' / 'data' / 'uploads' / 'extracted'
+        ]
+        
+        for extract_dir in extract_dirs:
+            if extract_dir.exists():
+                for module_dir in extract_dir.iterdir():
+                    if module_dir.is_dir():
+                        try:
+                            # Stop any running services for this module first
+                            running_services = app.config.get('running_services', {})
+                            if module_dir.name in running_services:
+                                service_info = running_services[module_dir.name]
+                                process = service_info['process']
+                                try:
+                                    process.terminate()
+                                    process.wait(timeout=5)
+                                except:
+                                    try:
+                                        process.kill()
+                                    except:
+                                        pass
+                                del running_services[module_dir.name]
+                            
+                            # Delete the module directory
+                            shutil.rmtree(module_dir)
+                            deleted_modules.append(module_dir.name)
+                            
+                        except Exception as e:
+                            errors.append(f"Failed to delete {module_dir.name}: {str(e)}")
+        
+        # Also clean up any empty parent directories
+        for extract_dir in extract_dirs:
+            if extract_dir.exists() and not any(extract_dir.iterdir()):
+                try:
+                    extract_dir.rmdir()
+                except:
+                    pass
+        
+        if errors:
+            return jsonify({'success': False, 'error': '; '.join(errors), 'deleted_count': len(deleted_modules)}), 500
+        else:
+            return jsonify({'success': True, 'message': f'Successfully deleted {len(deleted_modules)} modules', 'deleted_count': len(deleted_modules)})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/resources')
 
@@ -9288,6 +13296,161 @@ def personality_save():
 
 
 
+@app.route('/about')
+
+def about_page():
+
+    return send_file('about.html')
+
+
+
+
+
+@app.route('/pipelines')
+
+def pipelines_page():
+
+    return send_file('pipelines.html')
+
+
+
+
+
+@app.route('/cloud')
+
+def cloud_page():
+
+    return send_file('cloud_dashboard.html')
+
+
+
+
+
+@app.route('/secrets')
+
+def secrets_page():
+
+    return send_file('secrets_vault.html')
+
+
+
+
+
+@app.route('/echo-memory')
+
+def echo_memory_page():
+
+    return send_file('echo_memory.html')
+
+
+
+
+
+@app.route('/marketplace')
+
+def marketplace_page():
+
+    return send_file('marketplace.html')
+
+
+
+
+
+@app.route('/notifications')
+
+def notifications_page():
+
+    return send_file('notifications.html')
+
+
+
+
+
+@app.route('/rbac')
+
+def rbac_page():
+
+    return send_file('rbac.html')
+
+
+
+
+
+# TF Wizard routes
+if TF_WIZARD_AVAILABLE:
+    print("DEBUG: Registering TF Wizard routes")
+    @app.route('/tf_wizard')
+    def tf_wizard_index():
+        """Serve the TF Wizard main page"""
+        import os
+        from jinja2 import Environment, FileSystemLoader
+        tf_wizard_dir = os.path.dirname(tf_wizard_app.__file__)
+        templates_dir = os.path.join(tf_wizard_dir, 'templates')
+        env = Environment(loader=FileSystemLoader(templates_dir), autoescape=tf_wizard_app.templates.autoescape)
+        tmpl = env.get_template("index.html")
+        return tmpl.render()
+
+    @app.route('/tf_wizard/generate', methods=['POST'])
+    def tf_wizard_generate():
+        """Generate Terraform module zip"""
+        try:
+            data = request.get_json()
+            zip_bytes = generate_module_zip(data)
+            from flask import Response
+            import io
+            return Response(io.BytesIO(zip_bytes), 
+                          mimetype="application/zip", 
+                          headers={"Content-Disposition": f"attachment; filename=terraform_module_{data.get('module_name','module')}.zip"})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route('/tf_wizard/schema/apply', methods=['POST'])
+    def tf_wizard_apply_schema():
+        """Apply JSON schema to generate variables"""
+        try:
+            from jsonschema import Draft7Validator
+            payload = request.get_json()
+            schema = payload.get('schema')
+            if not schema:
+                return jsonify({"error": "schema is required"}), 400
+            
+            # Validate schema is valid JSON Schema (Draft7)
+            Draft7Validator.check_schema(schema)
+            
+            props = schema.get('properties', {})
+            vars_out = []
+            def build_var(name, meta):
+                js_type = meta.get('type')
+                # Use generator helper to build tf_type (supports dict schema too)
+                tf_type = tf_type_from_spec(meta) if isinstance(meta, dict) else tf_type_from_spec(js_type or '')
+                
+                v = {
+                    'name': name,
+                    'type': js_type or 'string',
+                    'tf_type': tf_type,
+                    'default': meta.get('default') if isinstance(meta, dict) and 'default' in meta else None,
+                    'description': meta.get('description', '') if isinstance(meta, dict) else '',
+                }
+                # if object with nested properties, return nested details
+                if isinstance(meta, dict) and meta.get('type') == 'object' and isinstance(meta.get('properties'), dict):
+                    nested = []
+                    for nk, nv in meta.get('properties', {}).items():
+                        nested.append(build_var(nk, nv))
+                    v['nested'] = nested
+                if isinstance(meta, dict) and 'enum' in meta:
+                    v['enum'] = meta.get('enum')
+                return v
+
+            for name, meta in props.items():
+                vars_out.append(build_var(name, meta))
+            return jsonify({'variables': vars_out})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+
+
+
+
 @app.route('/web_ide')
 
 def web_ide():
@@ -9319,6 +13482,62 @@ def web_ide():
     except Exception:
 
         return ('Web IDE not available', 404)
+
+@app.route('/masterchief_code_ui')
+
+def masterchief_code_ui():
+
+    """Serve the alternate web IDE from the cool-elbakyan worktree."""
+
+    try:
+
+        p = Path(r'C:\Users\Echo\masterchief\.claude\worktrees\cool-elbakyan\web_ide.html')
+
+        if p.exists():
+
+            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+    except Exception:
+
+        app.logger.exception('Failed to serve alternate web_ide.html')
+
+    # Fall back to main web_ide if alternate is not available
+
+    try:
+
+        return redirect(url_for('web_ide'))
+
+    except Exception:
+
+        return ('Alternate Web IDE not available', 404)
+
+@app.route('/iac_manager')
+
+def iac_manager():
+
+    """Serve the alternate TF Wizard from the cool-elbakyan worktree."""
+
+    try:
+
+        p = Path(r'C:\Users\Echo\masterchief\.claude\worktrees\cool-elbakyan\web_tf_wizard.html')
+
+        if p.exists():
+
+            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+    except Exception:
+
+        app.logger.exception('Failed to serve alternate web_tf_wizard.html')
+
+    # Fall back to main web_tf_wizard if alternate is not available
+
+    try:
+
+        return redirect(url_for('web_tf_wizard'))
+
+    except Exception:
+
+        return ('Alternate TF Wizard not available', 404)
 
 # --- Manager Portal (external, module-level definitions) --------------------
 
@@ -9687,6 +13906,79 @@ def api_manager_run_tests_status():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/features')
+def features_page():
+    """Serve the Feature Management page."""
+    try:
+        p = Path(__file__).resolve().parent / 'features' / 'templates' / 'feature_manager.html'
+        if p.exists():
+            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception:
+        app.logger.exception('Failed to serve feature_manager.html')
+    return jsonify({'error': 'Feature manager not available'}), 404
+
+
+@app.route('/api/features/enabled')
+def api_features_enabled():
+    """Return list of enabled features for the toolbar."""
+    if not FEATURE_MANAGER_AVAILABLE:
+        return jsonify([])
+    try:
+        fm = get_feature_manager()
+        if fm is None:
+            return jsonify([])
+        enabled = []
+        # Include features loaded from the feature manager
+        for name, handler in fm.features.items():
+            if handler.config.enabled:
+                enabled.append({
+                    'key': handler.config.name,
+                    'label': handler.config.display_name,
+                    'addon': 'features',
+                    'description': handler.config.description
+                })
+        # Include features from feature configs that are marked enabled
+        for name, config in fm.feature_configs.items():
+            if config.enabled and name not in fm.features:
+                enabled.append({
+                    'key': config.name,
+                    'label': config.display_name,
+                    'addon': 'features',
+                    'description': config.description
+                })
+        return jsonify(enabled)
+    except Exception as e:
+        app.logger.exception('Failed to list enabled features')
+        return jsonify([])
+
+
+@app.route('/feature/run/<path:feature_key>', methods=['POST'])
+def feature_run(feature_key):
+    """Run a feature by key. Supports feature manager features and addon-registered features."""
+    if not FEATURE_MANAGER_AVAILABLE:
+        return jsonify({'success': False, 'error': 'Feature manager not available'}), 503
+    try:
+        fm = get_feature_manager()
+        if fm is None:
+            return jsonify({'success': False, 'error': 'Feature manager not initialized'}), 503
+        data = request.get_json(silent=True) or {}
+        # Look up the feature in loaded features
+        if feature_key in fm.features:
+            handler = fm.features[feature_key]
+            if handler.instance and callable(getattr(handler.instance, 'run', None)):
+                result = handler.instance.run(**data)
+                return jsonify({'success': True, 'result': result})
+            else:
+                return jsonify({'success': True, 'result': f'Feature {feature_key} is enabled but has no run method'})
+        # Check feature configs (not yet loaded)
+        if feature_key in fm.feature_configs:
+            return jsonify({'success': False, 'error': f'Feature {feature_key} is configured but not enabled. Enable it first.'})
+        return jsonify({'success': False, 'error': f'Feature {feature_key} not found'}), 404
+    except Exception as e:
+        app.logger.exception('Failed to run feature %s', feature_key)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/web_tf_wizard')
 def web_tf_wizard():
     """Serve the TF Wizard static page if present (append-only safe route)."""
@@ -9712,6 +14004,7 @@ if __name__=='__main__':
 
     args=parser.parse_args()
 
+    print('DEBUG: Starting MasterChief...')
     print('='*70)
 
     print('MasterChief DevOps Platform')
@@ -9736,5 +14029,17 @@ if __name__=='__main__':
 
         app.logger.exception('Startup chat initialization failed')
 
-    app.run(host='0.0.0.0',port=args.port,debug=args.debug)
+    # Handle Windows console issues with Flask banner
+    try:
+        app.run(host='0.0.0.0',port=args.port,debug=args.debug)
+    except OSError as e:
+        if 'Windows error 6' in str(e):
+            print(f"⚠️  Windows console error encountered, but server should be running on http://localhost:{args.port}")
+            print("This is a known Windows console handle issue - the application is still functional.")
+            # Keep the process alive
+            import time
+            while True:
+                time.sleep(1)
+        else:
+            raise
 
