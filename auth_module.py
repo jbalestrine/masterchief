@@ -239,10 +239,15 @@ class AuthModule:
             """Load current user before each request"""
             g.user = current_user
 
+        # Register user loader
+        @auth_module.login_manager.user_loader
+        def load_user(user_id):
+            """Load user by ID"""
+            return User.get(user_id)
+
         return auth_module
 
-# Flask-Login user loader
-@login_manager.user_loader
-def load_user(user_id):
-    """Load user by ID"""
-    return User.get(user_id)
+
+def init_auth(app: Flask):
+    """Initialize authentication module"""
+    return AuthModule.init_app(app)
