@@ -968,7 +968,7 @@ def api_mock_stop():
 
                 return jsonify({'ok': False, 'error': 'stop script not found'}), 404
 
-            if not sys.mc_platform.startswith('win'):
+            if not sys.platform.startswith('win'):
 
                 return jsonify({'ok': False, 'error': 'Hyper-V scripts can only be run on Windows'}), 501
 
@@ -1653,7 +1653,7 @@ def api_ide_execute():
 
                     # On Windows default to PowerShell script to avoid missing bash/wsl
 
-                    if sys.mc_platform.startswith('win'):
+                    if sys.platform.startswith('win'):
 
                         ext = '.ps1'
 
@@ -13463,7 +13463,7 @@ def web_ide():
 
     try:
 
-        p = Path(__file__).resolve().parent / 'web_ide.html'
+        p = Path(__file__).resolve().parent / 'caf.html'
 
         if p.exists():
 
@@ -13487,11 +13487,11 @@ def web_ide():
 
 def masterchief_code_ui():
 
-    """Serve the alternate web IDE from the cool-elbakyan worktree."""
+    """Serve the Azure CAF Generator."""
 
     try:
 
-        p = Path(r'C:\Users\Echo\masterchief\.claude\worktrees\cool-elbakyan\web_ide.html')
+        p = Path(__file__).resolve().parent / 'web_ide.html'
 
         if p.exists():
 
@@ -13499,9 +13499,9 @@ def masterchief_code_ui():
 
     except Exception:
 
-        app.logger.exception('Failed to serve alternate web_ide.html')
+        app.logger.exception('Failed to serve CAF generator')
 
-    # Fall back to main web_ide if alternate is not available
+    # Fall back to main web_ide if not available
 
     try:
 
@@ -13509,7 +13509,7 @@ def masterchief_code_ui():
 
     except Exception:
 
-        return ('Alternate Web IDE not available', 404)
+        return ('CAF Generator not available', 404)
 
 @app.route('/iac_manager')
 
