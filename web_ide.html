@@ -260,6 +260,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);}
           <button class="tb-btn primary" onclick="runScript()" title="Run (Ctrl+Enter)">&#9654; Run</button>
           <button class="tb-btn" onclick="saveFile()" title="Save (Ctrl+S)">&#128190; Save</button>
           <button class="tb-btn" onclick="runScriptAsync()" title="Run Async">&#9200; Async</button>
+          <button class="tb-btn" onclick="analyzeCode()" title="AI Code Analysis" style="background: linear-gradient(135deg, #9C27B0, #BA55D3); color: white; border-color: #9C27B0;">&#129504; AI Analyze</button>
         </div>
         <div class="toolbar-group">
           <select id="shell-select" style="padding:5px 8px;font-size:12px;border-radius:4px;">
@@ -1329,6 +1330,65 @@ async function runScript() {
   document.getElementById('sb-status').textContent = 'Ready';
 }
 
+// ── AI Code Analysis ───────────────────────────────────────────────
+async function analyzeCode() {
+  if (state.activeTab === null) { toast('No file open', 'error'); return; }
+  const tab = state.tabs[state.activeTab];
+  const code = document.getElementById('code-editor').value;
+  
+  if (!code.trim()) { toast('No code to analyze', 'error'); return; }
+  
+  // Create analysis prompt
+  const analysisPrompt = `Please analyze this ${tab.lang || 'code'} file for:
+1. Syntax errors and potential bugs
+2. Code quality issues and improvements
+3. Best practices and suggestions
+4. Performance optimizations if applicable
+5. Security concerns if any
+
+File: ${tab.name}
+Language: ${tab.lang || 'unknown'}
+
+Code:
+\`\`\`${tab.lang || ''}
+${code}
+\`\`\`
+
+Please provide a detailed analysis with specific recommendations.`;
+
+  document.getElementById('sb-status').textContent = 'Analyzing with AI...';
+  appendOutput('\n--- AI Code Analysis ---\n', 'out-info');
+  switchPanel('output');
+
+  try {
+    const r = await fetch('/api/echo/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        message: analysisPrompt,
+        session_id: 'code_analysis_' + Date.now(),
+        auto_continue: true,
+        save_to_file: false
+      })
+    });
+    
+    const j = await r.json();
+    if (j.response) {
+      appendOutput('AI Analysis Results:\n', 'out-success');
+      appendOutput(j.response + '\n', 'out-stdout');
+      appendOutput('--- Analysis Complete ---\n', 'out-info');
+      toast('Code analysis complete');
+    } else {
+      appendOutput('[error] Analysis failed: ' + (j.error || 'Unknown error') + '\n', 'out-error');
+      toast('Analysis failed', 'error');
+    }
+  } catch(e) {
+    appendOutput('[error] Analysis request failed: ' + e + '\n', 'out-error');
+    toast('Analysis error: ' + e, 'error');
+  }
+  document.getElementById('sb-status').textContent = 'Ready';
+}
+
 // ── Run Async ──────────────────────────────────────────────────────
 async function runScriptAsync() {
   if (state.activeTab === null) { toast('No file open', 'error'); return; }
@@ -1464,7 +1524,9 @@ function createBlankFile() {
   const name = prompt('Filename (e.g., script.ps1):');
   if (!name) return;
   const lang = detectLang(name);
-  const tab = { id: Date.now(), name, path: name, content: '', dirty: true, lang };
+  // Create path relative to current directory
+  const path = state.currentPath ? `${state.currentPath}/${name}` : name;
+  const tab = { id: Date.now(), name, path, content: '', dirty: true, lang };
   state.tabs.push(tab);
   switchTab(state.tabs.length - 1);
 }

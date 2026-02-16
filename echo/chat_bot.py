@@ -268,13 +268,15 @@ class EchoChatBot:
         # via the dedicated runtime loader in `echo.runtime.model_runtime`.
         self._local_model_path = None
     
-    def chat(self, user_message: str, session_id: str = "default") -> Dict[str, Any]:
+    def chat(self, user_message: str, session_id: str = "default", temperature: float = 0.7, max_tokens: int = 256) -> Dict[str, Any]:
         """
         Process a user message and generate a response.
         
         Args:
             user_message: The user's message
             session_id: Session identifier for conversation context
+            temperature: Temperature for LLM generation
+            max_tokens: Maximum tokens for LLM generation
             
         Returns:
             Dictionary with response and metadata
@@ -294,7 +296,7 @@ class EchoChatBot:
         self.conversation_history[session_id].append(user_msg)
         
         # Generate response
-        response_text = self._generate_response(user_message, session_id)
+        response_text = self._generate_response(user_message, session_id, temperature, max_tokens)
         
         # Store bot response
         bot_msg = ChatMessage(
@@ -314,13 +316,15 @@ class EchoChatBot:
             'message_id': bot_msg.message_id
         }
     
-    def _generate_response(self, user_message: str, session_id: str) -> str:
+    def _generate_response(self, user_message: str, session_id: str, temperature: float = 0.7, max_tokens: int = 256) -> str:
         """
         Generate a response using learned patterns and defaults.
         
         Args:
             user_message: User's message
             session_id: Session identifier
+            temperature: Temperature for LLM generation
+            max_tokens: Maximum tokens for LLM generation
             
         Returns:
             Generated response
@@ -351,11 +355,11 @@ class EchoChatBot:
             # Prefer LLM-generated response for DevOps queries when available
             try:
                 if self._local_model_path:
-                    llm_out = self._generate_with_local_llm(user_message, max_tokens=256, temperature=0.2)
+                    llm_out = self._generate_with_local_llm(user_message, max_tokens=max_tokens, temperature=temperature)
                     if llm_out:
                         return llm_out
                     # try remote fallback if configured
-                    remote_out = self._generate_with_remote_llm(user_message, max_tokens=256, temperature=0.2)
+                    remote_out = self._generate_with_remote_llm(user_message, max_tokens=max_tokens, temperature=temperature)
                     if remote_out:
                         return remote_out
             except Exception:
@@ -367,10 +371,10 @@ class EchoChatBot:
         # Try local then remote LLM fallbacks before returning unknown response
         try:
             if self._local_model_path:
-                out = self._generate_with_local_llm(user_message, max_tokens=200, temperature=0.7)
+                out = self._generate_with_local_llm(user_message, max_tokens=max_tokens, temperature=temperature)
                 if out:
                     return out
-            remote_out = self._generate_with_remote_llm(user_message, max_tokens=200, temperature=0.7)
+            remote_out = self._generate_with_remote_llm(user_message, max_tokens=max_tokens, temperature=temperature)
             if remote_out:
                 return remote_out
         except Exception:

@@ -1565,7 +1565,35 @@ def api_ide_save():
 
     try:
 
-        script_mgr.add_script(filename, content)
+        # Check if this is a direct file path (web IDE) or script name (legacy)
+
+        if '/' in filename or '\\' in filename:
+
+            # Web IDE: save directly to project
+
+            base_path = Path(__file__).parent
+
+            file_path = (base_path / filename).resolve()
+
+            # Security check
+
+            if not file_path.is_relative_to(base_path):
+
+                return jsonify({'ok': False, 'error': 'Access denied'}), 403
+
+            # Create directory if needed
+
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Write file
+
+            file_path.write_text(content, encoding='utf-8')
+
+        else:
+
+            # Legacy: use script manager
+
+            script_mgr.add_script(filename, content)
 
         return jsonify({'ok': True, 'filename': filename})
 
@@ -2650,13 +2678,25 @@ def api_ide_log():
 
 def api_ide_tree():
 
-    # return directory tree under scripts folder; optional `path` query for subfolder
+    # return directory tree; use project root for web IDE (paths with slashes) or scripts folder for legacy compatibility
 
     rel = request.args.get('path','')
 
     try:
 
-        base = Path(app.config['SCRIPTS_FOLDER']).resolve()
+        # Check if this is a web IDE request (path contains slashes) or legacy script manager
+
+        if '/' in rel or '\\' in rel:
+
+            # Web IDE: use project root
+
+            base = Path(__file__).parent.resolve()
+
+        else:
+
+            # Legacy: use scripts folder (empty path or simple filename)
+
+            base = Path(app.config['SCRIPTS_FOLDER']).resolve()
 
         target = (base / rel).resolve()
 
@@ -2666,17 +2706,27 @@ def api_ide_tree():
 
         nodes = []
 
-        for p in sorted(target.iterdir()):
+        try:
+            paths = list(target.iterdir())
+        except (OSError, PermissionError) as e:
+            return jsonify({'ok': False, 'error': f'Cannot read directory: {e}'}), 500
 
-            if p.is_dir():
+        for p in sorted(paths, key=lambda x: x.name):
 
-                nodes.append({'type':'dir','name':p.name,'path':str(p.relative_to(base))})
+            try:
+                if p.name.startswith('.') and p.name not in ['.env', '.env.example']:  # Allow some dotfiles
+                    continue
 
-            else:
+                if p.is_dir():
+                    nodes.append({'type':'dir','name':p.name,'path':str(p.relative_to(base))})
+                else:
+                    stat = p.stat()
+                    nodes.append({'type':'file','name':p.name,'path':str(p.relative_to(base)),'size':stat.st_size,'modified':datetime.fromtimestamp(stat.st_mtime).isoformat()})
+            except (OSError, PermissionError):
+                # Skip files/directories we can't access
+                continue
 
-                nodes.append({'type':'file','name':p.name,'path':str(p.relative_to(base)),'size':p.stat().st_size,'modified':datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
-
-        return jsonify({'ok':True,'path':str(target.relative_to(base)),'nodes':nodes})
+        return jsonify({'ok':True,'path':str(target.relative_to(base)) if rel else '','nodes':nodes})
 
     except Exception as e:
 
@@ -11107,9 +11157,24 @@ def api_personality_toggle():
 
 
 
+@app.route('/masterchief_code_ui')
+def masterchief_code_ui():
+    """Serve the MasterChief Code UI (Web IDE)."""
+    try:
+        ide_path = Path(__file__).parent / 'web_ide.html'
+        if ide_path.exists():
+            return ide_path.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+        else:
+            return f'<h1>MasterChief Code UI</h1><p>Web IDE file not found at {ide_path}</p>', 404
+    except Exception as e:
+        app.logger.exception('Failed to serve MasterChief Code UI')
+        return f'<h1>Error</h1><p>Failed to load Code UI: {e}</p>', 500
+
+
 @app.route('/echo-chat')
 def echo_chat():
-    return send_file('echo_chat_page.html')
+    echo_art = Echo.get_compact_greeting()
+    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', ECHO_CHAT_TEMPLATE.replace('{% extends "base.html" %}', '').replace('{% block content %}', '').replace('{% endblock %}', '')), echo_art=echo_art, request=request, get_flashed_messages=get_flashed_messages)
 
 @app.route('/api/echo/chat',methods=['POST'])
 
@@ -12389,6 +12454,41 @@ def api_echo_image_status():
     return jsonify(res)
 
 
+@app.route('/api/gguf/models')
+def api_gguf_models():
+    try:
+        models_dir = Path(__file__).parent / 'models'
+        models = []
+        if models_dir.exists():
+            for f in models_dir.glob('*.gguf'):
+                models.append(str(f.relative_to(Path(__file__).parent)))
+        bot = get_chat_bot()
+        current = None
+        if hasattr(bot, '_model_path') and bot._model_path:
+            current = str(Path(bot._model_path).relative_to(Path(__file__).parent)) if Path(bot._model_path).is_relative_to(Path(__file__).parent) else bot._model_path
+        return jsonify({'models': models, 'current': current})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/gguf/select', methods=['POST'])
+def api_gguf_select():
+    try:
+        data = request.get_json() or {}
+        model = data.get('model', '')
+        bot = get_chat_bot()
+        if model:
+            success = bot.reload_model(model_name=model)
+            current = str(Path(bot._model_path).relative_to(Path(__file__).parent)) if Path(bot._model_path).is_relative_to(Path(__file__).parent) else bot._model_path
+            return jsonify({'success': success, 'current': current})
+        else:
+            # clear model
+            bot._model_path = None
+            return jsonify({'success': True, 'current': None})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 
 
 
@@ -12740,11 +12840,7 @@ def api_echo_models():
         models = []
         if models_dir.exists():
             for f in models_dir.glob('*.gguf'):
-                models.append({
-                    'name': f.name,
-                    'path': str(f),
-                    'size': f.stat().st_size
-                })
+                models.append(str(f.relative_to(Path.cwd())))
         return jsonify({'models': models})
     except Exception as e:
         app.logger.exception('List models failed')
@@ -13482,34 +13578,6 @@ def web_ide():
     except Exception:
 
         return ('Web IDE not available', 404)
-
-@app.route('/masterchief_code_ui')
-
-def masterchief_code_ui():
-
-    """Serve the Azure CAF Generator."""
-
-    try:
-
-        p = Path(__file__).resolve().parent / 'web_ide.html'
-
-        if p.exists():
-
-            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
-
-    except Exception:
-
-        app.logger.exception('Failed to serve CAF generator')
-
-    # Fall back to main web_ide if not available
-
-    try:
-
-        return redirect(url_for('web_ide'))
-
-    except Exception:
-
-        return ('CAF Generator not available', 404)
 
 @app.route('/iac_manager')
 
