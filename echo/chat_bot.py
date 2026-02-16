@@ -337,17 +337,19 @@ class EchoChatBot:
         if learned_response:
             return learned_response
         
-        # Pattern matching for common intents
-        if any(word in msg_lower for word in ['hello', 'hi', 'hey', 'greetings']):
+        # Pattern matching for common intents - check message start for greetings
+        msg_start = msg_lower[:50]  # Check only the first 50 characters
+        if any(phrase in msg_start for phrase in ['hello', 'hi there', 'hey there', 'greetings', 'good morning', 'good afternoon', 'good evening']):
             return self._random_choice(self.default_responses['greeting'])
         
-        if any(word in msg_lower for word in ['bye', 'goodbye', 'farewell', 'see you']):
+        if any(phrase in msg_start for phrase in ['bye', 'goodbye', 'farewell', 'see you']):
             return self._random_choice(self.default_responses['farewell'])
         
-        if any(word in msg_lower for word in ['thank', 'thanks', 'thx']):
+        if any(phrase in msg_start for phrase in ['thank', 'thanks', 'thx']):
             return self._random_choice(self.default_responses['thanks'])
         
-        if any(word in msg_lower for word in ['help', 'what can you do', 'capabilities']):
+        if any(phrase in msg_start for phrase in ['help', 'what can you do', 'capabilities']):
+            return self._random_choice(self.default_responses['help'])
             return self.default_responses['help'][0]
         
         # DevOps related queries
