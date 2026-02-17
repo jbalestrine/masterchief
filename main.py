@@ -3,6 +3,9 @@
 """MasterChief Flask Web Application - All-in-One File"""
 
 import sys
+print("DEBUG: main.py is starting", file=sys.stderr)
+
+import sys
 import os
 
 # Load environment variables from .env file
@@ -25,6 +28,12 @@ try:
     if _current_dir not in sys.path:
         sys.path.insert(0, _current_dir)
     from features.manager import init_feature_manager, get_feature_manager
+    import importlib
+    import features.manager
+    importlib.reload(features.manager)
+    from features.manager import init_feature_manager, get_feature_manager
+    with open('debug.log', 'a') as f:
+        f.write(f"DEBUG: Successfully imported init_feature_manager from features.manager, module file: {init_feature_manager.__module__}\n")
     FEATURE_MANAGER_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Warning: Failed to initialize feature manager: {e}")
@@ -51,6 +60,10 @@ import psutil
 import subprocess
 
 import zipfile
+
+import shutil
+
+import html
 
 from datetime import datetime
 
@@ -345,6 +358,17 @@ if FEATURE_MANAGER_AVAILABLE:
         with open('debug.log', 'a') as f:
             f.write(f"Traceback: {traceback.format_exc()}\n")
         FEATURE_MANAGER_AVAILABLE = False
+
+# Manually register GitHub integration routes
+try:
+    from features.handlers.github_integration import register_routes
+    print("DEBUG: About to call register_routes", file=sys.stderr)
+    register_routes(app)
+    print("DEBUG: Successfully called register_routes", file=sys.stderr)
+except Exception as e:
+    print(f"ERROR: Failed to register GitHub routes: {e}", file=sys.stderr)
+    import traceback
+    traceback.print_exc()
 else:
     with open('debug.log', 'a') as f:
         f.write("DEBUG: Feature manager not available\n")
@@ -803,6 +827,978 @@ def api_terraform_generate():
         app.logger.exception('Failed to generate terraform project')
 
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+
+
+
+ENTERPRISE_TF_JOBS = {}  # job_id -> generated project path
+
+class EnterpriseTerraformGenerator:
+    """Generates enterprise-grade Terraform projects from wizard configuration."""
+
+    def __init__(self, output_base):
+        self.output_base = Path(output_base)
+        self.output_base.mkdir(parents=True, exist_ok=True)
+
+    def generate(self, config):
+        """Generate a full enterprise Terraform project and return a job ID."""
+        job_id = str(uuid.uuid4())[:8]
+        project_name = config.get('project_name', 'enterprise-infra')
+        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '', project_name) or 'project'
+        out_dir = self.output_base / f'{safe_name}_{job_id}'
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        self._write_providers(config, out_dir)
+        self._write_backend(config, out_dir)
+        self._write_variables(config, out_dir)
+        self._write_locals(config, out_dir)
+
+        # Module directories
+        modules_dir = out_dir / 'modules'
+
+        # Hub module
+        if config.get('topology') == 'hub-spoke':
+            self._write_hub_module(config, modules_dir / 'hub')
+
+        # Spoke modules
+        for spoke in config.get('spokes', []):
+            spoke_name = re.sub(r'[^a-zA-Z0-9_-]', '', spoke.get('name', 'spoke'))
+            self._write_spoke_module(config, spoke, modules_dir / f'spoke_{spoke_name}')
+
+        # AKS module
+        if config.get('aks_enabled'):
+            self._write_aks_module(config, modules_dir / 'aks')
+
+        # Key Vault module
+        if config.get('keyvault_enabled', True):
+            self._write_keyvault_module(config, modules_dir / 'keyvault')
+
+        # Monitoring module
+        if config.get('log_analytics_enabled', True):
+            self._write_monitoring_module(config, modules_dir / 'monitoring')
+
+        # RBAC module
+        if config.get('rbac_assignments'):
+            self._write_rbac_module(config, modules_dir / 'rbac')
+
+        # DR module
+        if config.get('asr_enabled'):
+            self._write_dr_module(config, modules_dir / 'disaster_recovery')
+
+        # Users module (AAD groups)
+        if config.get('aad_groups_enabled'):
+            self._write_users_module(config, modules_dir / 'users')
+
+        # Akamai module
+        if config.get('akamai_enabled'):
+            self._write_akamai_module(config, modules_dir / 'akamai')
+
+        # VMSS module
+        if config.get('vmss_enabled'):
+            self._write_vmss_module(config, modules_dir / 'vmss')
+
+        # Main.tf referencing all modules
+        self._write_main(config, out_dir)
+
+        # Outputs
+        self._write_outputs(config, out_dir)
+
+        # Environment tfvars
+        self._write_environments(config, out_dir)
+
+        # CI/CD templates
+        if config.get('cicd_enabled'):
+            self._write_cicd_templates(config, out_dir)
+
+        # README
+        self._write_readme(config, out_dir)
+
+        # Create ZIP
+        zip_path = out_dir.parent / f'{safe_name}_{job_id}.zip'
+        shutil.make_archive(str(zip_path).replace('.zip', ''), 'zip', str(out_dir))
+
+        ENTERPRISE_TF_JOBS[job_id] = {
+            'id': job_id, 'path': str(zip_path), 'project_dir': str(out_dir),
+            'name': project_name, 'created': datetime.now().isoformat()
+        }
+        return job_id
+
+    def _w(self, path, content):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
+
+    def _write_providers(self, cfg, out):
+        providers = ['    azurerm = {\n      source  = "hashicorp/azurerm"\n      version = ">= 3.0"\n    }']
+        providers.append('    azuread = {\n      source  = "hashicorp/azuread"\n      version = ">= 2.0"\n    }')
+        providers.append('    random = {\n      source  = "hashicorp/random"\n      version = ">= 3.0"\n    }')
+        if cfg.get('aks_enabled'):
+            providers.append('    kubernetes = {\n      source  = "hashicorp/kubernetes"\n      version = ">= 2.0"\n    }')
+        if cfg.get('akamai_enabled'):
+            providers.append('    akamai = {\n      source  = "akamai/akamai"\n      version = ">= 1.0"\n    }')
+        self._w(out / 'providers.tf', f"""terraform {{
+  required_version = ">= 1.5"
+  required_providers {{
+{chr(10).join(providers)}
+  }}
+}}
+
+provider "azurerm" {{
+  features {{
+    key_vault {{
+      purge_protection_enabled = false
+    }}
+  }}
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id
+}}
+
+provider "azuread" {{
+  tenant_id = var.tenant_id
+}}
+""")
+
+    def _write_backend(self, cfg, out):
+        backend = cfg.get('backend', {})
+        if backend.get('type') == 'azurerm':
+            self._w(out / 'backend.tf', f"""terraform {{
+  backend "azurerm" {{
+    resource_group_name  = "{backend.get('resource_group', 'tfstate-rg')}"
+    storage_account_name = "{backend.get('storage_account', 'tfstatesa')}"
+    container_name       = "{backend.get('container', 'tfstate')}"
+    key                  = "{cfg.get('project_name', 'enterprise')}/terraform.tfstate"
+  }}
+}}
+""")
+        else:
+            self._w(out / 'backend.tf', 'terraform {\n  backend "local" {\n    path = "terraform.tfstate"\n  }\n}\n')
+
+    def _write_variables(self, cfg, out):
+        region = cfg.get('region', 'eastus')
+        env = cfg.get('environment', 'dev')
+        self._w(out / 'variables.tf', f"""variable "subscription_id" {{
+  type        = string
+  description = "Azure Subscription ID"
+  default     = "{cfg.get('subscription_id', '')}"
+}}
+
+variable "tenant_id" {{
+  type        = string
+  description = "Azure AD Tenant ID"
+  default     = "{cfg.get('tenant_id', '')}"
+}}
+
+variable "environment" {{
+  type        = string
+  description = "Environment name (dev/test/staging/prod)"
+  default     = "{env}"
+}}
+
+variable "location" {{
+  type        = string
+  description = "Azure region"
+  default     = "{region}"
+}}
+
+variable "naming_prefix" {{
+  type        = string
+  description = "Naming prefix for all resources"
+  default     = "{cfg.get('naming_prefix', cfg.get('project_name', 'mc'))}"
+}}
+
+variable "tags" {{
+  type = map(string)
+  default = {{
+    Environment = "{env}"
+    ManagedBy   = "terraform"
+    Project     = "{cfg.get('project_name', 'masterchief')}"
+  }}
+}}
+""")
+
+    def _write_locals(self, cfg, out):
+        prefix = cfg.get('naming_prefix', cfg.get('project_name', 'mc'))
+        self._w(out / 'locals.tf', f"""locals {{
+  prefix      = var.naming_prefix
+  environment = var.environment
+  location    = var.location
+  tags        = var.tags
+  hub_rg_name = "${{local.prefix}}-hub-rg"
+}}
+""")
+
+    def _write_hub_module(self, cfg, mod_dir):
+        hub_cidr = cfg.get('hub_cidr', '10.0.0.0/16')
+        hub_subnets = cfg.get('hub_subnets', [
+            {'name': 'GatewaySubnet', 'cidr': '10.0.0.0/24'},
+            {'name': 'AzureFirewallSubnet', 'cidr': '10.0.1.0/24'},
+            {'name': 'SharedServicesSubnet', 'cidr': '10.0.2.0/24'},
+            {'name': 'ManagementSubnet', 'cidr': '10.0.3.0/24'},
+        ])
+        subnets_hcl = '\n'.join(f'    {{ name = "{s["name"]}", cidr = "{s["cidr"]}" }},' for s in hub_subnets)
+        self._w(mod_dir / 'main.tf', f"""resource "azurerm_resource_group" "hub" {{
+  name     = "${{var.prefix}}-hub-rg"
+  location = var.location
+  tags     = var.tags
+}}
+
+resource "azurerm_virtual_network" "hub" {{
+  name                = "${{var.prefix}}-hub-vnet"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  address_space       = [var.hub_cidr]
+  tags                = var.tags
+}}
+
+resource "azurerm_subnet" "hub_subnets" {{
+  for_each             = {{ for s in var.hub_subnets : s.name => s }}
+  name                 = each.value.name
+  resource_group_name  = azurerm_resource_group.hub.name
+  virtual_network_name = azurerm_virtual_network.hub.name
+  address_prefixes     = [each.value.cidr]
+}}
+
+resource "azurerm_network_security_group" "hub_nsg" {{
+  name                = "${{var.prefix}}-hub-nsg"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  tags                = var.tags
+}}
+{'' if not cfg.get('firewall_enabled') else '''
+resource "azurerm_firewall" "hub" {
+  name                = "${var.prefix}-hub-fw"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  sku_name            = "AZFW_VNet"
+  sku_tier            = "Standard"
+  ip_configuration {
+    name                 = "configuration"
+    subnet_id            = azurerm_subnet.hub_subnets["AzureFirewallSubnet"].id
+    public_ip_address_id = azurerm_public_ip.fw_pip.id
+  }
+  tags = var.tags
+}
+
+resource "azurerm_public_ip" "fw_pip" {
+  name                = "${var.prefix}-hub-fw-pip"
+  location            = azurerm_resource_group.hub.location
+  resource_group_name = azurerm_resource_group.hub.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  tags                = var.tags
+}
+'''}
+""")
+        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
+variable "location" {{ type = string }}
+variable "tags" {{ type = map(string) }}
+variable "hub_cidr" {{
+  type    = string
+  default = "{hub_cidr}"
+}}
+variable "hub_subnets" {{
+  type = list(object({{ name = string, cidr = string }}))
+  default = [
+{subnets_hcl}
+  ]
+}}
+""")
+        self._w(mod_dir / 'outputs.tf', """output "hub_vnet_id" { value = azurerm_virtual_network.hub.id }
+output "hub_vnet_name" { value = azurerm_virtual_network.hub.name }
+output "hub_rg_name" { value = azurerm_resource_group.hub.name }
+output "hub_subnet_ids" { value = { for k, v in azurerm_subnet.hub_subnets : k => v.id } }
+""")
+
+    def _write_spoke_module(self, cfg, spoke, mod_dir):
+        spoke_cidr = spoke.get('cidr', '10.1.0.0/16')
+        spoke_subnets = spoke.get('subnets', [
+            {'name': 'AKSSubnet', 'cidr': '10.1.1.0/24'},
+            {'name': 'AppSubnet', 'cidr': '10.1.2.0/24'},
+            {'name': 'DataSubnet', 'cidr': '10.1.3.0/24'},
+        ])
+        subnets_hcl = '\n'.join(f'    {{ name = "{s["name"]}", cidr = "{s["cidr"]}" }},' for s in spoke_subnets)
+        self._w(mod_dir / 'main.tf', f"""resource "azurerm_resource_group" "spoke" {{
+  name     = "${{var.prefix}}-${{var.spoke_name}}-rg"
+  location = var.location
+  tags     = var.tags
+}}
+
+resource "azurerm_virtual_network" "spoke" {{
+  name                = "${{var.prefix}}-${{var.spoke_name}}-vnet"
+  location            = azurerm_resource_group.spoke.location
+  resource_group_name = azurerm_resource_group.spoke.name
+  address_space       = [var.spoke_cidr]
+  tags                = var.tags
+}}
+
+resource "azurerm_subnet" "spoke_subnets" {{
+  for_each             = {{ for s in var.spoke_subnets : s.name => s }}
+  name                 = each.value.name
+  resource_group_name  = azurerm_resource_group.spoke.name
+  virtual_network_name = azurerm_virtual_network.spoke.name
+  address_prefixes     = [each.value.cidr]
+}}
+
+resource "azurerm_network_security_group" "spoke_nsg" {{
+  name                = "${{var.prefix}}-${{var.spoke_name}}-nsg"
+  location            = azurerm_resource_group.spoke.location
+  resource_group_name = azurerm_resource_group.spoke.name
+  tags                = var.tags
+}}
+{"" if not spoke.get('peering', True) else '''
+resource "azurerm_virtual_network_peering" "spoke_to_hub" {
+  name                      = "${var.prefix}-${var.spoke_name}-to-hub"
+  resource_group_name       = azurerm_resource_group.spoke.name
+  virtual_network_name      = azurerm_virtual_network.spoke.name
+  remote_virtual_network_id = var.hub_vnet_id
+  allow_forwarded_traffic   = true
+  allow_gateway_transit     = false
+  use_remote_gateways       = false
+}
+
+resource "azurerm_virtual_network_peering" "hub_to_spoke" {
+  name                      = "hub-to-${var.spoke_name}"
+  resource_group_name       = var.hub_rg_name
+  virtual_network_name      = var.hub_vnet_name
+  remote_virtual_network_id = azurerm_virtual_network.spoke.id
+  allow_forwarded_traffic   = true
+  allow_gateway_transit     = true
+  use_remote_gateways       = false
+}
+''' }
+""")
+        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
+variable "location" {{ type = string }}
+variable "tags" {{ type = map(string) }}
+variable "spoke_name" {{ type = string }}
+variable "spoke_cidr" {{
+  type    = string
+  default = "{spoke_cidr}"
+}}
+variable "spoke_subnets" {{
+  type = list(object({{ name = string, cidr = string }}))
+  default = [
+{subnets_hcl}
+  ]
+}}
+variable "hub_vnet_id" {{ type = string; default = "" }}
+variable "hub_vnet_name" {{ type = string; default = "" }}
+variable "hub_rg_name" {{ type = string; default = "" }}
+""")
+        self._w(mod_dir / 'outputs.tf', f"""output "spoke_vnet_id" {{ value = azurerm_virtual_network.spoke.id }}
+output "spoke_rg_name" {{ value = azurerm_resource_group.spoke.name }}
+output "spoke_subnet_ids" {{ value = {{ for k, v in azurerm_subnet.spoke_subnets : k => v.id }} }}
+""")
+
+    def _write_aks_module(self, cfg, mod_dir):
+        aks_cfg = cfg.get('aks_config', {})
+        self._w(mod_dir / 'main.tf', """resource "azurerm_kubernetes_cluster" "aks" {
+  name                = "${var.prefix}-aks"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  dns_prefix          = "${var.prefix}-aks"
+  kubernetes_version  = var.kubernetes_version
+
+  default_node_pool {
+    name                = "system"
+    node_count          = var.system_node_count
+    vm_size             = var.system_vm_size
+    enable_auto_scaling = true
+    min_count           = var.system_min_count
+    max_count           = var.system_max_count
+    vnet_subnet_id      = var.subnet_id
+    max_pods            = 110
+    os_disk_size_gb     = 128
+  }
+
+  identity {
+    type = "SystemAssigned"
+  }
+
+  network_profile {
+    network_plugin    = var.network_plugin
+    network_policy    = var.network_policy
+    load_balancer_sku = "standard"
+    outbound_type     = "loadBalancer"
+  }
+
+  azure_active_directory_role_based_access_control {
+    managed            = var.enable_aad_rbac
+    azure_rbac_enabled = var.enable_aad_rbac
+  }
+
+  oms_agent {
+    log_analytics_workspace_id = var.log_analytics_workspace_id
+  }
+
+  azure_policy_enabled = var.enable_azure_policy
+
+  tags = var.tags
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+variable "subnet_id" { type = string }
+variable "kubernetes_version" { type = string; default = "1.29" }
+variable "system_vm_size" { type = string; default = "Standard_D2s_v3" }
+variable "system_node_count" { type = number; default = 3 }
+variable "system_min_count" { type = number; default = 2 }
+variable "system_max_count" { type = number; default = 5 }
+variable "network_plugin" { type = string; default = "azure" }
+variable "network_policy" { type = string; default = "azure" }
+variable "enable_aad_rbac" { type = bool; default = true }
+variable "enable_azure_policy" { type = bool; default = true }
+variable "log_analytics_workspace_id" { type = string; default = "" }
+""")
+        self._w(mod_dir / 'outputs.tf', """output "aks_id" { value = azurerm_kubernetes_cluster.aks.id }
+output "aks_name" { value = azurerm_kubernetes_cluster.aks.name }
+output "kube_config" { value = azurerm_kubernetes_cluster.aks.kube_admin_config_raw; sensitive = true }
+""")
+
+    def _write_keyvault_module(self, cfg, mod_dir):
+        kv = cfg.get('keyvault_config', {})
+        self._w(mod_dir / 'main.tf', f"""data "azurerm_client_config" "current" {{}}
+
+resource "azurerm_key_vault" "kv" {{
+  name                       = "${{var.prefix}}-kv"
+  location                   = var.location
+  resource_group_name        = var.resource_group_name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  purge_protection_enabled   = {str(kv.get('purge_protection', True)).lower()}
+  soft_delete_retention_days = {kv.get('soft_delete_days', 90)}
+  enable_rbac_authorization  = true
+
+  network_acls {{
+    default_action = "{kv.get('default_action', 'Deny')}"
+    bypass         = "AzureServices"
+  }}
+
+  tags = var.tags
+}}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+""")
+        self._w(mod_dir / 'outputs.tf', """output "key_vault_id" { value = azurerm_key_vault.kv.id }
+output "key_vault_uri" { value = azurerm_key_vault.kv.vault_uri }
+""")
+
+    def _write_monitoring_module(self, cfg, mod_dir):
+        self._w(mod_dir / 'main.tf', """resource "azurerm_log_analytics_workspace" "law" {
+  name                = "${var.prefix}-law"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = "PerGB2018"
+  retention_in_days   = var.retention_days
+  tags                = var.tags
+}
+
+resource "azurerm_log_analytics_solution" "containers" {
+  count                 = var.enable_container_insights ? 1 : 0
+  solution_name         = "ContainerInsights"
+  location              = var.location
+  resource_group_name   = var.resource_group_name
+  workspace_resource_id = azurerm_log_analytics_workspace.law.id
+  workspace_name        = azurerm_log_analytics_workspace.law.name
+  plan {
+    publisher = "Microsoft"
+    product   = "OMSGallery/ContainerInsights"
+  }
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+variable "retention_days" { type = number; default = 30 }
+variable "enable_container_insights" { type = bool; default = true }
+""")
+        self._w(mod_dir / 'outputs.tf', """output "workspace_id" { value = azurerm_log_analytics_workspace.law.id }
+output "workspace_key" { value = azurerm_log_analytics_workspace.law.primary_shared_key; sensitive = true }
+""")
+
+    def _write_rbac_module(self, cfg, mod_dir):
+        self._w(mod_dir / 'main.tf', """resource "azurerm_role_assignment" "assignments" {
+  for_each             = { for idx, a in var.assignments : idx => a }
+  scope                = each.value.scope
+  role_definition_name = each.value.role
+  principal_id         = each.value.principal_id
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "assignments" {
+  type = list(object({
+    principal_id = string
+    role         = string
+    scope        = string
+  }))
+  default = []
+}
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "assignment_ids" { value = [for a in azurerm_role_assignment.assignments : a.id] }\n')
+
+    def _write_dr_module(self, cfg, mod_dir):
+        asr = cfg.get('asr_config', {})
+        self._w(mod_dir / 'main.tf', f"""resource "azurerm_recovery_services_vault" "vault" {{
+  name                = "${{var.prefix}}-asr-vault"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = "Standard"
+  tags                = var.tags
+}}
+
+resource "azurerm_site_recovery_fabric" "primary" {{
+  name                = "primary-fabric"
+  resource_group_name = var.resource_group_name
+  recovery_vault_name = azurerm_recovery_services_vault.vault.name
+  location            = var.source_region
+}}
+
+resource "azurerm_site_recovery_fabric" "secondary" {{
+  name                = "secondary-fabric"
+  resource_group_name = var.resource_group_name
+  recovery_vault_name = azurerm_recovery_services_vault.vault.name
+  location            = var.target_region
+}}
+
+resource "azurerm_site_recovery_replication_policy" "policy" {{
+  name                                                 = "${{var.prefix}}-replication-policy"
+  resource_group_name                                  = var.resource_group_name
+  recovery_vault_name                                  = azurerm_recovery_services_vault.vault.name
+  recovery_point_retention_in_minutes                  = {asr.get('rpo_minutes', 1440)}
+  application_consistent_snapshot_frequency_in_minutes = {asr.get('snapshot_minutes', 240)}
+}}
+""")
+        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
+variable "location" {{ type = string }}
+variable "resource_group_name" {{ type = string }}
+variable "tags" {{ type = map(string) }}
+variable "source_region" {{ type = string; default = "{asr.get('source_region', 'eastus')}" }}
+variable "target_region" {{ type = string; default = "{asr.get('target_region', 'westus2')}" }}
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "vault_id" { value = azurerm_recovery_services_vault.vault.id }\n')
+
+    def _write_users_module(self, cfg, mod_dir):
+        self._w(mod_dir / 'main.tf', """resource "azuread_group" "groups" {
+  for_each         = { for g in var.groups : g.name => g }
+  display_name     = each.value.name
+  description      = each.value.description
+  security_enabled = true
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "groups" {
+  type = list(object({
+    name        = string
+    description = string
+  }))
+  default = []
+}
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "group_ids" { value = { for k, v in azuread_group.groups : k => v.id } }\n')
+
+    def _write_akamai_module(self, cfg, mod_dir):
+        ak = cfg.get('akamai_config', {})
+        self._w(mod_dir / 'main.tf', """# Akamai CDN & WAF Configuration
+# Requires Akamai API credentials configured
+
+resource "akamai_property" "cdn" {
+  name        = "${var.prefix}-cdn"
+  product_id  = "prd_Fresca"
+  contract_id = var.contract_id
+  group_id    = var.group_id
+
+  hostnames {
+    cname_from = var.edge_hostname
+    cname_to   = var.origin_hostname
+  }
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "contract_id" { type = string; default = "" }
+variable "group_id" { type = string; default = "" }
+variable "edge_hostname" { type = string; default = "" }
+variable "origin_hostname" { type = string; default = "" }
+""")
+        self._w(mod_dir / 'outputs.tf', '# Akamai outputs\n')
+
+    def _write_vmss_module(self, cfg, mod_dir):
+        vmss = cfg.get('vmss_config', {})
+        self._w(mod_dir / 'main.tf', """resource "azurerm_linux_virtual_machine_scale_set" "vmss" {
+  name                = "${var.prefix}-vmss"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  sku                 = var.vm_size
+  instances           = var.instance_count
+  admin_username      = "adminuser"
+
+  admin_ssh_key {
+    username   = "adminuser"
+    public_key = var.ssh_public_key
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+
+  os_disk {
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+
+  network_interface {
+    name    = "vmss-nic"
+    primary = true
+    ip_configuration {
+      name      = "internal"
+      primary   = true
+      subnet_id = var.subnet_id
+    }
+  }
+
+  tags = var.tags
+}
+""")
+        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
+variable "location" { type = string }
+variable "resource_group_name" { type = string }
+variable "tags" { type = map(string) }
+variable "subnet_id" { type = string }
+variable "vm_size" { type = string; default = "Standard_D2s_v3" }
+variable "instance_count" { type = number; default = 2 }
+variable "ssh_public_key" { type = string; default = "" }
+""")
+        self._w(mod_dir / 'outputs.tf', 'output "vmss_id" { value = azurerm_linux_virtual_machine_scale_set.vmss.id }\n')
+
+    def _write_main(self, cfg, out):
+        lines = ['# Main module composition\n']
+        if cfg.get('topology') == 'hub-spoke':
+            lines.append("""module "hub" {
+  source   = "./modules/hub"
+  prefix   = local.prefix
+  location = local.location
+  tags     = local.tags
+}
+""")
+        for spoke in cfg.get('spokes', []):
+            sname = re.sub(r'[^a-zA-Z0-9_]', '', spoke.get('name', 'spoke'))
+            lines.append(f"""module "spoke_{sname}" {{
+  source         = "./modules/spoke_{sname}"
+  prefix         = local.prefix
+  location       = local.location
+  tags           = local.tags
+  spoke_name     = "{spoke.get('name', sname)}"
+  hub_vnet_id    = {"module.hub.hub_vnet_id" if cfg.get('topology') == 'hub-spoke' else '""'}
+  hub_vnet_name  = {"module.hub.hub_vnet_name" if cfg.get('topology') == 'hub-spoke' else '""'}
+  hub_rg_name    = {"module.hub.hub_rg_name" if cfg.get('topology') == 'hub-spoke' else '""'}
+}}
+""")
+        if cfg.get('log_analytics_enabled', True):
+            lines.append("""module "monitoring" {
+  source              = "./modules/monitoring"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  tags                = local.tags
+}
+""")
+        if cfg.get('keyvault_enabled', True):
+            lines.append("""module "keyvault" {
+  source              = "./modules/keyvault"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  tags                = local.tags
+}
+""")
+        if cfg.get('aks_enabled'):
+            first_spoke = cfg.get('spokes', [{}])[0] if cfg.get('spokes') else {}
+            sname = re.sub(r'[^a-zA-Z0-9_]', '', first_spoke.get('name', 'spoke'))
+            lines.append(f"""module "aks" {{
+  source                     = "./modules/aks"
+  prefix                     = local.prefix
+  location                   = local.location
+  resource_group_name        = module.spoke_{sname}.spoke_rg_name
+  subnet_id                  = module.spoke_{sname}.spoke_subnet_ids["AKSSubnet"]
+  log_analytics_workspace_id = module.monitoring.workspace_id
+  tags                       = local.tags
+}}
+""")
+        if cfg.get('rbac_assignments'):
+            lines.append("""module "rbac" {
+  source      = "./modules/rbac"
+  assignments = var.rbac_assignments
+}
+""")
+        if cfg.get('asr_enabled'):
+            lines.append("""module "disaster_recovery" {
+  source              = "./modules/disaster_recovery"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  tags                = local.tags
+}
+""")
+        if cfg.get('aad_groups_enabled'):
+            lines.append("""module "users" {
+  source = "./modules/users"
+  groups = var.aad_groups
+}
+""")
+        if cfg.get('vmss_enabled'):
+            lines.append("""module "vmss" {
+  source              = "./modules/vmss"
+  prefix              = local.prefix
+  location            = local.location
+  resource_group_name = module.hub.hub_rg_name
+  subnet_id           = module.hub.hub_subnet_ids["SharedServicesSubnet"]
+  tags                = local.tags
+}
+""")
+        self._w(out / 'main.tf', '\n'.join(lines))
+
+    def _write_outputs(self, cfg, out):
+        lines = ['# Outputs\n']
+        if cfg.get('topology') == 'hub-spoke':
+            lines.append('output "hub_vnet_id" { value = module.hub.hub_vnet_id }')
+        for spoke in cfg.get('spokes', []):
+            sname = re.sub(r'[^a-zA-Z0-9_]', '', spoke.get('name', 'spoke'))
+            lines.append(f'output "spoke_{sname}_vnet_id" {{ value = module.spoke_{sname}.spoke_vnet_id }}')
+        if cfg.get('aks_enabled'):
+            lines.append('output "aks_name" { value = module.aks.aks_name }')
+        if cfg.get('keyvault_enabled', True):
+            lines.append('output "keyvault_uri" { value = module.keyvault.key_vault_uri }')
+        if cfg.get('log_analytics_enabled', True):
+            lines.append('output "log_analytics_workspace_id" { value = module.monitoring.workspace_id }')
+        self._w(out / 'outputs.tf', '\n'.join(lines) + '\n')
+
+    def _write_environments(self, cfg, out):
+        envs_dir = out / 'environments'
+        for env in ('dev', 'test', 'staging', 'prod'):
+            content = f"""environment    = "{env}"
+location       = "{cfg.get('region', 'eastus')}"
+naming_prefix  = "{cfg.get('naming_prefix', 'mc')}-{env}"
+"""
+            self._w(envs_dir / f'{env}.tfvars', content)
+
+    def _write_cicd_templates(self, cfg, out):
+        cicd_dir = out / 'cicd'
+        platform = cfg.get('cicd_platform', 'github')
+        if platform == 'github':
+            self._w(cicd_dir / '.github' / 'workflows' / 'terraform.yml', """name: Terraform CI/CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+      - name: Terraform Init
+        run: terraform init
+      - name: Terraform Format Check
+        run: terraform fmt -check
+      - name: Terraform Plan
+        if: github.event_name == 'pull_request'
+        run: terraform plan -var-file=environments/${{ github.event.pull_request.base.ref == 'main' && 'prod' || 'dev' }}.tfvars -no-color
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve -var-file=environments/prod.tfvars
+""")
+        else:
+            self._w(cicd_dir / 'azure-pipelines.yml', """trigger:
+  branches:
+    include: [main]
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: Plan
+    jobs:
+      - job: TerraformPlan
+        steps:
+          - task: TerraformInstaller@0
+            inputs:
+              terraformVersion: '1.5.0'
+          - task: TerraformTaskV4@4
+            inputs:
+              command: 'init'
+          - task: TerraformTaskV4@4
+            inputs:
+              command: 'plan'
+              commandOptions: '-var-file=environments/prod.tfvars'
+  - stage: Apply
+    dependsOn: Plan
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: TerraformApply
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: TerraformTaskV4@4
+                  inputs:
+                    command: 'apply'
+                    commandOptions: '-auto-approve -var-file=environments/prod.tfvars'
+""")
+
+    def _write_readme(self, cfg, out):
+        spokes = ', '.join(s.get('name', 'spoke') for s in cfg.get('spokes', []))
+        modules = []
+        if cfg.get('topology') == 'hub-spoke':
+            modules.append('Hub Network')
+        if cfg.get('spokes'):
+            modules.append(f'Spokes: {spokes}')
+        if cfg.get('aks_enabled'):
+            modules.append('AKS Kubernetes')
+        if cfg.get('keyvault_enabled', True):
+            modules.append('Key Vault')
+        if cfg.get('log_analytics_enabled', True):
+            modules.append('Log Analytics')
+        if cfg.get('asr_enabled'):
+            modules.append('Disaster Recovery')
+        if cfg.get('aad_groups_enabled'):
+            modules.append('Azure AD Groups')
+        if cfg.get('vmss_enabled'):
+            modules.append('VM Scale Sets')
+        if cfg.get('akamai_enabled'):
+            modules.append('Akamai CDN/WAF')
+        self._w(out / 'README.md', f"""# {cfg.get('project_name', 'Enterprise Infrastructure')}
+
+Generated by MasterChief Enterprise Terraform Wizard.
+
+## Architecture
+- Topology: {cfg.get('topology', 'hub-spoke')}
+- Region: {cfg.get('region', 'eastus')}
+- Environment: {cfg.get('environment', 'dev')}
+
+## Modules
+{chr(10).join(f'- {m}' for m in modules)}
+
+## Usage
+```bash
+terraform init
+terraform plan -var-file=environments/dev.tfvars
+terraform apply -var-file=environments/dev.tfvars
+```
+
+## Environments
+- dev.tfvars / test.tfvars / staging.tfvars / prod.tfvars
+""")
+
+    def validate(self, config):
+        """Validate configuration and return issues."""
+        issues = []
+        # Check CIDRs
+        cidrs = []
+        if config.get('hub_cidr'):
+            cidrs.append(('Hub', config['hub_cidr']))
+        for spoke in config.get('spokes', []):
+            if spoke.get('cidr'):
+                cidrs.append((spoke.get('name', 'Spoke'), spoke['cidr']))
+        # Basic CIDR overlap check
+        for i, (n1, c1) in enumerate(cidrs):
+            for j, (n2, c2) in enumerate(cidrs):
+                if i < j:
+                    if self._cidrs_overlap(c1, c2):
+                        issues.append({'severity': 'error', 'message': f'CIDR overlap: {n1} ({c1}) overlaps with {n2} ({c2})'})
+        # Naming
+        if not config.get('project_name'):
+            issues.append({'severity': 'error', 'message': 'Project name is required'})
+        if not config.get('subscription_id'):
+            issues.append({'severity': 'warning', 'message': 'Subscription ID not set — required for deployment'})
+        if not config.get('tenant_id'):
+            issues.append({'severity': 'warning', 'message': 'Tenant ID not set — required for Azure AD operations'})
+        # Best practices
+        if config.get('keyvault_config', {}).get('default_action') == 'Allow':
+            issues.append({'severity': 'warning', 'message': 'Key Vault network ACL set to Allow — Deny recommended for production'})
+        if config.get('environment') == 'prod' and not config.get('asr_enabled'):
+            issues.append({'severity': 'info', 'message': 'Production environment without DR — consider enabling Azure Site Recovery'})
+        if not issues:
+            issues.append({'severity': 'success', 'message': 'All validations passed'})
+        return issues
+
+    def _cidrs_overlap(self, cidr1, cidr2):
+        try:
+            def cidr_to_range(cidr):
+                parts = cidr.split('/')
+                ip_parts = list(map(int, parts[0].split('.')))
+                ip_int = (ip_parts[0] << 24) + (ip_parts[1] << 16) + (ip_parts[2] << 8) + ip_parts[3]
+                mask = (0xFFFFFFFF << (32 - int(parts[1]))) & 0xFFFFFFFF
+                start = ip_int & mask
+                end = start + (~mask & 0xFFFFFFFF)
+                return start, end
+            s1, e1 = cidr_to_range(cidr1)
+            s2, e2 = cidr_to_range(cidr2)
+            return s1 <= e2 and s2 <= e1
+        except Exception:
+            return False
+
+enterprise_tf_gen = EnterpriseTerraformGenerator(_data_dir / 'terraform_enterprise')
+
+
+# ---------------------------------------------------------------------------
+#  Enterprise TF Wizard Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/terraform/enterprise/generate', methods=['POST'])
+def api_tf_enterprise_generate():
+    try:
+        config = request.get_json(silent=True) or {}
+        job_id = enterprise_tf_gen.generate(config)
+        return jsonify({'ok': True, 'result': {'job_id': job_id, 'download_url': f'/api/terraform/enterprise/download/{job_id}'}})
+    except Exception as e:
+        app.logger.exception('Enterprise TF generation failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/validate', methods=['POST'])
+def api_tf_enterprise_validate():
+    try:
+        config = request.get_json(silent=True) or {}
+        issues = enterprise_tf_gen.validate(config)
+        return jsonify({'ok': True, 'result': issues})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/download/<job_id>', methods=['GET'])
+def api_tf_enterprise_download(job_id):
+    try:
+        job = ENTERPRISE_TF_JOBS.get(job_id)
+        if not job:
+            return jsonify({'ok': False, 'error': 'Job not found'}), 404
+        zip_path = Path(job['path'])
+        if zip_path.exists():
+            return send_file(str(zip_path), as_attachment=True, download_name=zip_path.name)
+        return jsonify({'ok': False, 'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/deploy_to_project', methods=['POST'])
+def api_tf_enterprise_deploy_to_project():
+    try:
+        config = request.get_json(silent=True) or {}
+        job_id = enterprise_tf_gen.generate(config)
+        job = ENTERPRISE_TF_JOBS[job_id]
+        return jsonify({'ok': True, 'result': {'job_id': job_id, 'project_dir': job['project_dir']}})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+###############################################################################
 
 
 
@@ -1511,7 +2507,7 @@ def api_ado_hooks():
 
         return jsonify({'ok': False, 'error': 'id not found'}), 404
 
-    return jsonify({'ok': True, 'files': files})
+    return jsonify({'ok': True, 'hooks': hooks})
 
 
 
@@ -3336,6 +4332,10 @@ ADDONS_MODULES_TEMPLATE = """{% extends "base.html" %}
 <p><strong>Modified:</strong> {{ module.modified }}</p>
 
 <div style="margin-top: 15px;">
+<a href="/addons/modules/{{ module.name }}/manager" class="btn" style="background:#2196F3;">🗂️ Manage Files</a>
+</div>
+
+<div style="margin-top: 15px;">
 
 <h4>Configuration Files</h4>
 
@@ -3590,6 +4590,599 @@ function deleteAllModules() {
 }
 
 </script>
+
+{% endblock %}"""
+
+
+
+MODULE_MANAGER_TEMPLATE = """{% extends "base.html" %}
+
+{% block content %}
+
+<div class="container">
+
+<header>
+
+<h1>⚡ MasterChief</h1>
+
+<p class="subtitle">Module Manager - {{ module.name }}</p>
+
+<div style="position:absolute;right:20px;top:24px;">
+
+    <a href="/addons/modules" class="btn" style="background:#666;">← Back to Modules</a>
+
+    <label style="color:#ccc;font-size:0.9em;margin-left:20px;">Language: <select id="langSelect"        
+
+style="background:#1a1a1a;color:#eee;border:1px solid
+
+#333;padding:6px;border-radius:6px;"><option value="en">English</option><option
+
+value="es">Español</option></select></label>
+
+    </div>
+
+</header>
+
+<nav>
+
+<a href="/" class="">Dashboard</a>
+
+<a href="/echo-chat" class="">🌙 Echo Chat</a>
+
+<a href="/scripts" class="">Scripts</a>
+
+<a href="/processes" class="">Processes</a>
+
+<a href="/services" class="">Services</a>
+
+<a href="/addons" class="active">Addons</a>
+
+<a href="/addons/modules" class="">🧩 Modules</a>
+
+<a href="/echo-train" class="">Training</a>
+
+</nav>
+
+<div class="section">
+
+<h2>🗂️ Module Manager: {{ module.name }}</h2>
+
+<div style="display: flex; gap: 20px; margin-bottom: 20px;">
+
+<div style="flex: 1;">
+
+<h3>📁 Module Information</h3>
+
+<div class="card">
+
+<p><strong>Name:</strong> {{ module.name }}</p>
+
+<p><strong>Path:</strong> {{ module.path }}</p>
+
+<p><strong>Files:</strong> {{ module.file_count }}</p>
+
+<p><strong>Directories:</strong> {{ module.dir_count }}</p>
+
+<p><strong>Total Size:</strong> {{ "%.1f"|format(module.total_size/1024) }} KB</p>
+
+</div>
+
+<h3>⚙️ Module Configuration</h3>
+
+<div class="card">
+
+<h4>UI Integration</h4>
+
+<p>Add this module to the main navigation menu for quick access.</p>
+
+<button id="addToUI" class="btn" style="background:#4CAF50;" onclick="toggleUIIntegration('add')">➕ Add to Main UI</button>
+
+<button id="removeFromUI" class="btn btn-danger" style="display:none;" onclick="toggleUIIntegration('remove')">➖ Remove from Main UI</button>
+
+<div id="uiStatus" style="margin-top:10px;"></div>
+
+</div>
+
+</div>
+
+<div style="flex: 2;">
+
+<h3>📂 File Explorer</h3>
+
+<div class="card">
+
+<div style="display: flex; gap: 10px; margin-bottom: 15px;">
+
+<button class="btn" onclick="refreshFiles()">🔄 Refresh</button>
+
+<label class="btn" for="fileUpload" style="background:#2196F3;">📤 Upload File</label>
+
+<input type="file" id="fileUpload" style="display:none;" onchange="uploadFile()">
+
+<button class="btn" onclick="createNewFile()" style="background:#FF9800;">📄 New File</button>
+
+<button class="btn" onclick="createNewFolder()" style="background:#9C27B0;">📁 New Folder</button>
+
+</div>
+
+<div id="fileTree" style="max-height: 400px; overflow-y: auto; border: 1px solid #333; border-radius: 5px; padding: 10px; background: #1a1a1a;">
+
+<!-- File tree will be loaded here -->
+
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+<div class="section">
+
+<h3>📝 File Editor</h3>
+
+<div id="editorContainer" style="display: none;">
+
+<div class="card">
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+
+<h4 id="editorTitle">Editing: <span id="currentFile"></span></h4>
+
+<div>
+
+<button class="btn" onclick="saveFile()" style="background:#4CAF50;">💾 Save</button>
+
+<button class="btn btn-danger" onclick="deleteFile()" onclick="return confirm('Delete this file?')">🗑️ Delete</button>
+
+<button class="btn" onclick="closeEditor()">❌ Close</button>
+
+</div>
+
+</div>
+
+<textarea id="fileEditor" style="width: 100%; height: 400px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; padding: 10px; font-family: 'Courier New', monospace; font-size: 14px; resize: vertical;"></textarea>
+
+</div>
+
+</div>
+
+</div>
+
+<!-- Modals -->
+
+<!-- New File Modal -->
+<div id="newFileModal" class="modal">
+<div class="modal-content">
+<span class="close" onclick="closeModal('newFileModal')">&times;</span>
+<h2>📄 Create New File</h2>
+<input type="text" id="newFileName" placeholder="filename.txt" style="width:100%;margin:10px 0;padding:8px;">
+<button class="btn" onclick="createFile()">Create File</button>
+</div>
+</div>
+
+<!-- New Folder Modal -->
+<div id="newFolderModal" class="modal">
+<div class="modal-content">
+<span class="close" onclick="closeModal('newFolderModal')">&times;</span>
+<h2>📁 Create New Folder</h2>
+<input type="text" id="newFolderName" placeholder="folder_name" style="width:100%;margin:10px 0;padding:8px;">
+<button class="btn" onclick="createFolder()">Create Folder</button>
+</div>
+</div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" class="modal">
+<div class="modal-content">
+<span class="close" onclick="closeModal('uploadModal')">&times;</span>
+<h2>📤 Upload File</h2>
+<form id="uploadForm" enctype="multipart/form-data">
+<input type="file" id="uploadFileInput" name="file" style="width:100%;margin:10px 0;">
+<div id="uploadPathContainer" style="margin:10px 0;">
+<label>Upload to folder (optional):</label>
+<input type="text" id="uploadPath" placeholder="path/to/folder" style="width:100%;padding:8px;">
+</div>
+<button type="button" class="btn" onclick="doUpload()">Upload</button>
+</form>
+<div id="uploadStatus"></div>
+</div>
+</div>
+
+</div>
+
+<script>
+
+// Global variables
+let currentModule = '{{ module.name }}';
+let currentFile = null;
+let fileTree = {};
+
+function init() {
+    loadFiles();
+    checkUIIntegration();
+}
+
+function loadFiles() {
+    fetch(`/addons/modules/${currentModule}/api/files`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading files: ' + data.error);
+                return;
+            }
+            renderFileTree(data.files);
+        })
+        .catch(e => alert('Error: ' + e));
+}
+
+function renderFileTree(files) {
+    fileTree = {};
+    
+    // Organize files by directory
+    files.forEach(file => {
+        const pathParts = file.path.split('/');
+        let current = fileTree;
+        
+        for (let i = 0; i < pathParts.length - 1; i++) {
+            const part = pathParts[i];
+            if (!current[part]) {
+                current[part] = { __type: 'directory', __children: {} };
+            }
+            current = current[part].__children;
+        }
+        
+        const fileName = pathParts[pathParts.length - 1];
+        current[fileName] = { 
+            __type: file.type, 
+            ...file,
+            __children: file.type === 'directory' ? {} : undefined
+        };
+    });
+    
+    const treeHtml = renderTreeNode(fileTree, '', 0);
+    document.getElementById('fileTree').innerHTML = treeHtml || '<p style="color:#888;">No files found</p>';
+}
+
+function renderTreeNode(node, path, depth) {
+    let html = '';
+    const indent = '  '.repeat(depth);
+    
+    for (const [name, item] of Object.entries(node)) {
+        if (name.startsWith('__')) continue;
+        
+        const fullPath = path ? `${path}/${name}` : name;
+        const isDir = item.__type === 'directory';
+        const icon = isDir ? '📁' : getFileIcon(item.extension);
+        
+        html += `${indent}<div style="margin: 2px 0;">
+            <span onclick="toggleDirectory('${fullPath}')" style="cursor: pointer; ${isDir ? 'font-weight: bold;' : ''}">
+                ${icon} ${name}
+            </span>
+            ${!isDir ? ` <button class="btn" style="font-size:0.7em;padding:2px 6px;" onclick="editFile('${fullPath}')">Edit</button>` : ''}
+        </div>`;
+        
+        if (isDir && item.__expanded) {
+            html += renderTreeNode(item.__children || {}, fullPath, depth + 1);
+        }
+    }
+    
+    return html;
+}
+
+function toggleDirectory(path) {
+    let current = fileTree;
+    const parts = path.split('/');
+    
+    for (const part of parts) {
+        if (current[part] && current[part].__type === 'directory') {
+            current[part].__expanded = !current[part].__expanded;
+            current = current[part].__children;
+        }
+    }
+    
+    renderFileTree(expandTreeToFiles(fileTree));
+}
+
+function expandTreeToFiles(node) {
+    const files = [];
+    
+    function traverse(current, path) {
+        for (const [name, item] of Object.entries(current)) {
+            if (name.startsWith('__')) continue;
+            
+            const fullPath = path ? `${path}/${name}` : name;
+            files.push({
+                name: item.name || name,
+                path: fullPath,
+                type: item.__type,
+                extension: item.extension || '',
+                size: item.size || 0,
+                modified: item.modified || ''
+            });
+            
+            if (item.__type === 'directory' && item.__children) {
+                traverse(item.__children, fullPath);
+            }
+        }
+    }
+    
+    traverse(node, '');
+    return files;
+}
+
+function getFileIcon(ext) {
+    const icons = {
+        '.py': '🐍', '.js': '📜', '.html': '🌐', '.css': '🎨', '.json': '📋',
+        '.md': '📖', '.txt': '📄', '.xml': '📄', '.yml': '📋', '.yaml': '📋',
+        '.sh': '⚡', '.bat': '⚡', '.ps1': '⚡', '.php': '🐘', '.sql': '🗄️',
+        '.png': '🖼️', '.jpg': '🖼️', '.jpeg': '🖼️', '.gif': '🖼️', '.svg': '🖼️'
+    };
+    return icons[ext] || '📄';
+}
+
+function editFile(path) {
+    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(path)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading file: ' + data.error);
+                return;
+            }
+            
+            currentFile = path;
+            document.getElementById('currentFile').textContent = path;
+            document.getElementById('fileEditor').value = data.content;
+            document.getElementById('editorContainer').style.display = 'block';
+            document.getElementById('fileEditor').focus();
+        })
+        .catch(e => alert('Error: ' + e));
+}
+
+function saveFile() {
+    if (!currentFile) return;
+    
+    const content = document.getElementById('fileEditor').value;
+    
+    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(currentFile)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('File saved successfully!');
+        } else {
+            alert('Error saving file: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(e => alert('Error: ' + e));
+}
+
+function deleteFile() {
+    if (!currentFile) return;
+    
+    if (!confirm(`Are you sure you want to delete "${currentFile}"?`)) return;
+    
+    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(currentFile)}`, {
+        method: 'DELETE'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('File deleted successfully!');
+            closeEditor();
+            loadFiles();
+        } else {
+            alert('Error deleting file: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(e => alert('Error: ' + e));
+}
+
+function closeEditor() {
+    document.getElementById('editorContainer').style.display = 'none';
+    currentFile = null;
+    document.getElementById('fileEditor').value = '';
+}
+
+function createNewFile() {
+    document.getElementById('newFileName').value = '';
+    document.getElementById('newFileModal').style.display = 'block';
+}
+
+function createFile() {
+    const fileName = document.getElementById('newFileName').value.trim();
+    if (!fileName) {
+        alert('Please enter a file name');
+        return;
+    }
+    
+    // For now, create in root directory
+    editFile(fileName);
+    closeModal('newFileModal');
+}
+
+function createNewFolder() {
+    document.getElementById('newFolderName').value = '';
+    document.getElementById('newFolderModal').style.display = 'block';
+}
+
+function createFolder() {
+    const folderName = document.getElementById('newFolderName').value.trim();
+    if (!folderName) {
+        alert('Please enter a folder name');
+        return;
+    }
+    
+    // Create empty directory by "creating" a file in it and then deleting it
+    const tempFile = `${folderName}/.gitkeep`;
+    
+    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(tempFile)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: '' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            loadFiles();
+            closeModal('newFolderModal');
+        } else {
+            alert('Error creating folder: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(e => alert('Error: ' + e));
+}
+
+function uploadFile() {
+    const fileInput = document.getElementById('fileUpload');
+    if (fileInput.files.length === 0) return;
+    
+    document.getElementById('uploadFileInput').files = fileInput.files;
+    document.getElementById('uploadModal').style.display = 'block';
+}
+
+function doUpload() {
+    const fileInput = document.getElementById('uploadFileInput');
+    const uploadPath = document.getElementById('uploadPath').value.trim();
+    const statusDiv = document.getElementById('uploadStatus');
+    
+    if (fileInput.files.length === 0) {
+        statusDiv.textContent = 'No file selected';
+        statusDiv.style.color = 'red';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    if (uploadPath) {
+        formData.append('path', uploadPath);
+    }
+    
+    statusDiv.textContent = 'Uploading...';
+    statusDiv.style.color = 'orange';
+    
+    fetch(`/addons/modules/${currentModule}/api/upload`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.textContent = data.message;
+            statusDiv.style.color = 'green';
+            loadFiles();
+            setTimeout(() => closeModal('uploadModal'), 2000);
+        } else {
+            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown error');
+            statusDiv.style.color = 'red';
+        }
+    })
+    .catch(e => {
+        statusDiv.textContent = 'Error: ' + e;
+        statusDiv.style.color = 'red';
+    });
+}
+
+function toggleUIIntegration(action) {
+    const statusDiv = document.getElementById('uiStatus');
+    statusDiv.textContent = action === 'add' ? 'Adding to UI...' : 'Removing from UI...';
+    statusDiv.style.color = 'orange';
+    
+    fetch(`/addons/modules/${currentModule}/api/ui_integration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.textContent = data.message;
+            statusDiv.style.color = 'green';
+            checkUIIntegration();
+        } else {
+            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown error');
+            statusDiv.style.color = 'red';
+        }
+    })
+    .catch(e => {
+        statusDiv.textContent = 'Error: ' + e;
+        statusDiv.style.color = 'red';
+    });
+}
+
+function checkUIIntegration() {
+    // Check if module is in UI by looking at the navigation
+    // This is a simple check - in a real app you'd have an API endpoint
+    const navLinks = document.querySelectorAll('nav a');
+    let isInUI = false;
+    
+    navLinks.forEach(link => {
+        if (link.href.includes(`/addons/modules/${currentModule}`)) {
+            isInUI = true;
+        }
+    });
+    
+    document.getElementById('addToUI').style.display = isInUI ? 'none' : 'inline-block';
+    document.getElementById('removeFromUI').style.display = isInUI ? 'inline-block' : 'none';
+}
+
+function refreshFiles() {
+    loadFiles();
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.8);
+}
+
+.modal-content {
+    background-color: #2d2d2d;
+    margin: 10% auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 500px;
+    color: #e0e0e0;
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #4CAF50;
+}
+
+.card {
+    background: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+</style>
 
 {% endblock %}"""
 
@@ -6392,9 +7985,11 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 
 <div class="section">
 
-<h2>Addon Installer</h2>
+<h2>Addon Manager</h2>
 
-<div class="file-upload" onclick="document.getElementById('fileInput').click();">
+<div style="display:flex;gap:20px;margin-bottom:30px;">
+
+<div class="file-upload" onclick="document.getElementById('fileInput').click();" style="flex:1;">
 
 <h3>📦 Upload Addon Package</h3>
 
@@ -6405,6 +8000,16 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 <input type="file" id="fileInput" name="file" accept=".zip" style="display:none;" onchange="document.getElementById('uploadForm').submit();">
 
 </form>
+
+</div>
+
+<div class="file-upload" onclick="showBlankModuleWizard()" style="flex:1;border-color:#2196F3;">
+
+<h3>🆕 Create Blank Module</h3>
+
+<p>Start with an empty module and build it live</p>
+
+</div>
 
 </div>
 
@@ -6479,6 +8084,110 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 {% endif %}
 
 </div>
+
+<!-- Blank Module Creation Wizard Modal -->
+<div id="blankModuleWizard" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;">
+    <div class="modal-content" style="background:#2d2d2d;margin:50px auto;padding:30px;border-radius:10px;max-width:700px;position:relative;">
+        <span class="close" style="position:absolute;top:15px;right:20px;font-size:30px;cursor:pointer;color:#888;" onclick="closeModal('blankModuleWizard')">&times;</span>
+        <h2 style="color: #4CAF50; margin-bottom: 20px;">🆕 Create Blank Module</h2>
+
+        <div class="form-group" style="margin-bottom:20px;">
+            <label for="moduleName" style="display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;">Module Name *</label>
+            <input type="text" id="moduleName" placeholder="e.g., my_custom_module" required style="width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;">
+            <small style="color: #888;">Must start with a letter, can contain letters, numbers, underscores, and hyphens</small>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px;">
+            <label for="moduleType" style="display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;">Module Type</label>
+            <select id="moduleType" style="width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;">
+                <option value="python">Python Module</option>
+                <option value="web">Web Application</option>
+                <option value="api">API Service</option>
+                <option value="tool">DevOps Tool</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px;">
+            <label for="moduleDescription" style="display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;">Description (Optional)</label>
+            <textarea id="moduleDescription" rows="3" placeholder="Describe what this module will do..." style="width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;"></textarea>
+        </div>
+
+        <div style="background: #1a1a1a; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h4 style="color: #4CAF50; margin: 0 0 10px 0;">What happens next?</h4>
+            <ul style="color: #ccc; margin: 0; padding-left: 20px;">
+                <li>A new directory structure will be created for your module</li>
+                <li>You can add files and edit code through the module management interface</li>
+                <li>Use the Build, Load, and Register Features buttons to activate your module</li>
+                <li>Access your module at: <code style="background: #2d2d2d; padding: 2px 4px; border-radius: 3px;">/addons/modules/{module_name}</code></li>
+            </ul>
+        </div>
+
+        <div style="text-align: right; margin-top: 20px;">
+            <button class="btn btn-info" onclick="closeModal('blankModuleWizard')" style="background:#2196F3;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;">Cancel</button>
+            <button class="btn" onclick="createBlankModule()" style="background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;margin-left:10px;">Create Module</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showBlankModuleWizard() {
+    document.getElementById('blankModuleWizard').style.display = 'block';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+function createBlankModule() {
+    const moduleName = document.getElementById('moduleName').value.trim();
+    const moduleType = document.getElementById('moduleType').value;
+    const description = document.getElementById('moduleDescription').value.trim();
+
+    if (!moduleName) {
+        alert('Please enter a module name');
+        return;
+    }
+
+    if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(moduleName)) {
+        alert('Module name must start with a letter and contain only letters, numbers, underscores, and hyphens');
+        return;
+    }
+
+    // Show loading
+    const btn = event.target || document.querySelector('#blankModuleWizard .btn:not(.btn-info)');
+    const originalText = btn.textContent;
+    btn.textContent = 'Creating...';
+    btn.disabled = true;
+
+    fetch('/addons/create_blank_module', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: moduleName,
+            type: moduleType,
+            description: description
+        })
+    })
+    .then(r => r.json())
+    .then(j => {
+        if (j.success) {
+            alert('Blank module created successfully! You can now add files and manage it.');
+            closeModal('blankModuleWizard');
+            location.reload();
+        } else {
+            alert('Error creating module: ' + (j.error || 'Unknown error'));
+        }
+    })
+    .catch(e => {
+        alert('Error: ' + e);
+    })
+    .finally(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    });
+}
+</script>
 
 {% endblock %}"""
 
@@ -9355,6 +11064,71 @@ def addons_modules():
     
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ADDONS_MODULES_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), installed_modules=installed_modules, request=request, get_flashed_messages=get_flashed_messages)
 
+@app.route('/addons/modules/<module_name>/manager')
+def module_manager(module_name):
+    """Module file manager and editor interface"""
+    try:
+        # Get module directory
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        if not extract_dir.exists():
+            flash(f'Module "{module_name}" not found', 'error')
+            return redirect('/addons/modules')
+        
+        # Get all files in the module
+        files = []
+        def scan_directory(path, relative_path=''):
+            try:
+                for item in sorted(path.iterdir()):
+                    if item.is_file():
+                        try:
+                            size = item.stat().st_size
+                            modified = datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                            files.append({
+                                'name': item.name,
+                                'path': str(item.relative_to(extract_dir)),
+                                'size': size,
+                                'modified': modified,
+                                'type': 'file',
+                                'extension': item.suffix.lower()
+                            })
+                        except:
+                            pass
+                    elif item.is_dir():
+                        try:
+                            # Add directory entry
+                            files.append({
+                                'name': item.name,
+                                'path': str(item.relative_to(extract_dir)),
+                                'size': 0,
+                                'modified': datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                                'type': 'directory',
+                                'extension': ''
+                            })
+                            # Recursively scan subdirectory
+                            scan_directory(item, str(item.relative_to(extract_dir)))
+                        except:
+                            pass
+            except:
+                pass
+        
+        scan_directory(extract_dir)
+        
+        # Get module info
+        module_info = {
+            'name': module_name,
+            'path': str(extract_dir),
+            'file_count': len([f for f in files if f['type'] == 'file']),
+            'dir_count': len([f for f in files if f['type'] == 'directory']),
+            'total_size': sum(f['size'] for f in files if f['type'] == 'file')
+        }
+        
+        return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', MODULE_MANAGER_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), 
+                                    module=module_info, files=files, request=request, get_flashed_messages=get_flashed_messages)
+        
+    except Exception as e:
+        flash(f'Error loading module manager: {str(e)}', 'error')
+        return redirect('/addons/modules')
+
 @app.route('/addons/modules/<module_name>/config/<path:config_file>')
 def addons_module_config(module_name, config_file):
     """View/edit config files for a module"""
@@ -9565,7 +11339,6 @@ def detect_project_type(extract_dir):
             except:
                 continue  # Skip files we can't access
     except Exception as e:
-        verbose_output.append(f"⚠️ Warning: Could not scan all files: {str(e)}")
         file_names = []
 
     # Python detection
@@ -10459,6 +12232,227 @@ def delete_all_modules():
             
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== MODULE MANAGER API =====
+
+@app.route('/addons/modules/<module_name>/api/files')
+def module_files_api(module_name):
+    """API endpoint to get module files as JSON"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        if not extract_dir.exists():
+            return jsonify({'error': 'Module not found'}), 404
+        
+        files = []
+        def scan_directory(path, relative_path=''):
+            try:
+                for item in sorted(path.iterdir()):
+                    if item.is_file():
+                        try:
+                            size = item.stat().st_size
+                            modified = datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                            files.append({
+                                'name': item.name,
+                                'path': str(item.relative_to(extract_dir)),
+                                'size': size,
+                                'modified': modified,
+                                'type': 'file',
+                                'extension': item.suffix.lower()
+                            })
+                        except:
+                            pass
+                    elif item.is_dir():
+                        try:
+                            files.append({
+                                'name': item.name,
+                                'path': str(item.relative_to(extract_dir)),
+                                'size': 0,
+                                'modified': datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                                'type': 'directory',
+                                'extension': ''
+                            })
+                            scan_directory(item, str(item.relative_to(extract_dir)))
+                        except:
+                            pass
+            except:
+                pass
+        
+        scan_directory(extract_dir)
+        return jsonify({'files': files})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/addons/modules/<module_name>/api/file', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def module_file_api(module_name):
+    """API endpoint for file operations (read, save, delete)"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        if not extract_dir.exists():
+            return jsonify({'error': 'Module not found'}), 404
+        
+        file_path = request.args.get('path', '')
+        if not file_path:
+            return jsonify({'error': 'File path required'}), 400
+        
+        full_path = extract_dir / file_path
+        full_path = full_path.resolve()
+        
+        # Security check - ensure path is within module directory
+        if not str(full_path).startswith(str(extract_dir)):
+            return jsonify({'error': 'Access denied'}), 403
+        
+        if request.method == 'GET':
+            # Read file
+            if not full_path.exists() or not full_path.is_file():
+                return jsonify({'error': 'File not found'}), 404
+            
+            try:
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                return jsonify({'content': content, 'path': file_path})
+            except UnicodeDecodeError:
+                return jsonify({'error': 'Binary file - cannot edit in text mode'}), 400
+            except Exception as e:
+                return jsonify({'error': f'Error reading file: {str(e)}'}), 500
+        
+        elif request.method in ['POST', 'PUT']:
+            # Save file
+            content = request.json.get('content', '') if request.is_json else request.form.get('content', '')
+            if content is None:
+                return jsonify({'error': 'Content required'}), 400
+            
+            try:
+                # Create directory if it doesn't exist
+                full_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                with open(full_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                
+                return jsonify({'success': True, 'message': 'File saved successfully'})
+            except Exception as e:
+                return jsonify({'error': f'Error saving file: {str(e)}'}), 500
+        
+        elif request.method == 'DELETE':
+            # Delete file
+            if not full_path.exists():
+                return jsonify({'error': 'File not found'}), 404
+            
+            try:
+                if full_path.is_file():
+                    full_path.unlink()
+                elif full_path.is_dir():
+                    import shutil
+                    shutil.rmtree(full_path)
+                
+                return jsonify({'success': True, 'message': 'File deleted successfully'})
+            except Exception as e:
+                return jsonify({'error': f'Error deleting file: {str(e)}'}), 500
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/addons/modules/<module_name>/api/upload', methods=['POST'])
+def module_upload_api(module_name):
+    """API endpoint for uploading files to a module"""
+    try:
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        if not extract_dir.exists():
+            return jsonify({'error': 'Module not found'}), 404
+        
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Get target path
+        target_path = request.form.get('path', '')
+        if target_path:
+            full_target_dir = extract_dir / target_path
+            full_target_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            full_target_dir = extract_dir
+        
+        # Save file
+        filename = secure_filename(file.filename)
+        file_path = full_target_dir / filename
+        
+        file.save(file_path)
+        
+        return jsonify({'success': True, 'message': f'File {filename} uploaded successfully', 'path': str(file_path.relative_to(extract_dir))})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/addons/modules/<module_name>/api/ui_integration', methods=['POST'])
+def module_ui_integration_api(module_name):
+    """API endpoint to add/remove module from main UI navigation"""
+    try:
+        action = request.json.get('action') if request.is_json else request.form.get('action')
+        if action not in ['add', 'remove']:
+            return jsonify({'error': 'Invalid action. Must be "add" or "remove"'}), 400
+        
+        # Get current UI modules
+        ui_modules_file = app.config['UPLOAD_FOLDER'] / 'ui_modules.json'
+        ui_modules = {}
+        
+        if ui_modules_file.exists():
+            try:
+                with open(ui_modules_file, 'r') as f:
+                    ui_modules = json.load(f)
+            except:
+                ui_modules = {}
+        
+        if action == 'add':
+            # Add module to UI
+            extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+            if not extract_dir.exists():
+                return jsonify({'error': 'Module not found'}), 404
+            
+            # Try to detect if module has a web interface
+            web_files = []
+            for ext in ['.html', '.htm', '.php']:
+                web_files.extend(list(extract_dir.rglob(f'*{ext}')))
+            
+            main_file = None
+            if web_files:
+                # Look for index.html, main.html, app.html, etc.
+                priority_files = ['index.html', 'index.htm', 'main.html', 'app.html', 'home.html']
+                for priority in priority_files:
+                    for web_file in web_files:
+                        if web_file.name.lower() == priority:
+                            main_file = str(web_file.relative_to(extract_dir))
+                            break
+                    if main_file:
+                        break
+                
+                if not main_file and web_files:
+                    main_file = str(web_files[0].relative_to(extract_dir))
+            
+            ui_modules[module_name] = {
+                'name': module_name,
+                'url': f'/addons/modules/{module_name}/web/{main_file}' if main_file else f'/addons/modules/{module_name}/manager',
+                'icon': '🧩',
+                'added_at': datetime.now().isoformat()
+            }
+            
+        elif action == 'remove':
+            # Remove module from UI
+            if module_name in ui_modules:
+                del ui_modules[module_name]
+            else:
+                return jsonify({'error': 'Module not in UI'}), 404
+        
+        # Save updated UI modules
+        with open(ui_modules_file, 'w') as f:
+            json.dump(ui_modules, f, indent=2)
+        
+        return jsonify({'success': True, 'message': f'Module {action}ed to/from UI successfully'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/resources')
 

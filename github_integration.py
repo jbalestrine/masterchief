@@ -13,6 +13,10 @@ except ImportError:
     Github = None
     GithubException = Exception
 import requests
+import subprocess
+import os
+import shutil
+from pathlib import Path
 
 from auth_config import auth_config
 
@@ -317,6 +321,172 @@ class GitHubIntegration:
             return None
         except Exception as e:
             logger.error(f"Error in create_pull_request: {e}")
+            return None
+
+    # Repository Cloning and File Operations
+    def clone_repository(self, repo_url: str, target_dir: str) -> Dict[str, Any]:
+        """Clone a GitHub repository to a local directory"""
+        try:
+            # Ensure target directory exists
+            Path(target_dir).parent.mkdir(parents=True, exist_ok=True)
+            
+            # Remove existing directory if it exists
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir)
+            
+            # Clone the repository
+            result = subprocess.run(
+                ['git', 'clone', repo_url, target_dir],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+            
+            if result.returncode == 0:
+                return {
+                    'success': True,
+                    'message': f'Successfully cloned {repo_url} to {target_dir}',
+                    'target_dir': target_dir
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': f'Git clone failed: {result.stderr}',
+                    'stdout': result.stdout,
+                    'stderr': result.stderr
+                }
+                
+        except subprocess.TimeoutExpired:
+            return {
+                'success': False,
+                'error': 'Git clone timed out after 5 minutes'
+            }
+        except Exception as e:
+            logger.error(f"Error cloning repository {repo_url}: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def get_repository_files(self, local_repo_path: str, path: str = "") -> List[Dict[str, Any]]:
+        """Get files and directories from a local repository"""
+        try:
+            repo_path = Path(local_repo_path)
+            if not repo_path.exists():
+                return []
+            
+            target_path = repo_path / path if path else repo_path
+            if not target_path.exists():
+                return []
+            
+            files = []
+            for item in target_path.iterdir():
+                if item.name.startswith('.'):  # Skip hidden files/directories
+                    continue
+                    
+                files.append({
+                    'name': item.name,
+                    'path': str(item.relative_to(repo_path)),
+                    'is_dir': item.is_dir(),
+                    'size': item.stat().st_size if item.is_file() else 0,
+                    'modified': item.stat().st_mtime
+                })
+            
+            # Sort: directories first, then files alphabetically
+            files.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+            return files
+            
+        except Exception as e:
+            logger.error(f"Error getting repository files from {local_repo_path}: {e}")
+            return []
+
+    def read_file_content(self, local_repo_path: str, file_path: str) -> Optional[str]:
+        """Read content of a file from the local repository"""
+        try:
+            full_path = Path(local_repo_path) / file_path
+            if not full_path.exists() or not full_path.is_file():
+                return None
+            
+            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()
+                
+        except Exception as e:
+            logger.error(f"Error reading file {file_path} from {local_repo_path}: {e}")
+            return None
+
+    def save_file_to_scripts(self, content: str, filename: str, scripts_dir: str = "data/scripts") -> Dict[str, Any]:
+        """Save file content to the scripts directory"""
+        try:
+            scripts_path = Path(scripts_dir)
+            scripts_path.mkdir(parents=True, exist_ok=True)
+            
+            file_path = scripts_path / filename
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
+            return {
+                'success': True,
+                'message': f'File saved to {file_path}',
+                'file_path': str(file_path)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error saving file to scripts: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def get_repo_contents(self, owner: str, repo: str, path: str = "") -> List[Dict[str, Any]]:
+        """Get repository contents at a specific path via GitHub API"""
+        if not self.github:
+            return []
+        
+        try:
+            repo_obj = self.github.get_repo(f"{owner}/{repo}")
+            contents = repo_obj.get_contents(path)
+            
+            result = []
+            for content in contents:
+                result.append({
+                    'name': content.name,
+                    'path': content.path,
+                    'type': content.type,  # 'file' or 'dir'
+                    'size': content.size if hasattr(content, 'size') else 0,
+                    'download_url': content.download_url if hasattr(content, 'download_url') else None,
+                    'url': content.url if hasattr(content, 'url') else None,
+                    'sha': content.sha if hasattr(content, 'sha') else None
+                })
+            return result
+            
+        except GithubException as e:
+            logger.error(f"Error getting repo contents for {owner}/{repo}/{path}: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error getting repo contents: {e}")
+            return []
+
+    def get_file_content_via_api(self, owner: str, repo: str, file_path: str) -> Optional[str]:
+        """Get file content via GitHub API"""
+        if not self.github:
+            return None
+        
+        try:
+            repo_obj = self.github.get_repo(f"{owner}/{repo}")
+            content_obj = repo_obj.get_contents(file_path)
+            
+            if content_obj.type == 'file':
+                # Decode the content (it's base64 encoded)
+                import base64
+                return base64.b64decode(content_obj.content).decode('utf-8')
+            else:
+                return None  # Not a file
+            
+        except GithubException as e:
+            logger.error(f"Error getting file content for {owner}/{repo}/{file_path}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error getting file content: {e}")
             return None
 
 # Global GitHub integration instance
