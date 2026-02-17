@@ -313,7 +313,34 @@ app.config['MARKETPLACE_DB'] = _data_dir / 'marketplace.json'
 app.config['MEMORIES_PATH'] = _data_dir / 'echo_memories.jsonl'
 app.config['MEMORY_INDEX_PATH'] = _data_dir / 'echo_memory_index.json'
 app.config['VAULT_AUDIT_DB'] = _data_dir / 'vault_audit.json'
+app.config['MODULES_CONFIG'] = _data_dir / 'modules.json'
 app.config['RBAC_ENABLED'] = True
+
+def load_enabled_modules():
+    config_file = app.config['MODULES_CONFIG']
+    default_modules = {
+        'rbac': {'enabled': True, 'db_path': app.config['RBAC_DB']},
+        'vault': {'enabled': True, 'db_path': app.config['VAULT_DB'], 'key_path': app.config['VAULT_KEY'], 'audit_path': app.config['VAULT_AUDIT_DB']},
+        'notification': {'enabled': True, 'db_path': app.config['NOTIFICATIONS_DB'], 'channels_path': app.config['NOTIFICATION_CHANNELS_DB'], 'rules_path': app.config['NOTIFICATION_RULES_DB']},
+        'pipeline': {'enabled': True, 'db_path': app.config['PIPELINES_DB'], 'runs_path': app.config['PIPELINE_RUNS_DB']},
+        'cloud': {'enabled': True, 'db_path': app.config['CLOUD_DB']},
+        'memory': {'enabled': True, 'memories_path': app.config['MEMORIES_PATH'], 'index_path': app.config['MEMORY_INDEX_PATH']},
+        'marketplace': {'enabled': True, 'db_path': app.config['MARKETPLACE_DB']},
+        'script': {'enabled': True}
+    }
+    if config_file.exists():
+        try:
+            loaded = json.loads(config_file.read_text())
+            # Merge with defaults
+            for k, v in default_modules.items():
+                if k not in loaded:
+                    loaded[k] = v
+            return loaded
+        except:
+            pass
+    return default_modules
+
+ENABLED_MODULES = load_enabled_modules()
 
 for folder in [app.config['UPLOAD_FOLDER'],app.config['SCRIPTS_FOLDER'],_data_dir]:
 
@@ -2931,303 +2958,6 @@ def api_echo_memories_context():
 
 
 # ---------------------------------------------------------------------------
-#  RBAC API Routes
-# ---------------------------------------------------------------------------
-
-@app.route('/api/rbac/users', methods=['GET'])
-def api_rbac_users_list():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': rbac_mgr.get_users()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/users', methods=['POST'])
-def api_rbac_users_create():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        user = rbac_mgr.add_user(d.get('username', ''), d.get('password', ''), d.get('role', 'viewer'))
-        return jsonify({'ok': True, 'result': user})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/rbac/users/<user_id>', methods=['PUT'])
-def api_rbac_users_update(user_id):
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        user = rbac_mgr.update_user(user_id, d)
-        return jsonify({'ok': True, 'result': user})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/rbac/users/<user_id>', methods=['DELETE'])
-def api_rbac_users_delete(user_id):
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        rbac_mgr.delete_user(user_id)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/roles', methods=['GET'])
-def api_rbac_roles_list():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': rbac_mgr.get_roles()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/roles', methods=['POST'])
-def api_rbac_roles_create():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        role = rbac_mgr.add_role(d.get('name', ''), d.get('permissions', []))
-        return jsonify({'ok': True, 'result': role})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/rbac/roles/<role_name>', methods=['PUT'])
-def api_rbac_roles_update(role_name):
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        role = rbac_mgr.update_role(role_name, d.get('permissions', []))
-        return jsonify({'ok': True, 'result': role})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/rbac/roles/<role_name>', methods=['DELETE'])
-def api_rbac_roles_delete(role_name):
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        rbac_mgr.delete_role(role_name)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/sessions', methods=['GET'])
-def api_rbac_sessions_list():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': rbac_mgr.get_sessions()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/sessions/<session_id>', methods=['DELETE'])
-def api_rbac_sessions_delete(session_id):
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        rbac_mgr.delete_session(session_id)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/audit', methods=['GET'])
-def api_rbac_audit():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        limit = request.args.get('limit', 100, type=int)
-        return jsonify({'ok': True, 'result': rbac_mgr.get_audit_log(limit)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/api_keys', methods=['POST'])
-def api_rbac_api_keys_create():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        key = rbac_mgr.generate_api_key(d.get('user_id', ''))
-        return jsonify({'ok': True, 'result': key})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/rbac/api_keys/<key_id>', methods=['DELETE'])
-def api_rbac_api_keys_delete(key_id):
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        rbac_mgr.revoke_api_key(key_id)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/rbac/login', methods=['POST'])
-def api_rbac_login():
-    if not rbac_mgr:
-        return jsonify({'ok': False, 'error': 'RBAC manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        sess = rbac_mgr.authenticate(d.get('username', ''), d.get('password', ''))
-        if sess:
-            return jsonify({'ok': True, 'result': sess})
-        return jsonify({'ok': False, 'error': 'Invalid credentials'}), 401
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-# ---------------------------------------------------------------------------
-#  Notification API Routes
-# ---------------------------------------------------------------------------
-
-@app.route('/api/notifications', methods=['GET'])
-def api_notifications_list():
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        unread = request.args.get('unread', '').lower() == 'true'
-        severity = request.args.get('severity')
-        return jsonify({'ok': True, 'result': notification_mgr.list_notifications(unread_only=unread, severity=severity)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/count', methods=['GET'])
-def api_notifications_count():
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': notification_mgr.unread_count()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/<nid>/read', methods=['POST'])
-def api_notifications_read(nid):
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        notification_mgr.mark_read(nid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/read_all', methods=['POST'])
-def api_notifications_read_all():
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        notification_mgr.mark_all_read()
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/<nid>', methods=['DELETE'])
-def api_notifications_delete(nid):
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        notification_mgr.delete_notification(nid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/channels', methods=['GET'])
-def api_notification_channels_list():
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': notification_mgr.get_channels()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/channels', methods=['POST'])
-def api_notification_channels_create():
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        ch = notification_mgr.add_channel(d.get('name', ''), d.get('type', 'in_app'), d.get('config', {}))
-        return jsonify({'ok': True, 'result': ch})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/notifications/channels/<cid>', methods=['PUT'])
-def api_notification_channels_update(cid):
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        ch = notification_mgr.update_channel(cid, d)
-        return jsonify({'ok': True, 'result': ch})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/notifications/channels/<cid>', methods=['DELETE'])
-def api_notification_channels_delete(cid):
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        notification_mgr.delete_channel(cid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/channels/<cid>/test', methods=['POST'])
-def api_notification_channels_test(cid):
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        result = notification_mgr.test_channel(cid)
-        return jsonify({'ok': True, 'result': result})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/notifications/rules', methods=['GET'])
-def api_notification_rules_list():
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': notification_mgr.get_rules()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/notifications/rules', methods=['POST'])
-def api_notification_rules_create():
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        rule = notification_mgr.add_rule(d.get('name', ''), d.get('event_type', ''), d.get('severity_filter', 'all'), d.get('channel_id', ''), d.get('active', True))
-        return jsonify({'ok': True, 'result': rule})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/notifications/rules/<rid>', methods=['PUT'])
-def api_notification_rules_update(rid):
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        rule = notification_mgr.update_rule(rid, d)
-        return jsonify({'ok': True, 'result': rule})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/notifications/rules/<rid>', methods=['DELETE'])
-def api_notification_rules_delete(rid):
-    if not notification_mgr:
-        return jsonify({'ok': False, 'error': 'Notification manager not available'}), 503
-    try:
-        notification_mgr.delete_rule(rid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-# ---------------------------------------------------------------------------
 #  Pipeline API Routes
 # ---------------------------------------------------------------------------
 
@@ -5320,980 +5050,6 @@ ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
 
 
 
-class ScriptManager:
-
-    def __init__(self,scripts_folder):
-
-        self.scripts_folder=scripts_folder
-
-    def list_scripts(self, include_repo_paths: bool = True, use_cache: bool = True):
-
-        """Return scripts organized by category with a simple on-disk cache.
-
-
-
-        Returns a list of category dicts: [{'category':'name','scripts':[...]}]
-
-        """
-
-        cache_file = Path(__file__).resolve().parent / 'data' / 'script_index.json'
-
-        cache_age = None
-
-        if cache_file.exists():
-
-            try:
-
-                cache_age = time.time() - cache_file.stat().st_mtime
-
-                if use_cache and cache_age is not None and cache_age < 30:
-
-                    with open(cache_file,'r',encoding='utf-8') as f:
-
-                        return json.load(f)
-
-            except Exception:
-
-                # If reading the cache fails, ignore and do a fresh scan
-
-                pass
-
-
-
-        scripts=[]
-
-        searched=set()
-
-        # Primary scripts folder
-
-        for ext in ['*.sh','*.ps1','*.py','*.bash']:
-
-            for script_file in self.scripts_folder.glob(ext):
-
-                if script_file.exists():
-
-                    key=str(script_file.resolve())
-
-                    if key in searched:
-
-                        continue
-
-                    searched.add(key)
-
-                    scripts.append({'name':script_file.name,'path':str(script_file.resolve()),'size':script_file.stat().st_size,'modified':datetime.fromtimestamp(script_file.stat().st_mtime).isoformat(),'type':script_file.suffix[1:],'source':'scripts_folder'})
-
-
-
-        if include_repo_paths:
-
-            # Also scan repo root and parent directories for scripts (limited depth/glob)
-
-            try:
-
-                repo_root=Path(__file__).resolve().parents[0]
-
-                search_dirs=[repo_root, repo_root.parent]
-
-                for sd in search_dirs:
-
-                    if not sd.exists():
-
-                        continue
-
-                    for ext in ['**/*.sh','**/*.ps1','**/*.py','**/*.bash']:
-
-                        for script_file in sd.glob(ext):
-
-                            if script_file.is_file():
-
-                                key=str(script_file.resolve())
-
-                                if key in searched:
-
-                                    continue
-
-                                searched.add(key)
-
-                                scripts.append({'name':script_file.name,'path':str(script_file.resolve()),'size':script_file.stat().st_size,'modified':datetime.fromtimestamp(script_file.stat().st_mtime).isoformat(),'type':script_file.suffix[1:],'source':'repo'})
-
-            except Exception:
-
-                pass
-
-
-
-        # Categorize scripts by heuristics (folder names, filename keywords)
-
-        categories_map = {}
-
-        def add_to_category(cat, item):
-
-            if cat not in categories_map:
-
-                categories_map[cat]=[]
-
-            categories_map[cat].append(item)
-
-
-
-        keywords = {
-
-            'deploy':['deploy','deploy.sh','deploy.py','k8s','kubernetes','helm','ansible'],
-
-            'backup':['backup','restore','snapshot'],
-
-            'build':['build','compile','make','pack'],
-
-            'test':['test','pytest','unittest','ci','integration'],
-
-            'install':['install','setup','bootstrap','install.ps1'],
-
-            'db':['db','migrate','schema','dump','restore'],
-
-            'tools':['tool','script','util','utility'],
-
-            'images':['image','docker','container'],
-
-        }
-
-
-
-        for s in scripts:
-
-            p = Path(s['path'])
-
-            name = p.name.lower()
-
-            placed = False
-
-            # heuristic: folder names
-
-            parts = [part.lower() for part in p.parts]
-
-            for cat, kws in keywords.items():
-
-                if any(k in name for k in kws) or any(k in part for part in parts for k in kws):
-
-                    add_to_category(cat, s)
-
-                    placed = True
-
-                    break
-
-            if not placed:
-
-                # fallback by top-level folder
-
-                top = parts[0] if parts else ''
-
-                add_to_category(top or 'other', s)
-
-
-
-        # Build result list sorted by category name, with scripts sorted
-
-        result = []
-
-        for cat in sorted(categories_map.keys()):
-
-            items = sorted(categories_map[cat], key=lambda x: x['name'])
-
-            result.append({'category':cat,'scripts':items})
-
-
-
-        # Cache index to disk for short period
-
-        try:
-
-            cache_file.parent.mkdir(parents=True,exist_ok=True)
-
-            with open(cache_file,'w',encoding='utf-8') as f:
-
-                json.dump(result,f)
-
-        except Exception:
-
-            pass
-
-
-
-        return result
-
-    def add_script(self,filename,content):
-
-        # Allow subdirectories but prevent path traversal
-
-        try:
-
-            # normalize and join
-
-            target = Path(self.scripts_folder) / Path(filename)
-
-            resolved = target.resolve()
-
-            base = Path(self.scripts_folder).resolve()
-
-            if not str(resolved).startswith(str(base)):
-
-                return False
-
-            resolved.parent.mkdir(parents=True, exist_ok=True)
-
-            with open(resolved, 'w', encoding='utf-8') as f:
-
-                f.write(content)
-
-            # make executable where appropriate
-
-            try:
-
-                os.chmod(resolved, 0o755)
-
-            except Exception:
-
-                pass
-
-            return True
-
-        except Exception:
-
-            return False
-
-    def delete_script(self,filename):
-
-        try:
-
-            target = Path(self.scripts_folder) / Path(filename)
-
-            resolved = target.resolve()
-
-            base = Path(self.scripts_folder).resolve()
-
-            if not str(resolved).startswith(str(base)):
-
-                return False
-
-            if resolved.exists():
-
-                resolved.unlink()
-
-                # cleanup empty parents
-
-                try:
-
-                    p = resolved.parent
-
-                    while p != base and not any(p.iterdir()):
-
-                        p.rmdir()
-
-                        p = p.parent
-
-                except Exception:
-
-                    pass
-
-                return True
-
-            return False
-
-        except Exception:
-
-            return False
-
-    def execute_script(self,filename,args=''):
-
-        script_path=self.scripts_folder/secure_filename(filename)
-
-        if not script_path.exists():
-
-            return {'success':False,'error':'Script not found'}
-
-        try:
-
-            # Choose an interpreter-aware command where possible
-
-            cmd = _interpreter_cmd_for_path(script_path)
-
-            if not cmd:
-
-                # Fall back to attempting to execute directly; if this fails on Windows
-
-                # the caller will receive a helpful error
-
-                cmd = [str(script_path)]
-
-            if args:
-
-                cmd.extend(args.split())
-
-            result=subprocess.run(cmd,capture_output=True,text=True,timeout=300)
-
-            return {'success':result.returncode==0,'returncode':result.returncode,'stdout':result.stdout,'stderr':result.stderr}
-
-        except subprocess.TimeoutExpired:
-
-            return {'success':False,'error':'Script execution timed out'}
-
-        except Exception as e:
-
-            return {'success':False,'error':str(e)}
-
-    def get_script_content(self,filename):
-
-        try:
-
-            target = Path(self.scripts_folder) / Path(filename)
-
-            resolved = target.resolve()
-
-            base = Path(self.scripts_folder).resolve()
-
-            if not str(resolved).startswith(str(base)):
-
-                return None
-
-            if resolved.exists():
-
-                with open(resolved,'r', encoding='utf-8') as f:
-
-                    return f.read()
-
-            return None
-
-        except Exception:
-
-            return None
-
-class VaultManager:
-    def __init__(self, db_path, key_path, audit_path):
-        self.db_path = Path(db_path)
-        self.key_path = Path(key_path)
-        self.audit_path = Path(audit_path)
-        self._fernet = self._init_encryption()
-        self._ensure_db()
-
-    def _init_encryption(self):
-        if Fernet is None:
-            return None
-        self.key_path.parent.mkdir(parents=True, exist_ok=True)
-        if self.key_path.exists():
-            key = self.key_path.read_bytes()
-        else:
-            key = Fernet.generate_key()
-            self.key_path.write_bytes(key)
-        return Fernet(key)
-
-    def _encrypt(self, plaintext):
-        if self._fernet:
-            return self._fernet.encrypt(plaintext.encode()).decode()
-        return base64.b64encode(plaintext.encode()).decode()
-
-    def _decrypt(self, ciphertext):
-        if self._fernet:
-            return self._fernet.decrypt(ciphertext.encode()).decode()
-        return base64.b64decode(ciphertext.encode()).decode()
-
-    def _ensure_db(self):
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.db_path.exists():
-            self._save_db({'secrets': []})
-        if not self.audit_path.exists():
-            self.audit_path.write_text(json.dumps({'entries': []}, indent=2), encoding='utf-8')
-
-    def _load_db(self):
-        try:
-            return json.loads(self.db_path.read_text(encoding='utf-8'))
-        except Exception:
-            return {'secrets': []}
-
-    def _save_db(self, data):
-        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-    def _audit(self, user, action, secret_name, details=''):
-        try:
-            d = json.loads(self.audit_path.read_text(encoding='utf-8')) if self.audit_path.exists() else {'entries': []}
-        except Exception:
-            d = {'entries': []}
-        d['entries'].append({
-            'id': str(uuid.uuid4()), 'timestamp': datetime.now().isoformat(),
-            'user': user, 'action': action, 'secret_name': secret_name, 'details': details
-        })
-        if len(d['entries']) > 2000:
-            d['entries'] = d['entries'][-2000:]
-        self.audit_path.write_text(json.dumps(d, indent=2), encoding='utf-8')
-
-    def list_secrets(self):
-        d = self._load_db()
-        return [{k: v for k, v in s.items() if k != 'encrypted_value' and k != 'versions'} for s in d.get('secrets', [])]
-
-    def create_secret(self, name, value, secret_type='other', rotation_days=0):
-        d = self._load_db()
-        if any(s['name'] == name for s in d.get('secrets', [])):
-            raise ValueError(f'Secret {name} already exists')
-        secret = {
-            'id': str(uuid.uuid4()), 'name': name, 'type': secret_type,
-            'encrypted_value': self._encrypt(value),
-            'rotation_days': rotation_days,
-            'created': datetime.now().isoformat(),
-            'updated': datetime.now().isoformat(),
-            'last_accessed': None,
-            'versions': [{'version': 1, 'timestamp': datetime.now().isoformat(), 'encrypted_value': self._encrypt(value)}]
-        }
-        d.setdefault('secrets', []).append(secret)
-        self._save_db(d)
-        self._audit('system', 'created', name, f'Secret {name} created (type={secret_type})')
-        return {k: v for k, v in secret.items() if k != 'encrypted_value' and k != 'versions'}
-
-    def get_secret(self, sid, user='system'):
-        d = self._load_db()
-        for s in d.get('secrets', []):
-            if s['id'] == sid:
-                s['last_accessed'] = datetime.now().isoformat()
-                self._save_db(d)
-                self._audit(user, 'accessed', s['name'])
-                return {
-                    'id': s['id'], 'name': s['name'], 'type': s['type'],
-                    'value': self._decrypt(s['encrypted_value']),
-                    'rotation_days': s.get('rotation_days', 0),
-                    'created': s['created'], 'updated': s['updated'],
-                    'last_accessed': s['last_accessed']
-                }
-        raise ValueError('Secret not found')
-
-    def update_secret(self, sid, value=None, rotation_days=None):
-        d = self._load_db()
-        for s in d.get('secrets', []):
-            if s['id'] == sid:
-                if value is not None:
-                    ver = len(s.get('versions', [])) + 1
-                    s.setdefault('versions', []).append({
-                        'version': ver, 'timestamp': datetime.now().isoformat(),
-                        'encrypted_value': self._encrypt(value)
-                    })
-                    s['encrypted_value'] = self._encrypt(value)
-                    s['updated'] = datetime.now().isoformat()
-                if rotation_days is not None:
-                    s['rotation_days'] = rotation_days
-                self._save_db(d)
-                self._audit('system', 'updated', s['name'])
-                return {k: v for k, v in s.items() if k != 'encrypted_value' and k != 'versions'}
-        raise ValueError('Secret not found')
-
-    def delete_secret(self, sid):
-        d = self._load_db()
-        name = next((s['name'] for s in d.get('secrets', []) if s['id'] == sid), 'unknown')
-        d['secrets'] = [s for s in d.get('secrets', []) if s['id'] != sid]
-        self._save_db(d)
-        self._audit('system', 'deleted', name)
-
-    def get_versions(self, sid):
-        d = self._load_db()
-        for s in d.get('secrets', []):
-            if s['id'] == sid:
-                return [{'version': v['version'], 'timestamp': v['timestamp']} for v in s.get('versions', [])]
-        return []
-
-    def get_audit_log(self, limit=100):
-        try:
-            d = json.loads(self.audit_path.read_text(encoding='utf-8'))
-        except Exception:
-            d = {'entries': []}
-        return list(reversed(d.get('entries', [])))[:limit]
-
-    def check_rotation(self):
-        d = self._load_db()
-        due = []
-        now = datetime.now()
-        for s in d.get('secrets', []):
-            rd = s.get('rotation_days', 0)
-            if rd > 0:
-                updated = datetime.fromisoformat(s['updated'])
-                days_since = (now - updated).days
-                status = 'overdue' if days_since > rd else ('due_soon' if days_since > rd * 0.8 else 'ok')
-                due.append({'id': s['id'], 'name': s['name'], 'rotation_days': rd, 'days_since_update': days_since, 'status': status})
-        return due
-
-class MemoryManager:
-    def __init__(self, memories_path, index_path):
-        self.memories_path = Path(memories_path)
-        self.index_path = Path(index_path)
-        self._ensure_db()
-
-    def _ensure_db(self):
-        self.memories_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.memories_path.exists():
-            self.memories_path.touch()
-        if not self.index_path.exists():
-            self.index_path.write_text(json.dumps({'topics': {}, 'entities': {}, 'pinned': []}, indent=2), encoding='utf-8')
-
-    def _load_all(self):
-        memories = []
-        if self.memories_path.exists():
-            for line in self.memories_path.read_text(encoding='utf-8').strip().split('\n'):
-                if line.strip():
-                    try:
-                        memories.append(json.loads(line))
-                    except Exception:
-                        pass
-        return memories
-
-    def _save_all(self, memories):
-        self.memories_path.write_text('\n'.join(json.dumps(m) for m in memories) + '\n' if memories else '', encoding='utf-8')
-
-    def _load_index(self):
-        try:
-            return json.loads(self.index_path.read_text(encoding='utf-8'))
-        except Exception:
-            return {'topics': {}, 'entities': {}, 'pinned': []}
-
-    def _save_index(self, idx):
-        self.index_path.write_text(json.dumps(idx, indent=2), encoding='utf-8')
-
-    def _update_index(self, memory):
-        idx = self._load_index()
-        for t in memory.get('topics', []):
-            idx['topics'][t] = idx['topics'].get(t, 0) + 1
-        for e in memory.get('entities', []):
-            idx['entities'][e] = idx['entities'].get(e, 0) + 1
-        if memory.get('pinned'):
-            if memory['id'] not in idx['pinned']:
-                idx['pinned'].append(memory['id'])
-        self._save_index(idx)
-
-    def add_memory(self, content, topics=None, entities=None, source='manual', importance=0.5):
-        memory = {
-            'id': str(uuid.uuid4()), 'content': content,
-            'topics': [t.strip() for t in (topics or []) if t.strip()],
-            'entities': [e.strip() for e in (entities or []) if e.strip()],
-            'source': source, 'importance': max(0.0, min(1.0, float(importance))),
-            'created': datetime.now().isoformat(), 'accessed_count': 0,
-            'pinned': False, 'decay_factor': 1.0
-        }
-        with open(self.memories_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(memory) + '\n')
-        self._update_index(memory)
-        return memory
-
-    def get_all(self, topic=None, pinned_only=False, query=None):
-        memories = self._load_all()
-        if topic:
-            memories = [m for m in memories if topic in m.get('topics', [])]
-        if pinned_only:
-            memories = [m for m in memories if m.get('pinned')]
-        if query:
-            q = query.lower()
-            memories = [m for m in memories if q in m.get('content', '').lower() or any(q in t.lower() for t in m.get('topics', []))]
-        return list(reversed(memories))
-
-    def get_memory(self, mid):
-        for m in self._load_all():
-            if m['id'] == mid:
-                return m
-        return None
-
-    def update_memory(self, mid, updates):
-        memories = self._load_all()
-        for m in memories:
-            if m['id'] == mid:
-                for k, v in updates.items():
-                    if k not in ('id', 'created'):
-                        m[k] = v
-                self._save_all(memories)
-                return m
-        raise ValueError('Memory not found')
-
-    def delete_memory(self, mid):
-        memories = self._load_all()
-        memories = [m for m in memories if m['id'] != mid]
-        self._save_all(memories)
-
-    def toggle_pin(self, mid):
-        memories = self._load_all()
-        for m in memories:
-            if m['id'] == mid:
-                m['pinned'] = not m.get('pinned', False)
-                self._save_all(memories)
-                return m
-        raise ValueError('Memory not found')
-
-    def search(self, query, limit=20):
-        query_terms = query.lower().split()
-        results = []
-        for m in self._load_all():
-            content_lower = m.get('content', '').lower()
-            topic_text = ' '.join(m.get('topics', [])).lower()
-            entity_text = ' '.join(m.get('entities', [])).lower()
-            combined = content_lower + ' ' + topic_text + ' ' + entity_text
-            score = sum(1 for term in query_terms if term in combined)
-            if score > 0:
-                score *= m.get('importance', 0.5) * m.get('decay_factor', 1.0)
-                if m.get('pinned'):
-                    score *= 1.5
-                results.append((score, m))
-        results.sort(key=lambda x: x[0], reverse=True)
-        return [m for _, m in results[:limit]]
-
-    def get_topics(self):
-        idx = self._load_index()
-        return idx.get('topics', {})
-
-    def get_context_for_conversation(self, message, limit=5):
-        return self.search(message, limit=limit)
-
-# ---------------------------------------------------------------------------
-#  RBAC Manager
-# ---------------------------------------------------------------------------
-
-class RBACManager:
-    ALL_PERMISSIONS = [
-        'dashboard','echo-chat','scripts','web_ide','processes','services',
-        'addons','training','pipelines','cloud','secrets_read','secrets_write',
-        'resources','notifications','rbac','marketplace'
-    ]
-
-    def __init__(self, db_path):
-        self.db_path = Path(db_path)
-        self._ensure_db()
-
-    def _ensure_db(self):
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.db_path.exists():
-            self._save({
-                'users': [{
-                    'id': str(uuid.uuid4()), 'username': 'admin',
-                    'password_hash': hashlib.sha256('admin'.encode()).hexdigest(),
-                    'role': 'admin', 'created': datetime.now().isoformat(),
-                    'active': True, 'api_keys': []
-                }, {
-                    'id': str(uuid.uuid4()), 'username': 'public',
-                    'password_hash': hashlib.sha256('public'.encode()).hexdigest(),
-                    'role': 'viewer', 'created': datetime.now().isoformat(),
-                    'active': True, 'api_keys': []
-                }],
-                'roles': [
-                    {'name': 'admin', 'permissions': ['*'], 'builtin': True},
-                    {'name': 'developer', 'permissions': ['dashboard','echo-chat','scripts','web_ide','resources','secrets_read','pipelines','marketplace','training'], 'builtin': True},
-                    {'name': 'operator', 'permissions': ['dashboard','pipelines','processes','services','cloud','secrets_read','notifications'], 'builtin': True},
-                    {'name': 'viewer', 'permissions': ['dashboard','echo-chat'], 'builtin': True}
-                ],
-                'sessions': [],
-                'audit_log': []
-            })
-
-    def _load(self):
-        try:
-            return json.loads(self.db_path.read_text(encoding='utf-8'))
-        except Exception:
-            return {'users': [], 'roles': [], 'sessions': [], 'audit_log': []}
-
-    def _save(self, data):
-        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-    def get_users(self):
-        d = self._load()
-        return [{ k: v for k, v in u.items() if k != 'password_hash' } for u in d['users']]
-
-    def add_user(self, username, password, role='viewer'):
-        d = self._load()
-        if any(u['username'] == username for u in d['users']):
-            raise ValueError(f'User {username} already exists')
-        user = {
-            'id': str(uuid.uuid4()), 'username': username,
-            'password_hash': hashlib.sha256(password.encode()).hexdigest(),
-            'role': role, 'created': datetime.now().isoformat(),
-            'active': True, 'api_keys': []
-        }
-        d['users'].append(user)
-        self._audit(d, 'system', 'user_created', f'User {username} created with role {role}')
-        self._save(d)
-        return {k: v for k, v in user.items() if k != 'password_hash'}
-
-    def update_user(self, user_id, updates):
-        d = self._load()
-        for u in d['users']:
-            if u['id'] == user_id:
-                for k, v in updates.items():
-                    if k == 'password':
-                        u['password_hash'] = hashlib.sha256(v.encode()).hexdigest()
-                    elif k not in ('id', 'password_hash'):
-                        u[k] = v
-                self._audit(d, 'system', 'user_updated', f'User {u["username"]} updated')
-                self._save(d)
-                return {k2: v2 for k2, v2 in u.items() if k2 != 'password_hash'}
-        raise ValueError('User not found')
-
-    def delete_user(self, user_id):
-        d = self._load()
-        d['users'] = [u for u in d['users'] if u['id'] != user_id]
-        self._audit(d, 'system', 'user_deleted', f'User {user_id} deleted')
-        self._save(d)
-
-    def get_roles(self):
-        return self._load().get('roles', [])
-
-    def add_role(self, name, permissions):
-        d = self._load()
-        if any(r['name'] == name for r in d['roles']):
-            raise ValueError(f'Role {name} already exists')
-        role = {'name': name, 'permissions': permissions, 'builtin': False}
-        d['roles'].append(role)
-        self._audit(d, 'system', 'role_created', f'Role {name} created')
-        self._save(d)
-        return role
-
-    def update_role(self, name, permissions):
-        d = self._load()
-        for r in d['roles']:
-            if r['name'] == name:
-                if r.get('builtin') and name == 'admin':
-                    raise ValueError('Cannot modify admin role')
-                r['permissions'] = permissions
-                self._audit(d, 'system', 'role_updated', f'Role {name} updated')
-                self._save(d)
-                return r
-        raise ValueError('Role not found')
-
-    def delete_role(self, name):
-        d = self._load()
-        d['roles'] = [r for r in d['roles'] if r['name'] != name or r.get('builtin')]
-        self._save(d)
-
-    def authenticate(self, username, password):
-        d = self._load()
-        pw_hash = hashlib.sha256(password.encode()).hexdigest()
-        for u in d['users']:
-            if u['username'] == username and u['password_hash'] == pw_hash and u.get('active', True):
-                sess = {
-                    'id': str(uuid.uuid4()), 'user_id': u['id'], 'username': username,
-                    'created': datetime.now().isoformat(), 'last_active': datetime.now().isoformat(),
-                    'ip': request.remote_addr or 'unknown'
-                }
-                d['sessions'].append(sess)
-                self._audit(d, username, 'login', f'User {username} logged in')
-                self._save(d)
-                return sess
-        return None
-
-    def get_sessions(self):
-        return self._load().get('sessions', [])
-
-    def delete_session(self, session_id):
-        d = self._load()
-        d['sessions'] = [s for s in d['sessions'] if s['id'] != session_id]
-        self._audit(d, 'system', 'session_revoked', f'Session {session_id[:8]}... revoked')
-        self._save(d)
-
-    def generate_api_key(self, user_id):
-        d = self._load()
-        for u in d['users']:
-            if u['id'] == user_id:
-                key = f'mc_{uuid.uuid4().hex}'
-                key_entry = {'id': str(uuid.uuid4()), 'key': key, 'created': datetime.now().isoformat()}
-                u.setdefault('api_keys', []).append(key_entry)
-                self._audit(d, u['username'], 'api_key_generated', f'API key generated for {u["username"]}')
-                self._save(d)
-                return key_entry
-        raise ValueError('User not found')
-
-    def revoke_api_key(self, key_id):
-        d = self._load()
-        for u in d['users']:
-            u['api_keys'] = [k for k in u.get('api_keys', []) if k['id'] != key_id]
-        self._save(d)
-
-    def get_audit_log(self, limit=100):
-        d = self._load()
-        return list(reversed(d.get('audit_log', [])))[:limit]
-
-    def _audit(self, data, user, action, details=''):
-        data.setdefault('audit_log', []).append({
-            'id': str(uuid.uuid4()), 'timestamp': datetime.now().isoformat(),
-            'user': user, 'action': action, 'details': details
-        })
-        if len(data['audit_log']) > 1000:
-            data['audit_log'] = data['audit_log'][-1000:]
-
-
-# ---------------------------------------------------------------------------
-#  Notification Manager
-# ---------------------------------------------------------------------------
-
-class NotificationManager:
-    def __init__(self, db_path, channels_path, rules_path):
-        self.db_path = Path(db_path)
-        self.channels_path = Path(channels_path)
-        self.rules_path = Path(rules_path)
-        self._ensure_db()
-
-    def _ensure_db(self):
-        for p, default in [
-            (self.db_path, {'notifications': []}),
-            (self.channels_path, {'channels': [
-                {'id': str(uuid.uuid4()), 'name': 'In-App', 'type': 'in_app', 'config': {}, 'enabled': True, 'created': datetime.now().isoformat()}
-            ]}),
-            (self.rules_path, {'rules': []})
-        ]:
-            p.parent.mkdir(parents=True, exist_ok=True)
-            if not p.exists():
-                p.write_text(json.dumps(default, indent=2), encoding='utf-8')
-
-    def _load(self, path):
-        try:
-            return json.loads(Path(path).read_text(encoding='utf-8'))
-        except Exception:
-            return {}
-
-    def _save(self, path, data):
-        Path(path).write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-    def send(self, title, message, severity='info', source='system'):
-        n = {
-            'id': str(uuid.uuid4()), 'title': title, 'message': message,
-            'severity': severity, 'source': source,
-            'read': False, 'timestamp': datetime.now().isoformat()
-        }
-        d = self._load(self.db_path)
-        d.setdefault('notifications', []).insert(0, n)
-        if len(d['notifications']) > 500:
-            d['notifications'] = d['notifications'][:500]
-        self._save(self.db_path, d)
-        self._dispatch(n)
-        return n
-
-    def list_notifications(self, unread_only=False, severity=None, limit=50):
-        d = self._load(self.db_path)
-        items = d.get('notifications', [])
-        if unread_only:
-            items = [i for i in items if not i.get('read')]
-        if severity:
-            items = [i for i in items if i.get('severity') == severity]
-        return items[:limit]
-
-    def unread_count(self):
-        d = self._load(self.db_path)
-        return sum(1 for n in d.get('notifications', []) if not n.get('read'))
-
-    def mark_read(self, nid):
-        d = self._load(self.db_path)
-        for n in d.get('notifications', []):
-            if n['id'] == nid:
-                n['read'] = True
-                break
-        self._save(self.db_path, d)
-
-    def mark_all_read(self):
-        d = self._load(self.db_path)
-        for n in d.get('notifications', []):
-            n['read'] = True
-        self._save(self.db_path, d)
-
-    def delete_notification(self, nid):
-        d = self._load(self.db_path)
-        d['notifications'] = [n for n in d.get('notifications', []) if n['id'] != nid]
-        self._save(self.db_path, d)
-
-    def get_channels(self):
-        return self._load(self.channels_path).get('channels', [])
-
-    def add_channel(self, name, ctype, config):
-        d = self._load(self.channels_path)
-        ch = {'id': str(uuid.uuid4()), 'name': name, 'type': ctype, 'config': config, 'enabled': True, 'created': datetime.now().isoformat()}
-        d.setdefault('channels', []).append(ch)
-        self._save(self.channels_path, d)
-        return ch
-
-    def update_channel(self, cid, updates):
-        d = self._load(self.channels_path)
-        for ch in d.get('channels', []):
-            if ch['id'] == cid:
-                ch.update({k: v for k, v in updates.items() if k != 'id'})
-                self._save(self.channels_path, d)
-                return ch
-        raise ValueError('Channel not found')
-
-    def delete_channel(self, cid):
-        d = self._load(self.channels_path)
-        d['channels'] = [ch for ch in d.get('channels', []) if ch['id'] != cid]
-        self._save(self.channels_path, d)
-
-    def test_channel(self, cid):
-        channels = self.get_channels()
-        ch = next((c for c in channels if c['id'] == cid), None)
-        if not ch:
-            raise ValueError('Channel not found')
-        test_n = {'title': 'Test Notification', 'message': 'This is a test from MasterChief.', 'severity': 'info'}
-        return self._dispatch_to_channel(ch, test_n)
-
-    def get_rules(self):
-        return self._load(self.rules_path).get('rules', [])
-
-    def add_rule(self, name, event_type, severity_filter, channel_id, active=True):
-        d = self._load(self.rules_path)
-        rule = {'id': str(uuid.uuid4()), 'name': name, 'event_type': event_type,
-                'severity_filter': severity_filter, 'channel_id': channel_id,
-                'active': active, 'created': datetime.now().isoformat()}
-        d.setdefault('rules', []).append(rule)
-        self._save(self.rules_path, d)
-        return rule
-
-    def update_rule(self, rid, updates):
-        d = self._load(self.rules_path)
-        for r in d.get('rules', []):
-            if r['id'] == rid:
-                r.update({k: v for k, v in updates.items() if k != 'id'})
-                self._save(self.rules_path, d)
-                return r
-        raise ValueError('Rule not found')
-
-    def delete_rule(self, rid):
-        d = self._load(self.rules_path)
-        d['rules'] = [r for r in d.get('rules', []) if r['id'] != rid]
-        self._save(self.rules_path, d)
-
-    def _dispatch(self, notification):
-        channels = self.get_channels()
-        rules = self.get_rules()
-        for rule in rules:
-            if not rule.get('active'):
-                continue
-            if rule.get('severity_filter') not in ('all', notification.get('severity')):
-                continue
-            ch = next((c for c in channels if c['id'] == rule.get('channel_id')), None)
-            if ch and ch.get('enabled'):
-                try:
-                    self._dispatch_to_channel(ch, notification)
-                except Exception:
-                    pass
-
-    def _dispatch_to_channel(self, ch, notification):
-        ctype = ch.get('type', '')
-        cfg = ch.get('config', {})
-        payload_text = f"**{notification['title']}**\n{notification['message']}"
-        if ctype == 'slack' and cfg.get('webhook_url'):
-            requests.post(cfg['webhook_url'], json={'text': payload_text}, timeout=10)
-        elif ctype == 'teams' and cfg.get('webhook_url'):
-            requests.post(cfg['webhook_url'], json={'@type': 'MessageCard', 'summary': notification['title'], 'sections': [{'text': notification['message']}]}, timeout=10)
-        elif ctype == 'discord' and cfg.get('webhook_url'):
-            requests.post(cfg['webhook_url'], json={'content': payload_text}, timeout=10)
-        elif ctype == 'email':
-            try:
-                import smtplib
-                from email.mime.text import MIMEText
-                msg = MIMEText(notification['message'])
-                msg['Subject'] = notification['title']
-                msg['From'] = cfg.get('from_email', '')
-                msg['To'] = cfg.get('to_email', '')
-                with smtplib.SMTP(cfg.get('smtp_host', 'localhost'), int(cfg.get('smtp_port', 25))) as s:
-                    if cfg.get('smtp_user'):
-                        s.login(cfg['smtp_user'], cfg.get('smtp_pass', ''))
-                    s.send_message(msg)
-            except Exception:
-                pass
-        return {'ok': True, 'channel': ch['name']}
-
-
 # ---------------------------------------------------------------------------
 #  Pipeline Manager
 # ---------------------------------------------------------------------------
@@ -6756,47 +5512,36 @@ class MarketplaceManager:
 
 
 ###############################################################################
-#  Manager Instantiations
+#  Dynamic Module Loading
 ###############################################################################
 
-# Only instantiate managers that exist and are needed
-try:
-    rbac_mgr = RBACManager(app.config['RBAC_DB'])
-except NameError:
-    rbac_mgr = None
+managers = {}
+for name, config in ENABLED_MODULES.items():
+    if not config.get('enabled', False):
+        managers[name] = None
+        continue
+    try:
+        spec = importlib.util.spec_from_file_location(f"{name}_manager", f"templates/{name}_manager.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        register_func = getattr(module, f'register_{name}_module')
+        # Remove 'enabled' from config for kwargs
+        kwargs = {k: v for k, v in config.items() if k != 'enabled'}
+        managers[name] = register_func(app, **kwargs)
+        print(f"DEBUG: Loaded module {name}")
+    except Exception as e:
+        print(f"Failed to load module {name}: {e}")
+        managers[name] = None
 
-try:
-    vault_mgr = VaultManager(app.config['VAULT_DB'], app.config['VAULT_KEY'], app.config['VAULT_AUDIT_DB'])
-except NameError:
-    vault_mgr = None
-
-try:
-    notification_mgr = NotificationManager(app.config['NOTIFICATIONS_DB'], app.config['NOTIFICATION_CHANNELS_DB'], app.config['NOTIFICATION_RULES_DB'])
-except NameError:
-    notification_mgr = None
-
-try:
-    pipeline_mgr = PipelineManager(app.config['PIPELINES_DB'], app.config['PIPELINE_RUNS_DB'])
-except NameError:
-    pipeline_mgr = None
-
-try:
-    cloud_mgr = CloudDashboardManager(app.config['CLOUD_DB'])
-except NameError:
-    cloud_mgr = None
-
-try:
-    memory_mgr = MemoryManager(app.config['MEMORIES_PATH'], app.config['MEMORY_INDEX_PATH'])
-except NameError:
-    memory_mgr = None
-except Exception as e:
-    memory_mgr = None
-    print(f"DEBUG: MemoryManager instantiation failed: {e}")
-
-try:
-    marketplace_mgr = MarketplaceManager(app.config['MARKETPLACE_DB'])
-except NameError:
-    marketplace_mgr = None
+# Set global manager variables for backward compatibility
+rbac_mgr = managers.get('rbac')
+vault_mgr = managers.get('vault')
+notification_mgr = managers.get('notification')
+pipeline_mgr = managers.get('pipeline')
+cloud_mgr = managers.get('cloud')
+memory_mgr = managers.get('memory')
+marketplace_mgr = managers.get('marketplace')
+script_mgr = managers.get('script')
 
 
 
@@ -7248,7 +5993,9 @@ code{color:#4CAF50;}
 
 <a href="/addons" class="{{ 'active' if '/addons' in request.path and '/modules' not in request.path else '' }}">Addons</a>
 
-<a href="/addons/modules" class="{{ 'active' if '/addons/modules' in request.path else '' }}">🧩 Modules</a>
+<a href="/modules" class="{{ 'active' if request.path=='/modules' else '' }}">⚙️ Modules</a>
+
+<a href="/addons/modules" class="{{ 'active' if '/addons/modules' in request.path else '' }}">🧩 Addon Modules</a>
 
 <a href="/echo-train" class="{{ 'active' if '/echo-train' in request.path else '' }}">Training</a>
 
@@ -8260,7 +7007,7 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 
 .chat-input-form{display:flex;gap:10px;}
 
-.chat-input{flex:1;padding:12px;background:#1a1a1a;border:2px solid #9370DB;color:#e0e0e0;border-radius:25px;font-size:1em;}
+.chat-input{flex:1;padding:12px;background:#1a1a1a;border:2px solid #9370DB;color:#e0e0e0;border-radius:25px;font-size:1em;resize:vertical;}
 
 .chat-input:focus{outline:none;border-color:#BA55D3;}
 
@@ -8426,7 +7173,7 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 
 <form class="chat-input-form" onsubmit="sendMessage(event)">
 
-<input type="text" id="chatInput" class="chat-input" placeholder="Type your message... ✨" autocomplete="off" required>
+<textarea id="chatInput" class="chat-input" placeholder="Type your message... ✨" autocomplete="off" required rows="2"></textarea>
 
 <div style="display:flex;gap:8px;align-items:center;margin-left:8px;">
 
@@ -8527,6 +7274,8 @@ const TRANSLATIONS = {
 };
 
 let CURRENT_LANG = 'en';
+
+document.getElementById('chatInput').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();this.closest('form').dispatchEvent(new Event('submit',{cancelable:true}));}});
 
 function sendMessage(e){
 
@@ -9451,6 +8200,38 @@ updateStats();
 
 {% endblock %}"""
 
+MODULES_TEMPLATE="""{% extends "base.html" %}
+
+{% block content %}
+
+<h2>🧩 Module Management</h2>
+
+<p>Enable or disable MasterChief modules. Changes take effect on restart.</p>
+
+<div class="modules-grid">
+{% for name, config in enabled_modules.items() %}
+<div class="card">
+<h3>{{ name|title }} Module</h3>
+<p>Status: <span class="status-{{ 'enabled' if config.enabled else 'disabled' }}">{{ 'Enabled' if config.enabled else 'Disabled' }}</span></p>
+<p>Manager: <code>{{ managers[name]|type if managers[name] else 'Not loaded' }}</code></p>
+<form method="POST" action="/api/modules/toggle" style="display:inline;">
+<input type="hidden" name="module" value="{{ name }}">
+<button type="submit" class="btn {{ 'btn-danger' if config.enabled else 'btn-success' }}">
+{{ 'Disable' if config.enabled else 'Enable' }}
+</button>
+</form>
+</div>
+{% endfor %}
+</div>
+
+<style>
+.modules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.status-enabled { color: #4CAF50; font-weight: bold; }
+.status-disabled { color: #f44336; font-weight: bold; }
+</style>
+
+{% endblock %}"""
+
 @app.route('/')
 
 @requires_permission('dashboard')
@@ -9458,6 +8239,22 @@ def dashboard():
     stats=get_system_stats()
 
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',DASHBOARD_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),stats=stats,request=request,get_flashed_messages=get_flashed_messages)
+
+@app.route('/modules')
+@requires_permission('dashboard')
+def modules_page():
+    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', MODULES_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), enabled_modules=ENABLED_MODULES, managers=managers, request=request, get_flashed_messages=get_flashed_messages)
+
+@app.route('/api/modules/toggle', methods=['POST'])
+@requires_permission('dashboard')
+def api_modules_toggle():
+    module = request.form.get('module')
+    if module not in ENABLED_MODULES:
+        return jsonify({'ok': False, 'error': 'Module not found'}), 400
+    ENABLED_MODULES[module]['enabled'] = not ENABLED_MODULES[module]['enabled']
+    # Save to file
+    app.config['MODULES_CONFIG'].write_text(json.dumps(ENABLED_MODULES, indent=2), encoding='utf-8')
+    return jsonify({'ok': True, 'enabled': ENABLED_MODULES[module]['enabled']})
 
 @app.route('/api/test')
 def api_test():
