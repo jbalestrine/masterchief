@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import jwt
 from urllib.parse import urlencode
 import logging
+from functools import wraps
 
 from auth_config import auth_config
 
@@ -19,15 +20,36 @@ from auth_config import auth_config
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def requires_permission(permission):
+    """Decorator to check if user has required permission"""
+    def decorator(f):
+        @wraps(f)
+        @login_required
+        def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated:
+                return redirect(url_for('login'))
+            
+            # Admin has all permissions
+            if hasattr(current_user, 'permissions') and ('*' in current_user.permissions or permission in current_user.permissions):
+                return f(*args, **kwargs)
+            
+            # Permission denied - redirect to login instead of dashboard to avoid infinite loop
+            flash(f'Access denied: {permission} permission required', 'error')
+            return redirect(url_for('login'))
+        return wrapper
+    return decorator
+
 class User(UserMixin):
     """User model for Flask-Login"""
 
-    def __init__(self, user_id, username=None, email=None, provider=None, profile_data=None):
+    def __init__(self, user_id, username=None, email=None, provider=None, profile_data=None, role=None, permissions=None):
         self.id = user_id
         self.username = username
         self.email = email
         self.provider = provider
         self.profile_data = profile_data or {}
+        self.role = role
+        self.permissions = permissions or []
 
     @staticmethod
     def get(user_id):
@@ -110,6 +132,87 @@ class AuthModule:
                     }
                 })
             return jsonify({'authenticated': False})
+
+        @self.app.route('/login', methods=['GET', 'POST'])
+        def login():
+            """Simple login form"""
+            if request.method == 'POST':
+                username = request.form.get('username')
+                password = request.form.get('password')
+                
+                # Use RBAC manager for authentication
+                from main import rbac_mgr
+                if rbac_mgr:
+                    session_data = rbac_mgr.authenticate(username, password)
+                    if session_data:
+                        # Get user details and permissions
+                        users = rbac_mgr.get_users()
+                        user = next((u for u in users if u['username'] == username), None)
+                        if user:
+                            # Get user permissions
+                            roles = rbac_mgr.get_roles()
+                            role = next((r for r in roles if r['name'] == user.get('role')), None)
+                            permissions = role.get('permissions', []) if role else []
+                            
+                            rbac_user = User(
+                                user_id=user['id'],
+                                username=user['username'],
+                                email=f"{user['username']}@localhost",
+                                provider='rbac',
+                                role=user.get('role'),
+                                permissions=permissions
+                            )
+                            login_user(rbac_user)
+                            next_page = request.args.get('next')
+                            return redirect(next_page or '/')
+                
+                flash('Invalid credentials')
+                return redirect(url_for('login'))
+            
+            # GET request - show login form
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>MasterChief Login</title>
+                <style>
+                    body { font-family: Arial, sans-serif; background: #1a1a1a; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+                    .login-container { background: #2d2d2d; padding: 2rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); width: 400px; border: 1px solid #4CAF50; }
+                    h2 { text-align: center; color: #4CAF50; margin-bottom: 1rem; }
+                    form { display: flex; flex-direction: column; }
+                    input { margin: 0.5rem 0; padding: 0.75rem; background: #1a1a1a; border: 1px solid #3a3a3a; color: #e0e0e0; border-radius: 5px; font-size: 1em; }
+                    input:focus { outline: none; border-color: #4CAF50; }
+                    button { background: #4CAF50; color: #fff; border: none; padding: 0.75rem; border-radius: 5px; cursor: pointer; margin-top: 1rem; font-size: 1em; transition: all 0.3s; }
+                    button:hover { background: #45a049; transform: translateY(-2px); }
+                    .error { color: #f44336; text-align: center; margin-bottom: 1rem; font-weight: bold; }
+                    .info { background: #2196F3; color: #fff; padding: 1rem; border-radius: 5px; margin-bottom: 1rem; border-left: 4px solid #0b7dda; }
+                    .info h3 { margin: 0 0 0.5rem 0; color: #fff; }
+                    .contact { text-align: center; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #3a3a3a; color: #888; }
+                </style>
+            </head>
+            <body>
+                <div class="login-container">
+                    <h2>MasterChief Access</h2>
+                    
+                    <div class="info">
+                        <h3>Public Access Available</h3>
+                        <p>You have the right to use public login with password: <strong>public</strong></p>
+                        <p>This provides access to general content but you will be restricted from administrative functions.</p>
+                    </div>
+                    
+                    <form method="post">
+                        <input type="text" name="username" placeholder="Username" required>
+                        <input type="password" name="password" placeholder="Password" required>
+                        <button type="submit">Login</button>
+                    </form>
+                    
+                    <div class="contact">
+                        <p>For full access, contact: <a href="mailto:JosephBalestrine@yahoo.com" style="color: #4CAF50;">JosephBalestrine@yahoo.com</a></p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            '''
 
         @self.app.route('/auth/azure/login')
         def azure_login():
@@ -243,7 +346,25 @@ class AuthModule:
         @auth_module.login_manager.user_loader
         def load_user(user_id):
             """Load user by ID"""
-            return User.get(user_id)
+            from main import rbac_mgr
+            if rbac_mgr:
+                users = rbac_mgr.get_users()
+                user = next((u for u in users if u['id'] == user_id), None)
+                if user:
+                    # Get user permissions
+                    roles = rbac_mgr.get_roles()
+                    role = next((r for r in roles if r['name'] == user.get('role')), None)
+                    permissions = role.get('permissions', []) if role else []
+                    
+                    return User(
+                        user_id=user['id'],
+                        username=user['username'],
+                        email=f"{user['username']}@localhost",
+                        provider='rbac',
+                        role=user.get('role'),
+                        permissions=permissions
+                    )
+            return None
 
         return auth_module
 
