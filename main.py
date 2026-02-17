@@ -7483,6 +7483,8 @@ DASHBOARD_TEMPLATE="""{% extends "base.html" %}
 
 <a href="/iac_manager" class="btn">IAC Manager</a>
 
+<a href="/github" class="btn">GitHub Integration</a>
+
 </div>
 
 {% endblock %}"""

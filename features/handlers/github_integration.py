@@ -153,6 +153,9 @@ def register_routes(app):
         if not github_integration.is_configured():
             return jsonify({'error': 'GitHub integration not configured'}), 503
         
+        if repo.endswith('.git'):
+            repo = repo[:-4]
+        
         file_path = request.args.get('file_path', '')
         if not file_path:
             return jsonify({'error': 'File path is required'}), 400

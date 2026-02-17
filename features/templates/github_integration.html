@@ -86,7 +86,12 @@
 
             <div id="remote-tab" class="tab-content">
                 <div class="form-group">
-                    <label for="remote-repo-select">Select Remote Repository</label>
+                    <label for="remote-repo-url">Custom Repository URL</label>
+                    <input type="url" id="remote-repo-url" placeholder="https://github.com/owner/repo.git">
+                    <button onclick="loadFromCustomURL()" class="btn btn-info">Load from URL</button>
+                </div>
+                <div class="form-group">
+                    <label for="remote-repo-select">Or Select Remote Repository</label>
                     <select id="remote-repo-select">
                         <option value="">Choose a repository...</option>
                     </select>
@@ -339,6 +344,20 @@
             }
         }
 
+        function loadFromCustomURL() {
+            const url = document.getElementById('remote-repo-url').value;
+            const match = url.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
+            if (!match) {
+                alert('Invalid GitHub URL. Please enter a URL like https://github.com/owner/repo');
+                return;
+            }
+            const owner = match[1];
+            const repo = match[2];
+            currentRemoteRepo = { full_name: `${owner}/${repo}.git` };
+            currentRemotePath = '';
+            loadRemoteFiles();
+        }
+
         document.getElementById('remote-repo-select').addEventListener('change', (e) => {
             const repoValue = e.target.value;
             if (repoValue) {
@@ -382,7 +401,7 @@
                     div.className = 'file-item ' + (item.type === 'dir' ? 'dir' : 'file');
                     div.innerHTML = `
                         <span>${item.type === 'dir' ? '📁' : '📄'} ${item.name}</span>
-                        ${item.type === 'file' ? `<small>(${formatSize(item.size)})</small>` : ''}
+                        ${item.type === 'file' ? `<small>(${formatSize(item.size)}) - ${item.last_modified}</small>` : ''}
                     `;
                     
                     if (item.type === 'dir') {
@@ -405,9 +424,25 @@
         }
 
         async function loadRemoteFile(owner, name, filePath) {
+            // Define allowed file extensions for source/text files
+            const allowedExtensions = ['py', 'txt', 'conf', 'json', 'yaml', 'yml', 'md', 'js', 'html', 'css', 'xml', 'sh', 'bat', 'ps1', 'ini', 'cfg', 'toml', 'lock', 'gitignore', 'dockerfile', 'makefile'];
+            
+            // Get file extension
+            const fileExtension = filePath.split('.').pop().toLowerCase();
+            
+            // Check if file extension is allowed
+            if (!allowedExtensions.includes(fileExtension)) {
+                showStatus('Cannot load binary or unsupported file type: .' + fileExtension + '. Only source/text files can be edited.', 'error');
+                return;
+            }
+            
             try {
                 const response = await fetch(`/api/features/github/repos/${owner}/${name}/file-content?file_path=${encodeURIComponent(filePath)}`);
                 const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load file');
+                }
                 
                 document.getElementById('file-content').value = data.content;
                 document.getElementById('save-filename').value = filePath.split('/').pop();
