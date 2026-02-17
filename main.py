@@ -8676,6 +8676,198 @@ def addons_upload():
 
     return redirect(url_for('addons_list'))
 
+@app.route('/addons/create_blank_module', methods=['POST'])
+def addons_create_blank_module():
+    """Create a blank module with empty directory structure."""
+    try:
+        data = request.get_json() or {}
+        module_name = data.get('name', '').strip()
+        module_type = data.get('type', 'python')
+        description = data.get('description', '').strip()
+
+        if not module_name:
+            return jsonify({'success': False, 'error': 'Module name is required'}), 400
+
+        if not re.match(r'^[a-zA-Z][a-zA-Z0-9_-]*$', module_name):
+            return jsonify({'success': False, 'error': 'Module name must start with a letter and contain only letters, numbers, underscores, and hyphens'}), 400
+
+        # Create module directory structure
+        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+        source_dir = extract_dir  # For blank modules, source_dir is the same as extract_dir
+
+        # Create basic directory structure
+        extract_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create basic files based on module type
+        if module_type == 'python':
+            # Create __init__.py
+            (extract_dir / '__init__.py').write_text(f'''"""
+{module_name} - {description or 'A custom Python module'}
+"""
+
+__version__ = "0.1.0"
+__author__ = "MasterChief"
+''')
+
+            # Create main.py
+            (extract_dir / 'main.py').write_text(f'''"""
+Main module for {module_name}
+{description or ''}
+"""
+
+def main():
+    """Main function - customize this for your module"""
+    print(f"Hello from {module_name}!")
+    # Add your code here
+
+if __name__ == "__main__":
+    main()
+''')
+
+            # Create config.py
+            (extract_dir / 'config.py').write_text(f'''"""
+Configuration for {module_name}
+"""
+
+# Module configuration
+MODULE_NAME = "{module_name}"
+MODULE_VERSION = "0.1.0"
+MODULE_DESCRIPTION = "{description or 'A custom Python module'}"
+
+# Add your configuration variables here
+DEBUG = True
+''')
+
+        elif module_type == 'web':
+            # Create basic web structure
+            (extract_dir / 'app.py').write_text(f'''"""
+Web application for {module_name}
+{description or ''}
+"""
+
+from flask import Flask, render_template_string
+
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return f"<h1>Welcome to {module_name}!</h1><p>{description or 'A custom web application'}</p>"
+
+if __name__ == "__main__":
+    app.run(debug=True)
+''')
+
+            (extract_dir / 'templates').mkdir(exist_ok=True)
+            (extract_dir / 'static').mkdir(exist_ok=True)
+
+        elif module_type == 'api':
+            # Create basic API structure
+            (extract_dir / 'api.py').write_text(f'''"""
+API service for {module_name}
+{description or ''}
+"""
+
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+@app.route('/api/health')
+def health():
+    return jsonify({{"status": "ok", "module": "{module_name}"}})
+
+@app.route('/api/info')
+def info():
+    return jsonify({{
+        "name": "{module_name}",
+        "version": "0.1.0",
+        "description": "{description or 'A custom API service'}"
+    }})
+
+if __name__ == "__main__":
+    app.run(debug=True)
+''')
+
+        else:
+            # Generic/other type - just create a basic README
+            (extract_dir / 'README.md').write_text(f'''# {module_name}
+
+{description or 'A custom module'}
+
+## Getting Started
+
+Add your code and documentation here.
+
+## Usage
+
+Customize this module according to your needs.
+''')
+
+        # Create README.md for all types
+        readme_path = extract_dir / 'README.md'
+        if not readme_path.exists():
+            readme_path.write_text(f'''# {module_name}
+
+{description or f'A custom {module_type} module'}
+
+## Description
+
+{description or 'This module was created as a blank template and can be customized as needed.'}
+
+## Files
+
+This module includes the following files:
+- Main implementation files
+- Configuration files
+- Documentation
+
+## Getting Started
+
+1. Add your custom code to the module files
+2. Configure any settings in the config files
+3. Use the Build and Load buttons to activate the module
+4. Register features to make them available system-wide
+
+## Development
+
+Edit files directly through the web interface or upload additional files as needed.
+''')
+
+        # Store module info
+        module_info = {
+            'name': module_name,
+            'extract_dir': str(extract_dir),
+            'source_dir': str(source_dir),
+            'installed_at': datetime.now().isoformat(),
+            'type': module_type,
+            'description': description,
+            'is_blank_module': True
+        }
+
+        # Save module info
+        modules_file = app.config['UPLOAD_FOLDER'] / 'modules.json'
+        try:
+            if modules_file.exists():
+                with open(modules_file, 'r') as f:
+                    modules = json.load(f)
+            else:
+                modules = {}
+
+            modules[module_name] = module_info
+
+            with open(modules_file, 'w') as f:
+                json.dump(modules, f, indent=2)
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Could not save module info: {str(e)}'}), 500
+
+        return jsonify({
+            'success': True,
+            'message': f'Blank module "{module_name}" created successfully',
+            'module': module_info
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/addons/install/<filename>', methods=['GET', 'POST'])
 
 def addons_install(filename):
