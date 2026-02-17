@@ -219,7 +219,7 @@ sys.path.remove(_script_dir)
 # Import authentication modules
 try:
     from auth_config import auth_config
-    from auth_module import init_auth
+    from auth_module import init_auth, requires_permission
     from azure_integration import azure_integration
     from github_integration import github_integration
     from app_management import app_management
@@ -249,6 +249,8 @@ except ImportError as e:
 from flask import Flask, render_template_string, request, jsonify, redirect, url_for, flash, get_flashed_messages, send_file
 
 from flask_cors import CORS
+
+from flask_login import login_required
 
 # Import TF Wizard modules
 try:
@@ -311,7 +313,7 @@ app.config['MARKETPLACE_DB'] = _data_dir / 'marketplace.json'
 app.config['MEMORIES_PATH'] = _data_dir / 'echo_memories.jsonl'
 app.config['MEMORY_INDEX_PATH'] = _data_dir / 'echo_memory_index.json'
 app.config['VAULT_AUDIT_DB'] = _data_dir / 'vault_audit.json'
-app.config['RBAC_ENABLED'] = False
+app.config['RBAC_ENABLED'] = True
 
 for folder in [app.config['UPLOAD_FOLDER'],app.config['SCRIPTS_FOLDER'],_data_dir]:
 
@@ -5964,6 +5966,11 @@ class RBACManager:
                     'password_hash': hashlib.sha256('admin'.encode()).hexdigest(),
                     'role': 'admin', 'created': datetime.now().isoformat(),
                     'active': True, 'api_keys': []
+                }, {
+                    'id': str(uuid.uuid4()), 'username': 'public',
+                    'password_hash': hashlib.sha256('public'.encode()).hexdigest(),
+                    'role': 'viewer', 'created': datetime.now().isoformat(),
+                    'active': True, 'api_keys': []
                 }],
                 'roles': [
                     {'name': 'admin', 'permissions': ['*'], 'builtin': True},
@@ -9446,6 +9453,7 @@ updateStats();
 
 @app.route('/')
 
+@requires_permission('dashboard')
 def dashboard():
     stats=get_system_stats()
 
@@ -9467,6 +9475,7 @@ def api_stats():
 
 @app.route('/scripts')
 
+@requires_permission('scripts')
 def scripts_list():
 
     res = script_mgr.list_scripts(include_repo_paths=True)
@@ -9565,6 +9574,7 @@ def scripts_add():
 
 @app.route('/scripts/view/<filename>')
 
+@requires_permission('scripts')
 def scripts_view(filename):
 
     content=script_mgr.get_script_content(filename)
@@ -9579,16 +9589,14 @@ def scripts_view(filename):
 
 @app.route('/scripts/execute/<filename>')
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_execute(filename):
 
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',SCRIPT_EXECUTE_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),filename=filename,result=None,request=request,get_flashed_messages=get_flashed_messages)
 
 @app.route('/scripts/run/<filename>',methods=['POST'])
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_run(filename):
 
     args=request.form.get('args','')
@@ -9599,8 +9607,7 @@ def scripts_run(filename):
 
 @app.route('/scripts/delete/<filename>')
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_delete(filename):
 
     if script_mgr.delete_script(filename):
@@ -9641,8 +9648,7 @@ def _b64_decode_path(s: str) -> str:
 
 @app.route('/scripts/edit/<b64path>')
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_edit(b64path):
 
     path = _b64_decode_path(b64path)
@@ -9673,8 +9679,7 @@ def scripts_edit(b64path):
 
 @app.route('/scripts/save/<b64path>', methods=['POST'])
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_save(b64path):
 
     path = _b64_decode_path(b64path)
@@ -9731,8 +9736,7 @@ def scripts_save(b64path):
 
 @app.route('/scripts/backup/<b64path>', methods=['POST'])
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_backup(b64path):
 
     path = _b64_decode_path(b64path)
@@ -10067,8 +10071,7 @@ def scripts_backup(b64path):
 
 @app.route('/scripts/suggest_commit/<b64path>', methods=['GET'])
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_suggest_commit(b64path):
 
     path = _b64_decode_path(b64path)
@@ -10125,8 +10128,7 @@ def scripts_suggest_commit(b64path):
 
 @app.route('/scripts/diff/<b64path>', methods=['POST'])
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_diff(b64path):
 
     path = _b64_decode_path(b64path)
@@ -10167,8 +10169,7 @@ def scripts_diff(b64path):
 
 @app.route('/scripts/exec_path/<b64path>', methods=['POST','GET'])
 
-@requires_basic_auth
-
+@requires_permission('scripts')
 def scripts_exec_path(b64path):
 
     path = _b64_decode_path(b64path)
@@ -10215,6 +10216,7 @@ def scripts_exec_path(b64path):
 
 @app.route('/processes')
 
+@requires_permission('processes')
 def processes_list():
 
     processes=get_processes()
@@ -10249,6 +10251,7 @@ def processes_kill(pid):
 
 @app.route('/services')
 
+@requires_permission('services')
 def services_list():
 
     is_windows=sys.platform=='win32'
@@ -10317,6 +10320,7 @@ def services_restart(service_name):
 
 @app.route('/addons')
 
+@requires_permission('addons')
 def addons_list():
 
     uploaded_files=[]
@@ -12458,6 +12462,7 @@ def module_ui_integration_api(module_name):
 
 @app.route('/resources')
 
+@requires_permission('resources')
 def resources_list():
 
     """Simple UI for uploading and managing reference/template/example files."""
@@ -13346,6 +13351,7 @@ def api_personality_toggle():
 
 
 @app.route('/masterchief_code_ui')
+@requires_permission('web_ide')
 def masterchief_code_ui():
     """Serve the MasterChief Code UI (Web IDE)."""
     try:
@@ -13360,6 +13366,7 @@ def masterchief_code_ui():
 
 
 @app.route('/echo-chat')
+@requires_permission('echo-chat')
 def echo_chat():
     echo_art = Echo.get_compact_greeting()
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', ECHO_CHAT_TEMPLATE.replace('{% extends "base.html" %}', '').replace('{% block content %}', '').replace('{% endblock %}', '')), echo_art=echo_art, request=request, get_flashed_messages=get_flashed_messages)
@@ -15040,6 +15047,7 @@ def api_echo_models():
 
 @app.route('/echo-train')
 
+@requires_permission('training')
 def echo_train_page():
 
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ECHO_TRAINING_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')))
@@ -15651,9 +15659,8 @@ def notifications_page():
 
 
 @app.route('/rbac')
-
+@requires_permission('rbac')
 def rbac_page():
-
     return send_file('rbac.html')
 
 
@@ -16206,6 +16213,70 @@ def api_features_enabled():
     except Exception as e:
         app.logger.exception('Failed to list enabled features')
         return jsonify([])
+
+
+@app.route('/api/features/settings', methods=['GET', 'POST'])
+def api_features_settings():
+    """Get or save API management settings."""
+    settings_file = Path(__file__).resolve().parent / 'api_settings.json'
+    
+    if request.method == 'GET':
+        # Load settings from file
+        try:
+            if settings_file.exists():
+                settings = json.loads(settings_file.read_text(encoding='utf-8'))
+                return jsonify(settings)
+            else:
+                # Return default settings
+                return jsonify({
+                    'core_features': {
+                        'masterchief_code_ui': True,
+                        'web_ide': True,
+                        'caf_generator': True,
+                        'echo_chat': True
+                    },
+                    'development_tools': {
+                        'github_integration': True,
+                        'azure_integration': True,
+                        'cloud_dashboard': True,
+                        'pipelines': True
+                    },
+                    'system_management': {
+                        'rbac': True,
+                        'notifications': True,
+                        'marketplace': True,
+                        'app_management': True
+                    },
+                    'advanced_features': {
+                        'echo_memory': True,
+                        'scenario_bot': True,
+                        'irc_bridge': True,
+                        'data_ingestion': True
+                    }
+                })
+        except Exception as e:
+            app.logger.exception('Failed to load API settings')
+            return jsonify({'error': 'Failed to load settings'}), 500
+    
+    elif request.method == 'POST':
+        # Save settings to file
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No data provided'}), 400
+            
+            # Validate the structure
+            required_categories = ['core_features', 'development_tools', 'system_management', 'advanced_features']
+            for category in required_categories:
+                if category not in data:
+                    return jsonify({'error': f'Missing category: {category}'}), 400
+            
+            # Save to file
+            settings_file.write_text(json.dumps(data, indent=2), encoding='utf-8')
+            return jsonify({'success': True, 'message': 'Settings saved successfully'})
+        except Exception as e:
+            app.logger.exception('Failed to save API settings')
+            return jsonify({'error': 'Failed to save settings'}), 500
 
 
 @app.route('/feature/run/<path:feature_key>', methods=['POST'])
