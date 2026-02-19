@@ -80,65 +80,31 @@ try:
 except ImportError:
     Fernet = None
 
+# Import our utility modules
+from utils import (
+    _interpreter_cmd_for_path,
+    _start_cleanup_thread,
+    _env_bool,
+    _parse_bool_val,
+    _start_output_cleanup_thread,
+    get_default_model_path,
+    _safe_script_path,
+    load_enabled_modules
+)
+from utils.terraform import EnterpriseTerraformGenerator
+from templates.base import HTML_TEMPLATE
+from templates.pages import (
+    DASHBOARD_TEMPLATE,
+    SCRIPTS_TEMPLATE,
+    SCRIPT_VIEW_TEMPLATE,
+    SCRIPT_EXECUTE_TEMPLATE,
+    MODULES_TEMPLATE,
+    MODULE_MANAGER_TEMPLATE
+)
 
 
-# Determine an interpreter command for a given script path.
 
-def _interpreter_cmd_for_path(p: Path, requested_shell=None):
 
-    try:
-
-        if requested_shell:
-
-            rs = str(requested_shell).lower()
-
-            if rs in ('python','py','python3'):
-
-                return [sys.executable, str(p)]
-
-            if rs in ('powershell','ps1','pwsh'):
-
-                return ['powershell','-ExecutionPolicy','Bypass','-File', str(p)]
-
-            if rs in ('bash','sh'):
-
-                # honor explicit request for bash/sh only if available on PATH
-
-                if shutil.which('bash'):
-
-                    return ['bash', str(p)]
-
-                if shutil.which('wsl'):
-
-                    return ['wsl', str(p)]
-
-                return None
-
-        # common suffixes
-
-        if p.suffix == '.py':
-
-            return [sys.executable, str(p)]
-
-        if p.suffix == '.ps1':
-
-            return ['powershell','-ExecutionPolicy','Bypass','-File', str(p)]
-
-        # On Windows, avoid implicitly selecting WSL/bash for unknown types.
-
-        # Prefer explicit shells (python/powershell) to prevent invoking missing WSL binaries.
-
-        if sys.platform.startswith('win'):
-
-            return None
-
-        # on unix-like platforms run the file directly
-
-        return [str(p)]
-
-    except Exception:
-
-        return None
 
 
 
@@ -156,59 +122,7 @@ from collections import Counter
 
 
 
-def _start_cleanup_thread(retention_days=30):
 
-    def runner():
-
-        while True:
-
-            try:
-
-                base = Path(__file__).parent / 'data' / 'models_output'
-
-                if base.exists():
-
-                    for d in base.iterdir():
-
-                        if not d.is_dir():
-
-                            continue
-
-                        # skip train_jobs.json
-
-                        if d.name == 'train_jobs.json':
-
-                            continue
-
-                        try:
-
-                            mtime = d.stat().st_mtime
-
-                            age_days = (time.time() - mtime) / (60*60*24)
-
-                            if age_days > retention_days:
-
-                                shutil.make_archive(str(d), 'zip', root_dir=str(d))
-
-                                shutil.rmtree(d)
-
-                        except Exception:
-
-                            app.logger.exception('Failed to archive old job %s', d)
-
-                # sleep between scans
-
-                time.sleep(60*60*6)
-
-            except Exception:
-
-                app.logger.exception('Cleanup thread error')
-
-                time.sleep(60*60)
-
-    thread = threading.Thread(target=runner, daemon=True)
-
-    thread.start()
 
 from core.echo.identity import Echo
 
@@ -227,6 +141,11 @@ try:
 except ImportError as e:
     print(f"Warning: Authentication modules not available: {e}")
     AUTH_MODULES_AVAILABLE = False
+    # Define dummy decorator when auth modules are not available
+    def requires_permission(permission):
+        def decorator(f):
+            return f
+        return decorator
 
 # Import setup wizard (works with or without auth modules)
 try:
@@ -316,29 +235,7 @@ app.config['VAULT_AUDIT_DB'] = _data_dir / 'vault_audit.json'
 app.config['MODULES_CONFIG'] = _data_dir / 'modules.json'
 app.config['RBAC_ENABLED'] = True
 
-def load_enabled_modules():
-    config_file = app.config['MODULES_CONFIG']
-    default_modules = {
-        'rbac': {'enabled': True, 'db_path': app.config['RBAC_DB']},
-        'vault': {'enabled': True, 'db_path': app.config['VAULT_DB'], 'key_path': app.config['VAULT_KEY'], 'audit_path': app.config['VAULT_AUDIT_DB']},
-        'notification': {'enabled': True, 'db_path': app.config['NOTIFICATIONS_DB'], 'channels_path': app.config['NOTIFICATION_CHANNELS_DB'], 'rules_path': app.config['NOTIFICATION_RULES_DB']},
-        'pipeline': {'enabled': True, 'db_path': app.config['PIPELINES_DB'], 'runs_path': app.config['PIPELINE_RUNS_DB']},
-        'cloud': {'enabled': True, 'db_path': app.config['CLOUD_DB']},
-        'memory': {'enabled': True, 'memories_path': app.config['MEMORIES_PATH'], 'index_path': app.config['MEMORY_INDEX_PATH']},
-        'marketplace': {'enabled': True, 'db_path': app.config['MARKETPLACE_DB']},
-        'script': {'enabled': True}
-    }
-    if config_file.exists():
-        try:
-            loaded = json.loads(config_file.read_text())
-            # Merge with defaults
-            for k, v in default_modules.items():
-                if k not in loaded:
-                    loaded[k] = v
-            return loaded
-        except:
-            pass
-    return default_modules
+
 
 ENABLED_MODULES = load_enabled_modules()
 
@@ -457,49 +354,7 @@ app.config['ECHO_AUTO_CONTINUE'] = _env_bool('ECHO_AUTO_CONTINUE', True)
 
 app.config['ECHO_CONTINUE_PROMPT'] = os.environ.get('ECHO_CONTINUE_PROMPT', 'Continue the previous answer to the user\'s question. Stay strictly on that topic and do not introduce unrelated facts or change the subject.')
 
-try:
 
-    app.config['ECHO_CONTINUE_MAX_RETRIES'] = int(os.environ.get('ECHO_CONTINUE_MAX_RETRIES', '2'))
-
-except Exception:
-
-    app.config['ECHO_CONTINUE_MAX_RETRIES'] = 2
-
-try:
-
-    app.config['ECHO_CONTINUE_MIN_SIMILARITY'] = float(os.environ.get('ECHO_CONTINUE_MIN_SIMILARITY', '0.12'))
-
-except Exception:
-
-    app.config['ECHO_CONTINUE_MIN_SIMILARITY'] = 0.12
-
-try:
-
-    app.config['ECHO_OUTPUT_RETENTION_DAYS'] = int(os.environ.get('ECHO_OUTPUT_RETENTION_DAYS', '90'))
-
-except Exception:
-
-    app.config['ECHO_OUTPUT_RETENTION_DAYS'] = 90
-
-
-
-# Image generation defaults (provider: 'horde' community or 'local' diffusers)
-
-app.config['IMAGE_PROVIDER'] = os.environ.get('IMAGE_PROVIDER', 'horde')
-
-app.config['IMAGE_RATE_LIMIT_PER_MIN'] = int(os.environ.get('IMAGE_RATE_LIMIT_PER_MIN', '6'))
-
-app.config['IMAGE_CACHE_TTL'] = int(os.environ.get('IMAGE_CACHE_TTL', '86400'))  # seconds
-
-
-
-# In-memory image cache: cache_key -> {'path': str(path), 'ts': time.time()}
-
-IMAGE_CACHE = {}
-
-# Rate limit tracker: key -> [timestamps]
-
-IMAGE_RATE = {}
 
     # Async image job tracker: job_id -> {'status','progress','path','error'}
 IMAGE_JOBS = {}
@@ -741,24 +596,6 @@ def init_chat():
 
 
 
-
-
-
-
-# --- Minimal Web IDE API endpoints -----------------------------------------------------
-
-def _safe_script_path(filename: str):
-
-    try:
-
-        fname = secure_filename(filename)
-
-        if not fname:
-
-            return None
-
-        return Path(app.config['SCRIPTS_FOLDER']) / fname
-
     except Exception:
 
         return None
@@ -767,1064 +604,29 @@ def _safe_script_path(filename: str):
 
 
 
-@app.route('/api/ide/scripts')
 
-def api_ide_scripts():
 
-    files = []
 
-    try:
 
-        scripts_dir = Path(app.config['SCRIPTS_FOLDER'])
 
-        for p in sorted(scripts_dir.glob('*')):
 
-            if p.is_file():
 
-                files.append({'name': p.name, 'size': p.stat().st_size, 'modified': datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
 
-    except Exception as e:
 
-        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 
-    # success
-
-    return jsonify({'ok': True, 'files': files})
-
-
-
-
-
-@app.route('/api/terraform/generate', methods=['POST'])
-
-def api_terraform_generate():
-
-    """Generate a Terraform project on the server from a wizard payload.
-
-    Expects JSON: { name, cloud, backend, provider_settings, variables, resources }
-
-    Returns: { ok: True, path: <relative path> }
-
-    """
-
-    data = request.get_json(silent=True) or {}
-
-    name = data.get('name') or (data.get('config') or {}).get('name') or 'tf_project'
-
-    # sanitize name
-
-    sf = secure_filename(name) or 'tf_project'
-
-    try:
-
-        from tools.terraform_wizard import WizardConfig, create_project
-
-    except Exception as e:
-
-        return jsonify({'ok': False, 'error': f'Import error: {e}'}), 500
-
-    base = Path(__file__).resolve().parent / 'data' / 'terraform_projects'
-
-    out_dir = base / sf
-
-    try:
-
-        cfg = WizardConfig(
-
-            name=sf,
-
-            cloud=data.get('cloud', 'azure'),
-
-            backend=data.get('backend'),
-
-            provider_settings=data.get('provider_settings'),
-
-            variables=data.get('variables'),
-
-            resources=data.get('resources'),
-
-        )
-
-        create_project(cfg, out_dir)
-
-        return jsonify({'ok': True, 'path': str(out_dir.relative_to(Path(__file__).resolve().parent))})
-
-    except Exception as e:
-
-        app.logger.exception('Failed to generate terraform project')
-
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-
-
-
-ENTERPRISE_TF_JOBS = {}  # job_id -> generated project path
-
-class EnterpriseTerraformGenerator:
-    """Generates enterprise-grade Terraform projects from wizard configuration."""
-
-    def __init__(self, output_base):
-        self.output_base = Path(output_base)
-        self.output_base.mkdir(parents=True, exist_ok=True)
-
-    def generate(self, config):
-        """Generate a full enterprise Terraform project and return a job ID."""
-        job_id = str(uuid.uuid4())[:8]
-        project_name = config.get('project_name', 'enterprise-infra')
-        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '', project_name) or 'project'
-        out_dir = self.output_base / f'{safe_name}_{job_id}'
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        self._write_providers(config, out_dir)
-        self._write_backend(config, out_dir)
-        self._write_variables(config, out_dir)
-        self._write_locals(config, out_dir)
-
-        # Module directories
-        modules_dir = out_dir / 'modules'
-
-        # Hub module
-        if config.get('topology') == 'hub-spoke':
-            self._write_hub_module(config, modules_dir / 'hub')
-
-        # Spoke modules
-        for spoke in config.get('spokes', []):
-            spoke_name = re.sub(r'[^a-zA-Z0-9_-]', '', spoke.get('name', 'spoke'))
-            self._write_spoke_module(config, spoke, modules_dir / f'spoke_{spoke_name}')
-
-        # AKS module
-        if config.get('aks_enabled'):
-            self._write_aks_module(config, modules_dir / 'aks')
-
-        # Key Vault module
-        if config.get('keyvault_enabled', True):
-            self._write_keyvault_module(config, modules_dir / 'keyvault')
-
-        # Monitoring module
-        if config.get('log_analytics_enabled', True):
-            self._write_monitoring_module(config, modules_dir / 'monitoring')
-
-        # RBAC module
-        if config.get('rbac_assignments'):
-            self._write_rbac_module(config, modules_dir / 'rbac')
-
-        # DR module
-        if config.get('asr_enabled'):
-            self._write_dr_module(config, modules_dir / 'disaster_recovery')
-
-        # Users module (AAD groups)
-        if config.get('aad_groups_enabled'):
-            self._write_users_module(config, modules_dir / 'users')
-
-        # Akamai module
-        if config.get('akamai_enabled'):
-            self._write_akamai_module(config, modules_dir / 'akamai')
-
-        # VMSS module
-        if config.get('vmss_enabled'):
-            self._write_vmss_module(config, modules_dir / 'vmss')
-
-        # Main.tf referencing all modules
-        self._write_main(config, out_dir)
-
-        # Outputs
-        self._write_outputs(config, out_dir)
-
-        # Environment tfvars
-        self._write_environments(config, out_dir)
-
-        # CI/CD templates
-        if config.get('cicd_enabled'):
-            self._write_cicd_templates(config, out_dir)
-
-        # README
-        self._write_readme(config, out_dir)
-
-        # Create ZIP
-        zip_path = out_dir.parent / f'{safe_name}_{job_id}.zip'
-        shutil.make_archive(str(zip_path).replace('.zip', ''), 'zip', str(out_dir))
-
-        ENTERPRISE_TF_JOBS[job_id] = {
-            'id': job_id, 'path': str(zip_path), 'project_dir': str(out_dir),
-            'name': project_name, 'created': datetime.now().isoformat()
-        }
-        return job_id
-
-    def _w(self, path, content):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding='utf-8')
-
-    def _write_providers(self, cfg, out):
-        providers = ['    azurerm = {\n      source  = "hashicorp/azurerm"\n      version = ">= 3.0"\n    }']
-        providers.append('    azuread = {\n      source  = "hashicorp/azuread"\n      version = ">= 2.0"\n    }')
-        providers.append('    random = {\n      source  = "hashicorp/random"\n      version = ">= 3.0"\n    }')
-        if cfg.get('aks_enabled'):
-            providers.append('    kubernetes = {\n      source  = "hashicorp/kubernetes"\n      version = ">= 2.0"\n    }')
-        if cfg.get('akamai_enabled'):
-            providers.append('    akamai = {\n      source  = "akamai/akamai"\n      version = ">= 1.0"\n    }')
-        self._w(out / 'providers.tf', f"""terraform {{
-  required_version = ">= 1.5"
-  required_providers {{
-{chr(10).join(providers)}
-  }}
-}}
-
-provider "azurerm" {{
-  features {{
-    key_vault {{
-      purge_protection_enabled = false
-    }}
-  }}
-  subscription_id = var.subscription_id
-  tenant_id       = var.tenant_id
-}}
-
-provider "azuread" {{
-  tenant_id = var.tenant_id
-}}
-""")
-
-    def _write_backend(self, cfg, out):
-        backend = cfg.get('backend', {})
-        if backend.get('type') == 'azurerm':
-            self._w(out / 'backend.tf', f"""terraform {{
-  backend "azurerm" {{
-    resource_group_name  = "{backend.get('resource_group', 'tfstate-rg')}"
-    storage_account_name = "{backend.get('storage_account', 'tfstatesa')}"
-    container_name       = "{backend.get('container', 'tfstate')}"
-    key                  = "{cfg.get('project_name', 'enterprise')}/terraform.tfstate"
-  }}
-}}
-""")
-        else:
-            self._w(out / 'backend.tf', 'terraform {\n  backend "local" {\n    path = "terraform.tfstate"\n  }\n}\n')
-
-    def _write_variables(self, cfg, out):
-        region = cfg.get('region', 'eastus')
-        env = cfg.get('environment', 'dev')
-        self._w(out / 'variables.tf', f"""variable "subscription_id" {{
-  type        = string
-  description = "Azure Subscription ID"
-  default     = "{cfg.get('subscription_id', '')}"
-}}
-
-variable "tenant_id" {{
-  type        = string
-  description = "Azure AD Tenant ID"
-  default     = "{cfg.get('tenant_id', '')}"
-}}
-
-variable "environment" {{
-  type        = string
-  description = "Environment name (dev/test/staging/prod)"
-  default     = "{env}"
-}}
-
-variable "location" {{
-  type        = string
-  description = "Azure region"
-  default     = "{region}"
-}}
-
-variable "naming_prefix" {{
-  type        = string
-  description = "Naming prefix for all resources"
-  default     = "{cfg.get('naming_prefix', cfg.get('project_name', 'mc'))}"
-}}
-
-variable "tags" {{
-  type = map(string)
-  default = {{
-    Environment = "{env}"
-    ManagedBy   = "terraform"
-    Project     = "{cfg.get('project_name', 'masterchief')}"
-  }}
-}}
-""")
-
-    def _write_locals(self, cfg, out):
-        prefix = cfg.get('naming_prefix', cfg.get('project_name', 'mc'))
-        self._w(out / 'locals.tf', f"""locals {{
-  prefix      = var.naming_prefix
-  environment = var.environment
-  location    = var.location
-  tags        = var.tags
-  hub_rg_name = "${{local.prefix}}-hub-rg"
-}}
-""")
-
-    def _write_hub_module(self, cfg, mod_dir):
-        hub_cidr = cfg.get('hub_cidr', '10.0.0.0/16')
-        hub_subnets = cfg.get('hub_subnets', [
-            {'name': 'GatewaySubnet', 'cidr': '10.0.0.0/24'},
-            {'name': 'AzureFirewallSubnet', 'cidr': '10.0.1.0/24'},
-            {'name': 'SharedServicesSubnet', 'cidr': '10.0.2.0/24'},
-            {'name': 'ManagementSubnet', 'cidr': '10.0.3.0/24'},
-        ])
-        subnets_hcl = '\n'.join(f'    {{ name = "{s["name"]}", cidr = "{s["cidr"]}" }},' for s in hub_subnets)
-        self._w(mod_dir / 'main.tf', f"""resource "azurerm_resource_group" "hub" {{
-  name     = "${{var.prefix}}-hub-rg"
-  location = var.location
-  tags     = var.tags
-}}
-
-resource "azurerm_virtual_network" "hub" {{
-  name                = "${{var.prefix}}-hub-vnet"
-  location            = azurerm_resource_group.hub.location
-  resource_group_name = azurerm_resource_group.hub.name
-  address_space       = [var.hub_cidr]
-  tags                = var.tags
-}}
-
-resource "azurerm_subnet" "hub_subnets" {{
-  for_each             = {{ for s in var.hub_subnets : s.name => s }}
-  name                 = each.value.name
-  resource_group_name  = azurerm_resource_group.hub.name
-  virtual_network_name = azurerm_virtual_network.hub.name
-  address_prefixes     = [each.value.cidr]
-}}
-
-resource "azurerm_network_security_group" "hub_nsg" {{
-  name                = "${{var.prefix}}-hub-nsg"
-  location            = azurerm_resource_group.hub.location
-  resource_group_name = azurerm_resource_group.hub.name
-  tags                = var.tags
-}}
-{'' if not cfg.get('firewall_enabled') else '''
-resource "azurerm_firewall" "hub" {
-  name                = "${var.prefix}-hub-fw"
-  location            = azurerm_resource_group.hub.location
-  resource_group_name = azurerm_resource_group.hub.name
-  sku_name            = "AZFW_VNet"
-  sku_tier            = "Standard"
-  ip_configuration {
-    name                 = "configuration"
-    subnet_id            = azurerm_subnet.hub_subnets["AzureFirewallSubnet"].id
-    public_ip_address_id = azurerm_public_ip.fw_pip.id
-  }
-  tags = var.tags
-}
-
-resource "azurerm_public_ip" "fw_pip" {
-  name                = "${var.prefix}-hub-fw-pip"
-  location            = azurerm_resource_group.hub.location
-  resource_group_name = azurerm_resource_group.hub.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  tags                = var.tags
-}
-'''}
-""")
-        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
-variable "location" {{ type = string }}
-variable "tags" {{ type = map(string) }}
-variable "hub_cidr" {{
-  type    = string
-  default = "{hub_cidr}"
-}}
-variable "hub_subnets" {{
-  type = list(object({{ name = string, cidr = string }}))
-  default = [
-{subnets_hcl}
-  ]
-}}
-""")
-        self._w(mod_dir / 'outputs.tf', """output "hub_vnet_id" { value = azurerm_virtual_network.hub.id }
-output "hub_vnet_name" { value = azurerm_virtual_network.hub.name }
-output "hub_rg_name" { value = azurerm_resource_group.hub.name }
-output "hub_subnet_ids" { value = { for k, v in azurerm_subnet.hub_subnets : k => v.id } }
-""")
-
-    def _write_spoke_module(self, cfg, spoke, mod_dir):
-        spoke_cidr = spoke.get('cidr', '10.1.0.0/16')
-        spoke_subnets = spoke.get('subnets', [
-            {'name': 'AKSSubnet', 'cidr': '10.1.1.0/24'},
-            {'name': 'AppSubnet', 'cidr': '10.1.2.0/24'},
-            {'name': 'DataSubnet', 'cidr': '10.1.3.0/24'},
-        ])
-        subnets_hcl = '\n'.join(f'    {{ name = "{s["name"]}", cidr = "{s["cidr"]}" }},' for s in spoke_subnets)
-        self._w(mod_dir / 'main.tf', f"""resource "azurerm_resource_group" "spoke" {{
-  name     = "${{var.prefix}}-${{var.spoke_name}}-rg"
-  location = var.location
-  tags     = var.tags
-}}
-
-resource "azurerm_virtual_network" "spoke" {{
-  name                = "${{var.prefix}}-${{var.spoke_name}}-vnet"
-  location            = azurerm_resource_group.spoke.location
-  resource_group_name = azurerm_resource_group.spoke.name
-  address_space       = [var.spoke_cidr]
-  tags                = var.tags
-}}
-
-resource "azurerm_subnet" "spoke_subnets" {{
-  for_each             = {{ for s in var.spoke_subnets : s.name => s }}
-  name                 = each.value.name
-  resource_group_name  = azurerm_resource_group.spoke.name
-  virtual_network_name = azurerm_virtual_network.spoke.name
-  address_prefixes     = [each.value.cidr]
-}}
-
-resource "azurerm_network_security_group" "spoke_nsg" {{
-  name                = "${{var.prefix}}-${{var.spoke_name}}-nsg"
-  location            = azurerm_resource_group.spoke.location
-  resource_group_name = azurerm_resource_group.spoke.name
-  tags                = var.tags
-}}
-{"" if not spoke.get('peering', True) else '''
-resource "azurerm_virtual_network_peering" "spoke_to_hub" {
-  name                      = "${var.prefix}-${var.spoke_name}-to-hub"
-  resource_group_name       = azurerm_resource_group.spoke.name
-  virtual_network_name      = azurerm_virtual_network.spoke.name
-  remote_virtual_network_id = var.hub_vnet_id
-  allow_forwarded_traffic   = true
-  allow_gateway_transit     = false
-  use_remote_gateways       = false
-}
-
-resource "azurerm_virtual_network_peering" "hub_to_spoke" {
-  name                      = "hub-to-${var.spoke_name}"
-  resource_group_name       = var.hub_rg_name
-  virtual_network_name      = var.hub_vnet_name
-  remote_virtual_network_id = azurerm_virtual_network.spoke.id
-  allow_forwarded_traffic   = true
-  allow_gateway_transit     = true
-  use_remote_gateways       = false
-}
-''' }
-""")
-        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
-variable "location" {{ type = string }}
-variable "tags" {{ type = map(string) }}
-variable "spoke_name" {{ type = string }}
-variable "spoke_cidr" {{
-  type    = string
-  default = "{spoke_cidr}"
-}}
-variable "spoke_subnets" {{
-  type = list(object({{ name = string, cidr = string }}))
-  default = [
-{subnets_hcl}
-  ]
-}}
-variable "hub_vnet_id" {{ type = string; default = "" }}
-variable "hub_vnet_name" {{ type = string; default = "" }}
-variable "hub_rg_name" {{ type = string; default = "" }}
-""")
-        self._w(mod_dir / 'outputs.tf', f"""output "spoke_vnet_id" {{ value = azurerm_virtual_network.spoke.id }}
-output "spoke_rg_name" {{ value = azurerm_resource_group.spoke.name }}
-output "spoke_subnet_ids" {{ value = {{ for k, v in azurerm_subnet.spoke_subnets : k => v.id }} }}
-""")
-
-    def _write_aks_module(self, cfg, mod_dir):
-        aks_cfg = cfg.get('aks_config', {})
-        self._w(mod_dir / 'main.tf', """resource "azurerm_kubernetes_cluster" "aks" {
-  name                = "${var.prefix}-aks"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  dns_prefix          = "${var.prefix}-aks"
-  kubernetes_version  = var.kubernetes_version
-
-  default_node_pool {
-    name                = "system"
-    node_count          = var.system_node_count
-    vm_size             = var.system_vm_size
-    enable_auto_scaling = true
-    min_count           = var.system_min_count
-    max_count           = var.system_max_count
-    vnet_subnet_id      = var.subnet_id
-    max_pods            = 110
-    os_disk_size_gb     = 128
-  }
-
-  identity {
-    type = "SystemAssigned"
-  }
-
-  network_profile {
-    network_plugin    = var.network_plugin
-    network_policy    = var.network_policy
-    load_balancer_sku = "standard"
-    outbound_type     = "loadBalancer"
-  }
-
-  azure_active_directory_role_based_access_control {
-    managed            = var.enable_aad_rbac
-    azure_rbac_enabled = var.enable_aad_rbac
-  }
-
-  oms_agent {
-    log_analytics_workspace_id = var.log_analytics_workspace_id
-  }
-
-  azure_policy_enabled = var.enable_azure_policy
-
-  tags = var.tags
-}
-""")
-        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
-variable "location" { type = string }
-variable "resource_group_name" { type = string }
-variable "tags" { type = map(string) }
-variable "subnet_id" { type = string }
-variable "kubernetes_version" { type = string; default = "1.29" }
-variable "system_vm_size" { type = string; default = "Standard_D2s_v3" }
-variable "system_node_count" { type = number; default = 3 }
-variable "system_min_count" { type = number; default = 2 }
-variable "system_max_count" { type = number; default = 5 }
-variable "network_plugin" { type = string; default = "azure" }
-variable "network_policy" { type = string; default = "azure" }
-variable "enable_aad_rbac" { type = bool; default = true }
-variable "enable_azure_policy" { type = bool; default = true }
-variable "log_analytics_workspace_id" { type = string; default = "" }
-""")
-        self._w(mod_dir / 'outputs.tf', """output "aks_id" { value = azurerm_kubernetes_cluster.aks.id }
-output "aks_name" { value = azurerm_kubernetes_cluster.aks.name }
-output "kube_config" { value = azurerm_kubernetes_cluster.aks.kube_admin_config_raw; sensitive = true }
-""")
-
-    def _write_keyvault_module(self, cfg, mod_dir):
-        kv = cfg.get('keyvault_config', {})
-        self._w(mod_dir / 'main.tf', f"""data "azurerm_client_config" "current" {{}}
-
-resource "azurerm_key_vault" "kv" {{
-  name                       = "${{var.prefix}}-kv"
-  location                   = var.location
-  resource_group_name        = var.resource_group_name
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  sku_name                   = "standard"
-  purge_protection_enabled   = {str(kv.get('purge_protection', True)).lower()}
-  soft_delete_retention_days = {kv.get('soft_delete_days', 90)}
-  enable_rbac_authorization  = true
-
-  network_acls {{
-    default_action = "{kv.get('default_action', 'Deny')}"
-    bypass         = "AzureServices"
-  }}
-
-  tags = var.tags
-}}
-""")
-        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
-variable "location" { type = string }
-variable "resource_group_name" { type = string }
-variable "tags" { type = map(string) }
-""")
-        self._w(mod_dir / 'outputs.tf', """output "key_vault_id" { value = azurerm_key_vault.kv.id }
-output "key_vault_uri" { value = azurerm_key_vault.kv.vault_uri }
-""")
-
-    def _write_monitoring_module(self, cfg, mod_dir):
-        self._w(mod_dir / 'main.tf', """resource "azurerm_log_analytics_workspace" "law" {
-  name                = "${var.prefix}-law"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  sku                 = "PerGB2018"
-  retention_in_days   = var.retention_days
-  tags                = var.tags
-}
-
-resource "azurerm_log_analytics_solution" "containers" {
-  count                 = var.enable_container_insights ? 1 : 0
-  solution_name         = "ContainerInsights"
-  location              = var.location
-  resource_group_name   = var.resource_group_name
-  workspace_resource_id = azurerm_log_analytics_workspace.law.id
-  workspace_name        = azurerm_log_analytics_workspace.law.name
-  plan {
-    publisher = "Microsoft"
-    product   = "OMSGallery/ContainerInsights"
-  }
-}
-""")
-        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
-variable "location" { type = string }
-variable "resource_group_name" { type = string }
-variable "tags" { type = map(string) }
-variable "retention_days" { type = number; default = 30 }
-variable "enable_container_insights" { type = bool; default = true }
-""")
-        self._w(mod_dir / 'outputs.tf', """output "workspace_id" { value = azurerm_log_analytics_workspace.law.id }
-output "workspace_key" { value = azurerm_log_analytics_workspace.law.primary_shared_key; sensitive = true }
-""")
-
-    def _write_rbac_module(self, cfg, mod_dir):
-        self._w(mod_dir / 'main.tf', """resource "azurerm_role_assignment" "assignments" {
-  for_each             = { for idx, a in var.assignments : idx => a }
-  scope                = each.value.scope
-  role_definition_name = each.value.role
-  principal_id         = each.value.principal_id
-}
-""")
-        self._w(mod_dir / 'variables.tf', """variable "assignments" {
-  type = list(object({
-    principal_id = string
-    role         = string
-    scope        = string
-  }))
-  default = []
-}
-""")
-        self._w(mod_dir / 'outputs.tf', 'output "assignment_ids" { value = [for a in azurerm_role_assignment.assignments : a.id] }\n')
-
-    def _write_dr_module(self, cfg, mod_dir):
-        asr = cfg.get('asr_config', {})
-        self._w(mod_dir / 'main.tf', f"""resource "azurerm_recovery_services_vault" "vault" {{
-  name                = "${{var.prefix}}-asr-vault"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  sku                 = "Standard"
-  tags                = var.tags
-}}
-
-resource "azurerm_site_recovery_fabric" "primary" {{
-  name                = "primary-fabric"
-  resource_group_name = var.resource_group_name
-  recovery_vault_name = azurerm_recovery_services_vault.vault.name
-  location            = var.source_region
-}}
-
-resource "azurerm_site_recovery_fabric" "secondary" {{
-  name                = "secondary-fabric"
-  resource_group_name = var.resource_group_name
-  recovery_vault_name = azurerm_recovery_services_vault.vault.name
-  location            = var.target_region
-}}
-
-resource "azurerm_site_recovery_replication_policy" "policy" {{
-  name                                                 = "${{var.prefix}}-replication-policy"
-  resource_group_name                                  = var.resource_group_name
-  recovery_vault_name                                  = azurerm_recovery_services_vault.vault.name
-  recovery_point_retention_in_minutes                  = {asr.get('rpo_minutes', 1440)}
-  application_consistent_snapshot_frequency_in_minutes = {asr.get('snapshot_minutes', 240)}
-}}
-""")
-        self._w(mod_dir / 'variables.tf', f"""variable "prefix" {{ type = string }}
-variable "location" {{ type = string }}
-variable "resource_group_name" {{ type = string }}
-variable "tags" {{ type = map(string) }}
-variable "source_region" {{ type = string; default = "{asr.get('source_region', 'eastus')}" }}
-variable "target_region" {{ type = string; default = "{asr.get('target_region', 'westus2')}" }}
-""")
-        self._w(mod_dir / 'outputs.tf', 'output "vault_id" { value = azurerm_recovery_services_vault.vault.id }\n')
-
-    def _write_users_module(self, cfg, mod_dir):
-        self._w(mod_dir / 'main.tf', """resource "azuread_group" "groups" {
-  for_each         = { for g in var.groups : g.name => g }
-  display_name     = each.value.name
-  description      = each.value.description
-  security_enabled = true
-}
-""")
-        self._w(mod_dir / 'variables.tf', """variable "groups" {
-  type = list(object({
-    name        = string
-    description = string
-  }))
-  default = []
-}
-""")
-        self._w(mod_dir / 'outputs.tf', 'output "group_ids" { value = { for k, v in azuread_group.groups : k => v.id } }\n')
-
-    def _write_akamai_module(self, cfg, mod_dir):
-        ak = cfg.get('akamai_config', {})
-        self._w(mod_dir / 'main.tf', """# Akamai CDN & WAF Configuration
-# Requires Akamai API credentials configured
-
-resource "akamai_property" "cdn" {
-  name        = "${var.prefix}-cdn"
-  product_id  = "prd_Fresca"
-  contract_id = var.contract_id
-  group_id    = var.group_id
-
-  hostnames {
-    cname_from = var.edge_hostname
-    cname_to   = var.origin_hostname
-  }
-}
-""")
-        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
-variable "contract_id" { type = string; default = "" }
-variable "group_id" { type = string; default = "" }
-variable "edge_hostname" { type = string; default = "" }
-variable "origin_hostname" { type = string; default = "" }
-""")
-        self._w(mod_dir / 'outputs.tf', '# Akamai outputs\n')
-
-    def _write_vmss_module(self, cfg, mod_dir):
-        vmss = cfg.get('vmss_config', {})
-        self._w(mod_dir / 'main.tf', """resource "azurerm_linux_virtual_machine_scale_set" "vmss" {
-  name                = "${var.prefix}-vmss"
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  sku                 = var.vm_size
-  instances           = var.instance_count
-  admin_username      = "adminuser"
-
-  admin_ssh_key {
-    username   = "adminuser"
-    public_key = var.ssh_public_key
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts"
-    version   = "latest"
-  }
-
-  os_disk {
-    storage_account_type = "Standard_LRS"
-    caching              = "ReadWrite"
-  }
-
-  network_interface {
-    name    = "vmss-nic"
-    primary = true
-    ip_configuration {
-      name      = "internal"
-      primary   = true
-      subnet_id = var.subnet_id
-    }
-  }
-
-  tags = var.tags
-}
-""")
-        self._w(mod_dir / 'variables.tf', """variable "prefix" { type = string }
-variable "location" { type = string }
-variable "resource_group_name" { type = string }
-variable "tags" { type = map(string) }
-variable "subnet_id" { type = string }
-variable "vm_size" { type = string; default = "Standard_D2s_v3" }
-variable "instance_count" { type = number; default = 2 }
-variable "ssh_public_key" { type = string; default = "" }
-""")
-        self._w(mod_dir / 'outputs.tf', 'output "vmss_id" { value = azurerm_linux_virtual_machine_scale_set.vmss.id }\n')
-
-    def _write_main(self, cfg, out):
-        lines = ['# Main module composition\n']
-        if cfg.get('topology') == 'hub-spoke':
-            lines.append("""module "hub" {
-  source   = "./modules/hub"
-  prefix   = local.prefix
-  location = local.location
-  tags     = local.tags
-}
-""")
-        for spoke in cfg.get('spokes', []):
-            sname = re.sub(r'[^a-zA-Z0-9_]', '', spoke.get('name', 'spoke'))
-            lines.append(f"""module "spoke_{sname}" {{
-  source         = "./modules/spoke_{sname}"
-  prefix         = local.prefix
-  location       = local.location
-  tags           = local.tags
-  spoke_name     = "{spoke.get('name', sname)}"
-  hub_vnet_id    = {"module.hub.hub_vnet_id" if cfg.get('topology') == 'hub-spoke' else '""'}
-  hub_vnet_name  = {"module.hub.hub_vnet_name" if cfg.get('topology') == 'hub-spoke' else '""'}
-  hub_rg_name    = {"module.hub.hub_rg_name" if cfg.get('topology') == 'hub-spoke' else '""'}
-}}
-""")
-        if cfg.get('log_analytics_enabled', True):
-            lines.append("""module "monitoring" {
-  source              = "./modules/monitoring"
-  prefix              = local.prefix
-  location            = local.location
-  resource_group_name = module.hub.hub_rg_name
-  tags                = local.tags
-}
-""")
-        if cfg.get('keyvault_enabled', True):
-            lines.append("""module "keyvault" {
-  source              = "./modules/keyvault"
-  prefix              = local.prefix
-  location            = local.location
-  resource_group_name = module.hub.hub_rg_name
-  tags                = local.tags
-}
-""")
-        if cfg.get('aks_enabled'):
-            first_spoke = cfg.get('spokes', [{}])[0] if cfg.get('spokes') else {}
-            sname = re.sub(r'[^a-zA-Z0-9_]', '', first_spoke.get('name', 'spoke'))
-            lines.append(f"""module "aks" {{
-  source                     = "./modules/aks"
-  prefix                     = local.prefix
-  location                   = local.location
-  resource_group_name        = module.spoke_{sname}.spoke_rg_name
-  subnet_id                  = module.spoke_{sname}.spoke_subnet_ids["AKSSubnet"]
-  log_analytics_workspace_id = module.monitoring.workspace_id
-  tags                       = local.tags
-}}
-""")
-        if cfg.get('rbac_assignments'):
-            lines.append("""module "rbac" {
-  source      = "./modules/rbac"
-  assignments = var.rbac_assignments
-}
-""")
-        if cfg.get('asr_enabled'):
-            lines.append("""module "disaster_recovery" {
-  source              = "./modules/disaster_recovery"
-  prefix              = local.prefix
-  location            = local.location
-  resource_group_name = module.hub.hub_rg_name
-  tags                = local.tags
-}
-""")
-        if cfg.get('aad_groups_enabled'):
-            lines.append("""module "users" {
-  source = "./modules/users"
-  groups = var.aad_groups
-}
-""")
-        if cfg.get('vmss_enabled'):
-            lines.append("""module "vmss" {
-  source              = "./modules/vmss"
-  prefix              = local.prefix
-  location            = local.location
-  resource_group_name = module.hub.hub_rg_name
-  subnet_id           = module.hub.hub_subnet_ids["SharedServicesSubnet"]
-  tags                = local.tags
-}
-""")
-        self._w(out / 'main.tf', '\n'.join(lines))
-
-    def _write_outputs(self, cfg, out):
-        lines = ['# Outputs\n']
-        if cfg.get('topology') == 'hub-spoke':
-            lines.append('output "hub_vnet_id" { value = module.hub.hub_vnet_id }')
-        for spoke in cfg.get('spokes', []):
-            sname = re.sub(r'[^a-zA-Z0-9_]', '', spoke.get('name', 'spoke'))
-            lines.append(f'output "spoke_{sname}_vnet_id" {{ value = module.spoke_{sname}.spoke_vnet_id }}')
-        if cfg.get('aks_enabled'):
-            lines.append('output "aks_name" { value = module.aks.aks_name }')
-        if cfg.get('keyvault_enabled', True):
-            lines.append('output "keyvault_uri" { value = module.keyvault.key_vault_uri }')
-        if cfg.get('log_analytics_enabled', True):
-            lines.append('output "log_analytics_workspace_id" { value = module.monitoring.workspace_id }')
-        self._w(out / 'outputs.tf', '\n'.join(lines) + '\n')
-
-    def _write_environments(self, cfg, out):
-        envs_dir = out / 'environments'
-        for env in ('dev', 'test', 'staging', 'prod'):
-            content = f"""environment    = "{env}"
-location       = "{cfg.get('region', 'eastus')}"
-naming_prefix  = "{cfg.get('naming_prefix', 'mc')}-{env}"
-"""
-            self._w(envs_dir / f'{env}.tfvars', content)
-
-    def _write_cicd_templates(self, cfg, out):
-        cicd_dir = out / 'cicd'
-        platform = cfg.get('cicd_platform', 'github')
-        if platform == 'github':
-            self._w(cicd_dir / '.github' / 'workflows' / 'terraform.yml', """name: Terraform CI/CD
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  terraform:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "1.5.0"
-      - name: Terraform Init
-        run: terraform init
-      - name: Terraform Format Check
-        run: terraform fmt -check
-      - name: Terraform Plan
-        if: github.event_name == 'pull_request'
-        run: terraform plan -var-file=environments/${{ github.event.pull_request.base.ref == 'main' && 'prod' || 'dev' }}.tfvars -no-color
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve -var-file=environments/prod.tfvars
-""")
-        else:
-            self._w(cicd_dir / 'azure-pipelines.yml', """trigger:
-  branches:
-    include: [main]
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-stages:
-  - stage: Plan
-    jobs:
-      - job: TerraformPlan
-        steps:
-          - task: TerraformInstaller@0
-            inputs:
-              terraformVersion: '1.5.0'
-          - task: TerraformTaskV4@4
-            inputs:
-              command: 'init'
-          - task: TerraformTaskV4@4
-            inputs:
-              command: 'plan'
-              commandOptions: '-var-file=environments/prod.tfvars'
-  - stage: Apply
-    dependsOn: Plan
-    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
-    jobs:
-      - deployment: TerraformApply
-        environment: 'production'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: TerraformTaskV4@4
-                  inputs:
-                    command: 'apply'
-                    commandOptions: '-auto-approve -var-file=environments/prod.tfvars'
-""")
-
-    def _write_readme(self, cfg, out):
-        spokes = ', '.join(s.get('name', 'spoke') for s in cfg.get('spokes', []))
-        modules = []
-        if cfg.get('topology') == 'hub-spoke':
-            modules.append('Hub Network')
-        if cfg.get('spokes'):
-            modules.append(f'Spokes: {spokes}')
-        if cfg.get('aks_enabled'):
-            modules.append('AKS Kubernetes')
-        if cfg.get('keyvault_enabled', True):
-            modules.append('Key Vault')
-        if cfg.get('log_analytics_enabled', True):
-            modules.append('Log Analytics')
-        if cfg.get('asr_enabled'):
-            modules.append('Disaster Recovery')
-        if cfg.get('aad_groups_enabled'):
-            modules.append('Azure AD Groups')
-        if cfg.get('vmss_enabled'):
-            modules.append('VM Scale Sets')
-        if cfg.get('akamai_enabled'):
-            modules.append('Akamai CDN/WAF')
-        self._w(out / 'README.md', f"""# {cfg.get('project_name', 'Enterprise Infrastructure')}
-
-Generated by MasterChief Enterprise Terraform Wizard.
-
-## Architecture
-- Topology: {cfg.get('topology', 'hub-spoke')}
-- Region: {cfg.get('region', 'eastus')}
-- Environment: {cfg.get('environment', 'dev')}
-
-## Modules
-{chr(10).join(f'- {m}' for m in modules)}
-
-## Usage
-```bash
-terraform init
-terraform plan -var-file=environments/dev.tfvars
-terraform apply -var-file=environments/dev.tfvars
-```
-
-## Environments
-- dev.tfvars / test.tfvars / staging.tfvars / prod.tfvars
-""")
-
-    def validate(self, config):
-        """Validate configuration and return issues."""
-        issues = []
-        # Check CIDRs
-        cidrs = []
-        if config.get('hub_cidr'):
-            cidrs.append(('Hub', config['hub_cidr']))
-        for spoke in config.get('spokes', []):
-            if spoke.get('cidr'):
-                cidrs.append((spoke.get('name', 'Spoke'), spoke['cidr']))
-        # Basic CIDR overlap check
-        for i, (n1, c1) in enumerate(cidrs):
-            for j, (n2, c2) in enumerate(cidrs):
-                if i < j:
-                    if self._cidrs_overlap(c1, c2):
-                        issues.append({'severity': 'error', 'message': f'CIDR overlap: {n1} ({c1}) overlaps with {n2} ({c2})'})
-        # Naming
-        if not config.get('project_name'):
-            issues.append({'severity': 'error', 'message': 'Project name is required'})
-        if not config.get('subscription_id'):
-            issues.append({'severity': 'warning', 'message': 'Subscription ID not set — required for deployment'})
-        if not config.get('tenant_id'):
-            issues.append({'severity': 'warning', 'message': 'Tenant ID not set — required for Azure AD operations'})
-        # Best practices
-        if config.get('keyvault_config', {}).get('default_action') == 'Allow':
-            issues.append({'severity': 'warning', 'message': 'Key Vault network ACL set to Allow — Deny recommended for production'})
-        if config.get('environment') == 'prod' and not config.get('asr_enabled'):
-            issues.append({'severity': 'info', 'message': 'Production environment without DR — consider enabling Azure Site Recovery'})
-        if not issues:
-            issues.append({'severity': 'success', 'message': 'All validations passed'})
-        return issues
-
-    def _cidrs_overlap(self, cidr1, cidr2):
-        try:
-            def cidr_to_range(cidr):
-                parts = cidr.split('/')
-                ip_parts = list(map(int, parts[0].split('.')))
-                ip_int = (ip_parts[0] << 24) + (ip_parts[1] << 16) + (ip_parts[2] << 8) + ip_parts[3]
-                mask = (0xFFFFFFFF << (32 - int(parts[1]))) & 0xFFFFFFFF
-                start = ip_int & mask
-                end = start + (~mask & 0xFFFFFFFF)
-                return start, end
-            s1, e1 = cidr_to_range(cidr1)
-            s2, e2 = cidr_to_range(cidr2)
-            return s1 <= e2 and s2 <= e1
-        except Exception:
-            return False
 
 enterprise_tf_gen = EnterpriseTerraformGenerator(_data_dir / 'terraform_enterprise')
+
+ENTERPRISE_TF_JOBS = {}  # job_id -> generated project path
 
 
 # ---------------------------------------------------------------------------
 #  Enterprise TF Wizard Routes
 # ---------------------------------------------------------------------------
 
-@app.route('/api/terraform/enterprise/generate', methods=['POST'])
-def api_tf_enterprise_generate():
-    try:
-        config = request.get_json(silent=True) or {}
-        job_id = enterprise_tf_gen.generate(config)
-        return jsonify({'ok': True, 'result': {'job_id': job_id, 'download_url': f'/api/terraform/enterprise/download/{job_id}'}})
-    except Exception as e:
-        app.logger.exception('Enterprise TF generation failed')
-        return jsonify({'ok': False, 'error': str(e)}), 500
 
-@app.route('/api/terraform/enterprise/validate', methods=['POST'])
-def api_tf_enterprise_validate():
-    try:
-        config = request.get_json(silent=True) or {}
-        issues = enterprise_tf_gen.validate(config)
-        return jsonify({'ok': True, 'result': issues})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/terraform/enterprise/download/<job_id>', methods=['GET'])
-def api_tf_enterprise_download(job_id):
-    try:
-        job = ENTERPRISE_TF_JOBS.get(job_id)
-        if not job:
-            return jsonify({'ok': False, 'error': 'Job not found'}), 404
-        zip_path = Path(job['path'])
-        if zip_path.exists():
-            return send_file(str(zip_path), as_attachment=True, download_name=zip_path.name)
-        return jsonify({'ok': False, 'error': 'File not found'}), 404
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/terraform/enterprise/deploy_to_project', methods=['POST'])
-def api_tf_enterprise_deploy_to_project():
-    try:
-        config = request.get_json(silent=True) or {}
-        job_id = enterprise_tf_gen.generate(config)
-        job = ENTERPRISE_TF_JOBS[job_id]
-        return jsonify({'ok': True, 'result': {'job_id': job_id, 'project_dir': job['project_dir']}})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 ###############################################################################
@@ -1833,302 +635,19 @@ def api_tf_enterprise_deploy_to_project():
 
 
 
-@app.route('/api/mock/generate', methods=['POST'])
 
-def api_mock_generate():
 
-    """Generate a docker-compose mock environment for a given terraform project.
 
-    Expects JSON: { name: <project_name>, cloud: 'azure'|'aws'|'gcp' }
 
-    """
 
-    data = request.get_json(silent=True) or {}
 
-    name = data.get('name') or 'tf_project'
 
-    cloud = data.get('cloud') or 'azure'
 
-    mock_type = data.get('mock_type') or 'docker'
 
-    sf = secure_filename(name) or 'tf_project'
 
-    try:
 
-        from tools.terraform_wizard import WizardConfig, generate_mock_docker_compose, generate_mock_hyperv
 
-    except Exception as e:
 
-        return jsonify({'ok': False, 'error': f'Import error: {e}'}), 500
-
-    base = Path(__file__).resolve().parent / 'data' / 'terraform_projects'
-
-    out_dir = base / sf
-
-    try:
-
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        cfg = WizardConfig(name=sf, cloud=cloud, variables={}, resources=[])
-
-        if mock_type == 'hyperv':
-
-            mock_dir = generate_mock_hyperv(cfg, out_dir)
-
-        else:
-
-            mock_dir = generate_mock_docker_compose(cfg, out_dir)
-
-        return jsonify({'ok': True, 'path': str(mock_dir.relative_to(Path(__file__).resolve().parent))})
-
-    except Exception as e:
-
-        app.logger.exception('Failed to generate mock environment')
-
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-
-
-
-@app.route('/api/mock/start', methods=['POST'])
-
-def api_mock_start():
-
-    data = request.get_json(silent=True) or {}
-
-    path = data.get('path')
-
-    mock_type = data.get('mock_type') or 'docker'
-
-    if not path:
-
-        return jsonify({'ok': False, 'error': 'path required'}), 400
-
-    base = Path(__file__).resolve().parent
-
-    mock_dir = (base / path).resolve()
-
-    if not str(mock_dir).startswith(str(base)):
-
-        return jsonify({'ok': False, 'error': 'invalid path'}), 400
-
-    # choose script based on mock_type
-
-    try:
-
-        if mock_type == 'hyperv':
-
-            start_script = mock_dir / 'start_mock_hyperv.ps1'
-
-            if not start_script.exists():
-
-                return jsonify({'ok': False, 'error': 'start script not found'}), 404
-
-            if not sys.platform.startswith('win'):
-
-                return jsonify({'ok': False, 'error': 'Hyper-V scripts can only be run on Windows'}), 501
-
-            cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(start_script)]
-
-        else:
-
-            start_script = mock_dir / 'start_mock.sh'
-
-            if not start_script.exists():
-
-                return jsonify({'ok': False, 'error': 'start script not found'}), 404
-
-            # attempt to use docker compose
-
-            cmd = [str(start_script)]
-
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-        if proc.returncode != 0:
-
-            return jsonify({'ok': False, 'error': proc.stderr}), 500
-
-        return jsonify({'ok': True, 'stdout': proc.stdout})
-
-    except Exception as e:
-
-        app.logger.exception('Failed to start mock services')
-
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-
-
-
-@app.route('/api/mock/stop', methods=['POST'])
-
-def api_mock_stop():
-
-    data = request.get_json(silent=True) or {}
-
-    path = data.get('path')
-
-    mock_type = data.get('mock_type') or 'docker'
-
-    if not path:
-
-        return jsonify({'ok': False, 'error': 'path required'}), 400
-
-    base = Path(__file__).resolve().parent
-
-    mock_dir = (base / path).resolve()
-
-    if not str(mock_dir).startswith(str(base)):
-
-        return jsonify({'ok': False, 'error': 'invalid path'}), 400
-
-    try:
-
-        if mock_type == 'hyperv':
-
-            stop_script = mock_dir / 'stop_mock_hyperv.ps1'
-
-            if not stop_script.exists():
-
-                return jsonify({'ok': False, 'error': 'stop script not found'}), 404
-
-            if not sys.platform.startswith('win'):
-
-                return jsonify({'ok': False, 'error': 'Hyper-V scripts can only be run on Windows'}), 501
-
-            cmd = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(stop_script)]
-
-        else:
-
-            stop_script = mock_dir / 'stop_mock.sh'
-
-            if not stop_script.exists():
-
-                return jsonify({'ok': False, 'error': 'stop script not found'}), 404
-
-            cmd = [str(stop_script)]
-
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-
-        if proc.returncode != 0:
-
-            return jsonify({'ok': False, 'error': proc.stderr}), 500
-
-        return jsonify({'ok': True, 'stdout': proc.stdout})
-
-    except Exception as e:
-
-        app.logger.exception('Failed to stop mock services')
-
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-
-
-
-@app.route('/api/terraform/run', methods=['POST'])
-
-def api_terraform_run():
-
-    """Run terraform actions (init|plan|deploy) asynchronously and return exec_id.
-
-    JSON: { action: 'init'|'plan'|'deploy', dir: '<relative path under data/terraform_projects>', auto_approve: bool }
-
-    """
-
-    data = request.get_json(silent=True) or {}
-
-    action = data.get('action')
-
-    rel = data.get('dir')
-
-    if not action or action not in ('init', 'plan', 'deploy'):
-
-        return jsonify({'ok': False, 'error': 'action required (init|plan|deploy)'}), 400
-
-    base = Path(__file__).resolve().parent / 'data' / 'terraform_projects'
-
-    if not rel:
-
-        return jsonify({'ok': False, 'error': 'dir required'}), 400
-
-    target = (base / rel).resolve()
-
-    try:
-
-        if not str(target).startswith(str(base.resolve())) or not target.exists():
-
-            return jsonify({'ok': False, 'error': 'invalid dir'}), 400
-
-    except Exception:
-
-        return jsonify({'ok': False, 'error': 'invalid dir'}), 400
-
-
-
-    # build command
-
-    if action == 'init':
-
-        cmd = ['terraform', 'init', '-input=false']
-
-    elif action == 'plan':
-
-        cmd = ['terraform', 'plan', '-out=tfplan', '-input=false']
-
-    else:
-
-        # deploy
-
-        cmd = ['terraform', 'apply', '-auto-approve']
-
-
-
-    exec_id = uuid.uuid4().hex
-
-    EXEC_JOBS[exec_id] = {'id': exec_id, 'status': 'queued', 'cmd': cmd, 'pid': None, 'returncode': None, 'started_at': None, 'finished_at': None, 'cwd': str(target)}
-
-    _start_job_thread(exec_id, cmd, cwd=str(target))
-
-    return jsonify({'ok': True, 'exec_id': exec_id})
-
-
-
-
-
-@app.route('/api/tf/validate', methods=['POST'])
-def api_tf_validate():
-    return jsonify({'ok': True, 'output': 'TF validate endpoint working'})
-
-
-
-
-
-@app.route('/api/tf/plan', methods=['POST'])
-def api_tf_plan():
-    data = request.get_json(silent=True) or {}
-    main_tf = data.get('main', '')
-    variables_tf = data.get('variables', '')
-    if not main_tf:
-        return jsonify({'ok': False, 'error': 'main terraform code required'}), 400
-    
-    try:
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmpdir:
-            Path(tmpdir, 'main.tf').write_text(main_tf, encoding='utf-8')
-            if variables_tf:
-                Path(tmpdir, 'variables.tf').write_text(variables_tf, encoding='utf-8')
-            
-            # Init and plan
-            proc = subprocess.run(['terraform', 'init', '-input=false'], cwd=tmpdir, capture_output=True, text=True, timeout=60)
-            if proc.returncode != 0:
-                return jsonify({'ok': False, 'error': proc.stderr}), 500
-            
-            proc = subprocess.run(['terraform', 'plan', '-input=false'], cwd=tmpdir, capture_output=True, text=True, timeout=120)
-            return jsonify({'ok': True, 'output': proc.stdout + proc.stderr}), 200
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 
@@ -2163,29 +682,13 @@ def api_tf_apply():
 
 
 
-@app.route('/api/tf/destroy', methods=['POST'])
-def api_tf_destroy():
-    try:
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # For destroy, we need the state file, but since this is a demo, we'll assume local state
-            # In a real implementation, you'd need to handle state files properly
-            return jsonify({'ok': False, 'error': 'destroy not implemented for demo - requires state file'}), 501
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 
 
 
-@app.route('/api/tf/refresh')
-def api_tf_refresh():
-    try:
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmpdir:
-            return jsonify({'ok': False, 'error': 'refresh not implemented for demo - requires state file'}), 501
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 
 
 
@@ -2238,6 +741,54 @@ def api_tf_backup():
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+
+
+
+
+# ---------------------------------------------------------------------------  
+#  Enterprise TF Wizard Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/terraform/enterprise/generate', methods=['POST'])
+def api_tf_enterprise_generate():
+    try:
+        config = request.get_json(silent=True) or {}
+        job_id, job_record = enterprise_tf_gen.generate(config, jobs_registry=ENTERPRISE_TF_JOBS)
+        return jsonify({'ok': True, 'result': {'job_id': job_id, 'download_url': f'/api/terraform/enterprise/download/{job_id}'}})
+    except Exception as e:
+        app.logger.exception('Enterprise TF generation failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/validate', methods=['POST'])
+def api_tf_enterprise_validate():
+    try:
+        config = request.get_json(silent=True) or {}
+        issues = enterprise_tf_gen.validate(config)
+        return jsonify({'ok': True, 'result': issues})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/download/<job_id>', methods=['GET'])
+def api_tf_enterprise_download(job_id):
+    try:
+        job = ENTERPRISE_TF_JOBS.get(job_id)
+        if not job:
+            return jsonify({'ok': False, 'error': 'Job not found'}), 404
+        zip_path = Path(job['path'])
+        if zip_path.exists():
+            return send_file(str(zip_path), as_attachment=True, download_name=zip_path.name)
+        return jsonify({'ok': False, 'error': 'File not found'}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/terraform/enterprise/deploy_to_project', methods=['POST'])
+def api_tf_enterprise_deploy_to_project():
+    try:
+        config = request.get_json(silent=True) or {}
+        job_id, job_record = enterprise_tf_gen.generate(config, jobs_registry=ENTERPRISE_TF_JOBS)
+        return jsonify({'ok': True, 'result': {'job_id': job_id, 'project_dir': job_record['project_dir']}})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 
@@ -2770,516 +1321,15 @@ def api_ide_execute():
 
 
 
-@app.route('/api/vault/secrets', methods=['GET'])
-def api_vault_list():
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': vault_mgr.list_secrets()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/vault/secrets', methods=['POST'])
-def api_vault_create():
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        secret = vault_mgr.create_secret(d.get('name', ''), d.get('value', ''), d.get('type', 'other'), d.get('rotation_days', 0))
-        return jsonify({'ok': True, 'result': secret})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/vault/secrets/<sid>', methods=['GET'])
-def api_vault_get(sid):
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': vault_mgr.get_secret(sid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 404
-
-@app.route('/api/vault/secrets/<sid>', methods=['PUT'])
-def api_vault_update(sid):
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        secret = vault_mgr.update_secret(sid, value=d.get('value'), rotation_days=d.get('rotation_days'))
-        return jsonify({'ok': True, 'result': secret})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/vault/secrets/<sid>', methods=['DELETE'])
-def api_vault_delete(sid):
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        vault_mgr.delete_secret(sid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/vault/secrets/<sid>/versions', methods=['GET'])
-def api_vault_versions(sid):
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': vault_mgr.get_versions(sid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/vault/audit', methods=['GET'])
-def api_vault_audit():
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        limit = request.args.get('limit', 100, type=int)
-        return jsonify({'ok': True, 'result': vault_mgr.get_audit_log(limit)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/vault/rotation', methods=['GET'])
-def api_vault_rotation():
-    if not vault_mgr:
-        return jsonify({'ok': False, 'error': 'Vault manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': vault_mgr.check_rotation()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
-
-
-
-@app.route('/api/echo/memories', methods=['GET'])
-def api_echo_memories_list():
-    try:
-        topic = request.args.get('topic')
-        q = request.args.get('q')
-        pinned = request.args.get('pinned', '').lower() == 'true'
-        return jsonify({'ok': True, 'result': memory_mgr.get_all(topic=topic, pinned_only=pinned, query=q)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/echo/memories', methods=['POST'])
-def api_echo_memories_create():
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        topics = d.get('topics', [])
-        if isinstance(topics, str):
-            topics = [t.strip() for t in topics.split(',') if t.strip()]
-        entities = d.get('entities', [])
-        if isinstance(entities, str):
-            entities = [e.strip() for e in entities.split(',') if e.strip()]
-        memory = memory_mgr.add_memory(
-            content=d.get('content', ''),
-            topics=topics, entities=entities,
-            source=d.get('source', 'manual'),
-            importance=d.get('importance', 0.5)
-        )
-        return jsonify({'ok': True, 'result': memory})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/echo/memories/<mid>', methods=['GET'])
-def api_echo_memories_get(mid):
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        m = memory_mgr.get_memory(mid)
-        if m:
-            return jsonify({'ok': True, 'result': m})
-        return jsonify({'ok': False, 'error': 'Not found'}), 404
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/echo/memories/<mid>', methods=['PUT'])
-def api_echo_memories_update(mid):
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        m = memory_mgr.update_memory(mid, d)
-        return jsonify({'ok': True, 'result': m})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/echo/memories/<mid>', methods=['DELETE'])
-def api_echo_memories_delete(mid):
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        memory_mgr.delete_memory(mid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/echo/memories/<mid>/pin', methods=['POST'])
-def api_echo_memories_pin(mid):
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        m = memory_mgr.toggle_pin(mid)
-        return jsonify({'ok': True, 'result': m})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/echo/memories/search', methods=['GET'])
-def api_echo_memories_search():
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        q = request.args.get('q', '')
-        return jsonify({'ok': True, 'result': memory_mgr.search(q)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/echo/memories/topics', methods=['GET'])
-def api_echo_memories_topics():
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': memory_mgr.get_topics()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/echo/memories/context', methods=['POST'])
-def api_echo_memories_context():
-    if not memory_mgr:
-        return jsonify({'ok': False, 'error': 'Memory manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        return jsonify({'ok': True, 'result': memory_mgr.get_context_for_conversation(d.get('message', ''))})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
 # ---------------------------------------------------------------------------
-#  Pipeline API Routes
+#  Marketplace API Routes
 # ---------------------------------------------------------------------------
-
-@app.route('/api/pipelines', methods=['GET'])
-def api_pipelines_list():
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': pipeline_mgr.list_pipelines()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/pipelines', methods=['POST'])
-def api_pipelines_create():
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        pipeline = pipeline_mgr.create_pipeline(d.get('name', 'New Pipeline'), d.get('description', ''))
-        return jsonify({'ok': True, 'result': pipeline})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/pipelines/<pid>', methods=['GET'])
-def api_pipelines_get(pid):
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': pipeline_mgr.get_pipeline(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 404
-
-@app.route('/api/pipelines/<pid>', methods=['PUT'])
-def api_pipelines_update(pid):
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        pipeline = pipeline_mgr.update_pipeline(pid, d)
-        return jsonify({'ok': True, 'result': pipeline})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/pipelines/<pid>', methods=['DELETE'])
-def api_pipelines_delete(pid):
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        pipeline_mgr.delete_pipeline(pid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/pipelines/<pid>/execute', methods=['POST'])
-def api_pipelines_execute(pid):
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        run = pipeline_mgr.execute_pipeline(pid)
-        return jsonify({'ok': True, 'result': run})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/pipelines/runs', methods=['GET'])
-def api_pipeline_runs_list():
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        pid = request.args.get('pipeline_id')
-        return jsonify({'ok': True, 'result': pipeline_mgr.get_runs(pipeline_id=pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/pipelines/runs/<rid>', methods=['GET'])
-def api_pipeline_runs_get(rid):
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': pipeline_mgr.get_run(rid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 404
-
-@app.route('/api/pipelines/runs/<rid>/cancel', methods=['POST'])
-def api_pipeline_runs_cancel(rid):
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        run = pipeline_mgr.cancel_run(rid)
-        return jsonify({'ok': True, 'result': run})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/pipelines/import', methods=['POST'])
-def api_pipelines_import():
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        d.pop('id', None)
-        d['id'] = str(uuid.uuid4())
-        d['created'] = datetime.now().isoformat()
-        d['updated'] = datetime.now().isoformat()
-        data = pipeline_mgr._load()
-        data.setdefault('pipelines', []).append(d)
-        pipeline_mgr._save(data)
-        return jsonify({'ok': True, 'result': d})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/pipelines/<pid>/export', methods=['GET'])
-def api_pipelines_export(pid):
-    if not pipeline_mgr:
-        return jsonify({'ok': False, 'error': 'Pipeline manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': pipeline_mgr.get_pipeline(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 404
-
-
-# ---------------------------------------------------------------------------
-#  Cloud Dashboard API Routes
-# ---------------------------------------------------------------------------
-
-@app.route('/api/cloud/accounts', methods=['GET'])
-def api_cloud_accounts_list():
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': cloud_mgr.get_accounts()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/cloud/accounts', methods=['POST'])
-def api_cloud_accounts_create():
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        acct = cloud_mgr.add_account(d.get('name', ''), d.get('provider', 'azure'), d.get('credential_secret_id', ''), d.get('region', ''))
-        return jsonify({'ok': True, 'result': acct})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/cloud/accounts/<aid>', methods=['DELETE'])
-def api_cloud_accounts_delete(aid):
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        cloud_mgr.remove_account(aid)
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/cloud/resources', methods=['GET'])
-def api_cloud_resources_list():
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        provider = request.args.get('provider')
-        rtype = request.args.get('type')
-        status = request.args.get('status')
-        return jsonify({'ok': True, 'result': cloud_mgr.get_resources(provider=provider, rtype=rtype, status=status)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/cloud/resources/<rid>', methods=['GET'])
-def api_cloud_resources_get(rid):
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': cloud_mgr.get_resource(rid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 404
-
-@app.route('/api/cloud/resources/<rid>/start', methods=['POST'])
-def api_cloud_resources_start(rid):
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': cloud_mgr.start_resource(rid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/cloud/resources/<rid>/stop', methods=['POST'])
-def api_cloud_resources_stop(rid):
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': cloud_mgr.stop_resource(rid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/cloud/costs', methods=['GET'])
-def api_cloud_costs():
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': cloud_mgr.get_costs()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/cloud/refresh', methods=['POST'])
-def api_cloud_refresh():
-    if not cloud_mgr:
-        return jsonify({'ok': False, 'error': 'Cloud manager not available'}), 503
-    try:
-        cloud_mgr.refresh()
-        return jsonify({'ok': True})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
+#  Marketplace API Routes
 # ---------------------------------------------------------------------------
 #  Marketplace API Routes
 # ---------------------------------------------------------------------------
 
-@app.route('/api/marketplace/plugins', methods=['GET'])
-def api_marketplace_plugins_list():
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        q = request.args.get('q')
-        category = request.args.get('category')
-        installed = request.args.get('installed', '').lower() == 'true'
-        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins(query=q, category=category, installed_only=installed)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/marketplace/plugins/<pid>', methods=['GET'])
-def api_marketplace_plugins_get(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.get_plugin(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 404
-
-@app.route('/api/marketplace/plugins/<pid>/install', methods=['POST'])
-def api_marketplace_plugins_install(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.install_plugin(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/marketplace/plugins/<pid>/uninstall', methods=['POST'])
-def api_marketplace_plugins_uninstall(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.uninstall_plugin(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/marketplace/plugins/<pid>/update', methods=['POST'])
-def api_marketplace_plugins_update(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.get_plugin(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/marketplace/plugins/<pid>/config', methods=['GET'])
-def api_marketplace_plugins_config_get(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.get_config(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 404
-
-@app.route('/api/marketplace/plugins/<pid>/config', methods=['PUT'])
-def api_marketplace_plugins_config_update(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        return jsonify({'ok': True, 'result': marketplace_mgr.update_config(pid, d)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/marketplace/plugins/<pid>/reviews', methods=['GET'])
-def api_marketplace_plugins_reviews_list(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.get_reviews(pid)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/marketplace/plugins/<pid>/reviews', methods=['POST'])
-def api_marketplace_plugins_reviews_create(pid):
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        d = request.get_json(silent=True) or {}
-        review = marketplace_mgr.add_review(pid, d.get('rating', 5), d.get('text', ''), d.get('author', 'Anonymous'))
-        return jsonify({'ok': True, 'result': review})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 400
-
-@app.route('/api/marketplace/installed', methods=['GET'])
-def api_marketplace_installed():
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins(installed_only=True)})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-@app.route('/api/marketplace/refresh', methods=['POST'])
-def api_marketplace_refresh():
-    if not marketplace_mgr:
-        return jsonify({'ok': False, 'error': 'Marketplace manager not available'}), 503
-    try:
-        return jsonify({'ok': True, 'result': marketplace_mgr.list_plugins()})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-
+# Remote credential storage for IDE remote execution (basic, stored in data/ide_creds.json)
 # Remote credential storage for IDE remote execution (basic, stored in data/ide_creds.json)
 
 CREDS_FILE = Path(__file__).resolve().parent / 'data' / 'ide_creds.json'
@@ -3812,1240 +1862,6 @@ def _upsert_session_meta(sid: str, title: str = None):
 
 
 
-ECHO_RESOURCES_TEMPLATE = """{% extends "base.html" %}
-
-{% block content %}
-
-<h3>Resources: Reference / Templates / Examples</h3>
-
-<div style="display:flex;gap:20px;align-items:flex-start;">
-
-<div style="flex:1;max-width:420px;">
-
-<form id="uploadForm" enctype="multipart/form-data" onsubmit="uploadResource(event)">
-
-<label>File: <input type="file" name="file" required></label><br><br>
-
-<label>Category:
-
-<select name="category">
-
-<option value="reference">Reference Dictionary</option>
-
-<option value="template">Template Ingestion</option>
-
-<option value="examples">Chat Examples</option>
-
-</select></label><br><br>
-
-<label><input type="checkbox" name="for_training"> Use for training</label><br>
-
-<label><input type="checkbox" name="for_ingestion" checked> Use for ingestion</label><br>
-
-<label><input type="checkbox" name="persona"> Upload as Personality (persona)</label><br><br>
-
-<button class="btn btn-primary" type="submit">Upload</button>
-
-</form>
-
-<div id="uploadMsg" style="margin-top:10px;color:#6c6"></div>
-
-</div>
-
-<div style="flex:2;">
-
-<h4>Existing Resources</h4>
-
-</div>
-
-<div style="flex:2;">
-
-<h4>Existing Resources</h4>
-
-<div style="margin-bottom:10px;">
-
-Session id: <input id="sessionIdInput" placeholder="session id (optional)" style="width:220px;margin-right:8px;"> <button onclick="fetchPersonaStatus()">Check Persona</button>
-
-<select id="resourceSelect" style="width:60%;margin-left:8px"></select>
-
-<button onclick="enableSelectedPersona()">Enable persona for session</button>
-
-<div id="personaStatus" style="margin-top:6px;color:#8f8"></div>
-
-</div>
-
-<div id="resourcesList">(loading...)</div>
-
-</div>
-
-</div>
-
-<script>
-
-        // Training page render helper
-
-        function showTrainingPage(){
-
-            const el = document.getElementById('trainingPage');
-
-            if(!el) return;
-
-        }
-
-function uploadResource(e){
-
- e.preventDefault();
-
- const f = document.getElementById('uploadForm');
-
-const fd = new FormData(f);
-
-
-
-fetch('/api/resources/upload',{method:'POST',body:fd}).then(r=>r.json()).then(j=>{
-
-     document.getElementById('uploadMsg').textContent = j.message || JSON.stringify(j);
-
-     loadResources();
-
- }).catch(e=>{document.getElementById('uploadMsg').textContent='Upload failed';console.error(e)});
-
-}
-
-function loadResources(){
-
- fetch('/api/resources/list').then(r=>r.json()).then(j=>{
-
-     const el=document.getElementById('resourcesList');
-
-     el.innerHTML='';
-
-     const idx=j || {};
-
-     const sel = document.getElementById('resourceSelect'); sel.innerHTML='';
-
-     Object.keys(idx).forEach(k=>{
-
-         const r = idx[k];
-
-         const div=document.createElement('div');
-
-         div.style.border='1px solid #333';div.style.padding='8px';div.style.marginBottom='6px';
-
-         let personaBadge = r.persona ? ' <span style="color:#ffb86b;font-weight:bold">[PERSONA]</span>' : '';
-
-         div.innerHTML = '<b>'+r.filename+'</b> '+personaBadge+' <small>['+r.category+']</small><br>'+
-
-             '<button class="btn btn-sm" onclick="loadIntoSession(\''+encodeURIComponent(k)+'\')">Load into session</button> '
-
-             +'<button class="btn btn-sm btn-danger" onclick="deleteResource(\''+encodeURIComponent(k)+'\')">Delete</button>';
-
-         // also add to select
-
-         const opt = document.createElement('option'); opt.value = k; opt.text = r.filename + (r.persona ? ' [PERSONA]' : ''); sel.appendChild(opt);
-
-         el.appendChild(div);
-
-     });
-
- }).catch(e=>{document.getElementById('resourcesList').textContent='Failed to load resources';console.error(e)});
-
-}
-
-function fetchPersonaStatus(){
-
-    const sid = document.getElementById('sessionIdInput').value || '';
-
-    fetch('/api/personality/status?session_id='+encodeURIComponent(sid)).then(r=>r.json()).then(j=>{
-
-        const p = j.personality;
-
-        const out = document.getElementById('personaStatus');
-
-        if(p && p.enabled){
-
-            out.textContent = `Enabled: ${p.id}`;
-
-        } else {
-
-            out.textContent = 'No persona enabled for session';
-
-        }
-
-    }).catch(e=>{console.error(e)});
-
-}
-
-
-
-function enableSelectedPersona(){
-
-    const sel = document.getElementById('resourceSelect');
-
-    if(!sel.value){ alert('Select a resource first'); return; }
-
-    const sid = document.getElementById('sessionIdInput').value || '';
-
-    fetch('/api/resources/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id: decodeURIComponent(sel.value), session_id: sid || '', use_persona: true, for_ingestion: true})}).then(r=>r.json()).then(j=>{
-
-        alert(j.message || JSON.stringify(j));
-
-        fetchPersonaStatus();
-
-    }).catch(e=>{console.error(e)});
-
-}
-
-function deleteResource(id){ if(!confirm('Delete resource?')) return; fetch('/api/resources/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:decodeURIComponent(id)})}).then(r=>r.json()).then(j=>{ loadResources(); }).catch(e=>console.error(e)); }
-
-function loadIntoSession(id){ const sid = prompt('Load into which session id? (leave blank for current page session)'); fetch('/api/resources/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:decodeURIComponent(id), session_id: sid || ''})}).then(r=>r.json()).then(j=>{ alert(j.message||JSON.stringify(j)); }).catch(e=>console.error(e)); }
-
-loadResources();
-
-</script>
-
-{% endblock %}"""
-
-
-
-ADDONS_MODULES_TEMPLATE = """{% extends "base.html" %}
-
-{% block content %}
-
-<div class="section">
-
-<h2>🧩 Addons Modules</h2>
-
-<p>Manage installed addon modules, configure settings, install dependencies, and run services.</p>
-
-{% if installed_modules %}
-
-<h3>Installed Modules ({{ installed_modules|length }} modules)</h3>
-
-<div style="margin-bottom: 20px;">
-<button class="btn" style="background: #f44336; color: white;" onclick="deleteAllModules()" id="delete-all-btn">🗑️ Delete All Modules</button>
-<span id="delete-status" style="margin-left: 10px; display: none;"></span>
-</div>
-
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-top: 20px;">
-
-{% for module in installed_modules %}
-
-<div class="card" style="border-left-color: #FF6B35;">
-
-<h3 style="color: #FF6B35;">{{ module.name }}{% if module.build_commands %} <span style="font-size: 0.7em; background: #FF5722; color: white; padding: 2px 6px; border-radius: 3px;">🔨</span>{% endif %}</h3>
-
-<div style="margin: 10px 0;">
-
-<span class="status-badge" style="background: #4CAF50;">{{ module.language|upper }}</span>
-
-<span class="status-badge" style="background: #2196F3;">{{ module.files }} files</span>
-
-<span class="status-badge" style="background: #FF9800;">{{ (module.size/1024)|round(1) }} KB</span>
-
-{% if module.build_commands %}
-
-<span style="margin-left: 10px;">
-
-<form method="POST" action="/addons/modules/{{ module.name }}/build" style="display: inline;">
-
-<button type="submit" class="btn" style="background: #FF5722; font-size: 0.8em; padding: 4px 8px;" onclick="return confirm('Build/compile {{ module.name }}?')">🔨 Build</button>
-
-</form>
-
-</span>
-
-{% endif %}
-
-</div>
-
-<p><strong>Path:</strong> {{ module.path }}</p>
-
-<p><strong>Modified:</strong> {{ module.modified }}</p>
-
-<div style="margin-top: 15px;">
-<a href="/addons/modules/{{ module.name }}/manager" class="btn" style="background:#2196F3;">🗂️ Manage Files</a>
-</div>
-
-<div style="margin-top: 15px;">
-
-<h4>Configuration Files</h4>
-
-{% if module.config_files %}
-
-<ul style="margin: 5px 0; padding-left: 20px;">
-
-{% for config in module.config_files %}
-
-<li><a href="/addons/modules/{{ module.name }}/config/{{ config }}" class="btn btn-info" style="font-size: 0.8em; padding: 4px 8px;">📝 {{ config }}</a></li>
-
-{% endfor %}
-
-</ul>
-
-{% else %}
-
-<p style="color: #888; font-style: italic;">No config files found</p>
-
-{% endif %}
-
-</div>
-
-<div style="margin-top: 15px;">
-
-<h4>Setup & Dependencies</h4>
-
-{% if module.requirements_files %}
-
-<form method="POST" action="/addons/modules/{{ module.name }}/install_deps" style="display: inline;">
-
-<button type="submit" class="btn" style="background: #4CAF50;">📦 Install Dependencies</button>
-
-</form>
-
-{% endif %}
-
-{% if module.setup_scripts %}
-
-<h5>Setup Scripts:</h5>
-
-<ul style="margin: 5px 0; padding-left: 20px;">
-
-{% for script in module.setup_scripts %}
-
-<li>
-{% if script.endswith('.php') %}
-<a href="/addons/modules/{{ module.name }}/web/{{ script }}" class="btn" style="background: #9C27B0;" target="_blank">🌐 View {{ script }}</a>
-<span style="font-size: 0.8em; color: #888;"> (Web-based installer)</span>
-{% else %}
-<form method="POST" action="/addons/modules/{{ module.name }}/run_setup/{{ script }}" style="display: inline;">
-<button type="submit" class="btn" style="background: #FF9800;" onclick="return confirm('Run setup script: {{ script }}?')">▶️ {{ script }}</button>
-</form>
-{% endif %}
-</li>
-
-{% endfor %}
-
-</ul>
-
-{% endif %}
-
-</div>
-
-{% if module.build_commands %}
-
-<div style="margin-top: 15px;">
-
-<h4>Build & Compile</h4>
-
-<p style="font-size: 0.9em; color: #888;">Project Type: {{ module.project_type }}{% if module.frameworks %} | Frameworks: {{ module.frameworks|join(', ') }}{% endif %}</p>
-
-<form method="POST" action="/addons/modules/{{ module.name }}/build" style="display: inline;">
-
-<button type="submit" class="btn" style="background: #FF5722;" onclick="return confirm('Build/compile {{ module.name }}? This may take several minutes.')">🔨 Build Project</button>
-
-</form>
-
-<p style="font-size: 0.8em; color: #666; margin-top: 5px;">{{ module.build_commands|length }} build step(s) detected</p>
-
-</div>
-
-{% endif %}
-
-<div style="margin-top: 15px;">
-
-<h4>Service Control</h4>
-
-<button class="btn" style="background: #4CAF50;" onclick="startService('{{ module.name }}')">▶️ Start Service</button>
-
-<button class="btn btn-warning" onclick="stopService('{{ module.name }}')">⏹️ Stop Service</button>
-
-<button class="btn btn-info" onclick="checkServiceStatus('{{ module.name }}')">📊 Status</button>
-
-<div id="service-status-{{ module.name }}" style="margin-top: 10px; padding: 10px; background: #1a1a1a; border-radius: 5px; display: none;"></div>
-
-</div>
-
-<div style="margin-top: 15px;">
-
-<h4>Documentation</h4>
-
-{% if module.readme_files %}
-
-<ul style="margin: 5px 0; padding-left: 20px;">
-
-{% for readme in module.readme_files %}
-
-<li><a href="/addons/modules/{{ module.name }}/config/{{ readme }}" class="btn" style="background: #9C27B0; font-size: 0.8em; padding: 4px 8px;">📖 {{ readme }}</a></li>
-
-{% endfor %}
-
-</ul>
-
-{% else %}
-
-<p style="color: #888; font-style: italic;">No documentation found</p>
-
-{% endif %}
-
-</div>
-
-</div>
-
-{% endfor %}
-
-</div>
-
-{% else %}
-
-<h3>No Installed Modules</h3>
-
-<p>No addon modules are currently installed. Install addons from the <a href="/addons">Addons</a> page to see them here.</p>
-
-{% endif %}
-
-</div>
-
-<script>
-
-function startService(moduleName) {
-
-    fetch(`/addons/modules/${moduleName}/start`, { method: 'POST' })
-
-        .then(r => r.json())
-
-        .then(data => {
-
-            alert(data.message || 'Service started');
-
-            checkServiceStatus(moduleName);
-
-        })
-
-        .catch(e => alert('Error: ' + e));
-
-}
-
-function stopService(moduleName) {
-
-    fetch(`/addons/modules/${moduleName}/stop`, { method: 'POST' })
-
-        .then(r => r.json())
-
-        .then(data => {
-
-            alert(data.message || 'Service stopped');
-
-            checkServiceStatus(moduleName);
-
-        })
-
-        .catch(e => alert('Error: ' + e));
-
-}
-
-function checkServiceStatus(moduleName) {
-
-    fetch(`/addons/modules/${moduleName}/status`)
-
-        .then(r => r.json())
-
-        .then(data => {
-
-            const statusDiv = document.getElementById(`service-status-${moduleName}`);
-
-            statusDiv.style.display = 'block';
-
-            statusDiv.innerHTML = `
-
-                <strong>Status:</strong> ${data.status || 'Unknown'}<br>
-
-                <strong>Port:</strong> ${data.port || 'N/A'}<br>
-
-                <strong>PID:</strong> ${data.pid || 'N/A'}<br>
-
-                <strong>URL:</strong> ${data.url ? `<a href="${data.url}" target="_blank">${data.url}</a>` : 'N/A'}
-
-            `;
-
-        })
-
-        .catch(e => {
-
-            const statusDiv = document.getElementById(`service-status-${moduleName}`);
-
-            statusDiv.style.display = 'block';
-
-            statusDiv.innerHTML = '<strong>Error:</strong> ' + e;
-
-        });
-
-}
-
-function deleteAllModules() {
-    if (!confirm('Are you sure you want to delete ALL installed modules? This action cannot be undone!')) {
-        return;
-    }
-    
-    const btn = document.getElementById('delete-all-btn');
-    const status = document.getElementById('delete-status');
-    
-    btn.disabled = true;
-    btn.textContent = '🗑️ Deleting...';
-    status.style.display = 'inline';
-    status.textContent = 'Deleting all modules...';
-    status.style.color = '#ff9800';
-    
-    fetch('/addons/modules/delete_all', { method: 'POST' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                status.textContent = 'All modules deleted successfully!';
-                status.style.color = '#4CAF50';
-                // Reload the page after a short delay
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
-            } else {
-                status.textContent = 'Error: ' + (data.error || 'Unknown error');
-                status.style.color = '#f44336';
-                btn.disabled = false;
-                btn.textContent = '🗑️ Delete All Modules';
-            }
-        })
-        .catch(e => {
-            status.textContent = 'Error: ' + e;
-            status.style.color = '#f44336';
-            btn.disabled = false;
-            btn.textContent = '🗑️ Delete All Modules';
-        });
-}
-
-</script>
-
-{% endblock %}"""
-
-
-
-MODULE_MANAGER_TEMPLATE = """{% extends "base.html" %}
-
-{% block content %}
-
-<div class="container">
-
-<header>
-
-<h1>⚡ MasterChief</h1>
-
-<p class="subtitle">Module Manager - {{ module.name }}</p>
-
-<div style="position:absolute;right:20px;top:24px;">
-
-    <a href="/addons/modules" class="btn" style="background:#666;">← Back to Modules</a>
-
-    <label style="color:#ccc;font-size:0.9em;margin-left:20px;">Language: <select id="langSelect"        
-
-style="background:#1a1a1a;color:#eee;border:1px solid
-
-#333;padding:6px;border-radius:6px;"><option value="en">English</option><option
-
-value="es">Español</option></select></label>
-
-    </div>
-
-</header>
-
-<nav>
-
-<a href="/" class="">Dashboard</a>
-
-<a href="/echo-chat" class="">🌙 Echo Chat</a>
-
-<a href="/scripts" class="">Scripts</a>
-
-<a href="/processes" class="">Processes</a>
-
-<a href="/services" class="">Services</a>
-
-<a href="/addons" class="active">Addons</a>
-
-<a href="/addons/modules" class="">🧩 Modules</a>
-
-<a href="/echo-train" class="">Training</a>
-
-</nav>
-
-<div class="section">
-
-<h2>🗂️ Module Manager: {{ module.name }}</h2>
-
-<div style="display: flex; gap: 20px; margin-bottom: 20px;">
-
-<div style="flex: 1;">
-
-<h3>📁 Module Information</h3>
-
-<div class="card">
-
-<p><strong>Name:</strong> {{ module.name }}</p>
-
-<p><strong>Path:</strong> {{ module.path }}</p>
-
-<p><strong>Files:</strong> {{ module.file_count }}</p>
-
-<p><strong>Directories:</strong> {{ module.dir_count }}</p>
-
-<p><strong>Total Size:</strong> {{ "%.1f"|format(module.total_size/1024) }} KB</p>
-
-</div>
-
-<h3>⚙️ Module Configuration</h3>
-
-<div class="card">
-
-<h4>UI Integration</h4>
-
-<p>Add this module to the main navigation menu for quick access.</p>
-
-<button id="addToUI" class="btn" style="background:#4CAF50;" onclick="toggleUIIntegration('add')">➕ Add to Main UI</button>
-
-<button id="removeFromUI" class="btn btn-danger" style="display:none;" onclick="toggleUIIntegration('remove')">➖ Remove from Main UI</button>
-
-<div id="uiStatus" style="margin-top:10px;"></div>
-
-</div>
-
-</div>
-
-<div style="flex: 2;">
-
-<h3>📂 File Explorer</h3>
-
-<div class="card">
-
-<div style="display: flex; gap: 10px; margin-bottom: 15px;">
-
-<button class="btn" onclick="refreshFiles()">🔄 Refresh</button>
-
-<label class="btn" for="fileUpload" style="background:#2196F3;">📤 Upload File</label>
-
-<input type="file" id="fileUpload" style="display:none;" onchange="uploadFile()">
-
-<button class="btn" onclick="createNewFile()" style="background:#FF9800;">📄 New File</button>
-
-<button class="btn" onclick="createNewFolder()" style="background:#9C27B0;">📁 New Folder</button>
-
-</div>
-
-<div id="fileTree" style="max-height: 400px; overflow-y: auto; border: 1px solid #333; border-radius: 5px; padding: 10px; background: #1a1a1a;">
-
-<!-- File tree will be loaded here -->
-
-</div>
-
-</div>
-
-</div>
-
-</div>
-
-<div class="section">
-
-<h3>📝 File Editor</h3>
-
-<div id="editorContainer" style="display: none;">
-
-<div class="card">
-
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-
-<h4 id="editorTitle">Editing: <span id="currentFile"></span></h4>
-
-<div>
-
-<button class="btn" onclick="saveFile()" style="background:#4CAF50;">💾 Save</button>
-
-<button class="btn btn-danger" onclick="deleteFile()" onclick="return confirm('Delete this file?')">🗑️ Delete</button>
-
-<button class="btn" onclick="closeEditor()">❌ Close</button>
-
-</div>
-
-</div>
-
-<textarea id="fileEditor" style="width: 100%; height: 400px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; padding: 10px; font-family: 'Courier New', monospace; font-size: 14px; resize: vertical;"></textarea>
-
-</div>
-
-</div>
-
-</div>
-
-<!-- Modals -->
-
-<!-- New File Modal -->
-<div id="newFileModal" class="modal">
-<div class="modal-content">
-<span class="close" onclick="closeModal('newFileModal')">&times;</span>
-<h2>📄 Create New File</h2>
-<input type="text" id="newFileName" placeholder="filename.txt" style="width:100%;margin:10px 0;padding:8px;">
-<button class="btn" onclick="createFile()">Create File</button>
-</div>
-</div>
-
-<!-- New Folder Modal -->
-<div id="newFolderModal" class="modal">
-<div class="modal-content">
-<span class="close" onclick="closeModal('newFolderModal')">&times;</span>
-<h2>📁 Create New Folder</h2>
-<input type="text" id="newFolderName" placeholder="folder_name" style="width:100%;margin:10px 0;padding:8px;">
-<button class="btn" onclick="createFolder()">Create Folder</button>
-</div>
-</div>
-
-<!-- Upload Modal -->
-<div id="uploadModal" class="modal">
-<div class="modal-content">
-<span class="close" onclick="closeModal('uploadModal')">&times;</span>
-<h2>📤 Upload File</h2>
-<form id="uploadForm" enctype="multipart/form-data">
-<input type="file" id="uploadFileInput" name="file" style="width:100%;margin:10px 0;">
-<div id="uploadPathContainer" style="margin:10px 0;">
-<label>Upload to folder (optional):</label>
-<input type="text" id="uploadPath" placeholder="path/to/folder" style="width:100%;padding:8px;">
-</div>
-<button type="button" class="btn" onclick="doUpload()">Upload</button>
-</form>
-<div id="uploadStatus"></div>
-</div>
-</div>
-
-</div>
-
-<script>
-
-// Global variables
-let currentModule = '{{ module.name }}';
-let currentFile = null;
-let fileTree = {};
-
-function init() {
-    loadFiles();
-    checkUIIntegration();
-}
-
-function loadFiles() {
-    fetch(`/addons/modules/${currentModule}/api/files`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) {
-                alert('Error loading files: ' + data.error);
-                return;
-            }
-            renderFileTree(data.files);
-        })
-        .catch(e => alert('Error: ' + e));
-}
-
-function renderFileTree(files) {
-    fileTree = {};
-    
-    // Organize files by directory
-    files.forEach(file => {
-        const pathParts = file.path.split('/');
-        let current = fileTree;
-        
-        for (let i = 0; i < pathParts.length - 1; i++) {
-            const part = pathParts[i];
-            if (!current[part]) {
-                current[part] = { __type: 'directory', __children: {} };
-            }
-            current = current[part].__children;
-        }
-        
-        const fileName = pathParts[pathParts.length - 1];
-        current[fileName] = { 
-            __type: file.type, 
-            ...file,
-            __children: file.type === 'directory' ? {} : undefined
-        };
-    });
-    
-    const treeHtml = renderTreeNode(fileTree, '', 0);
-    document.getElementById('fileTree').innerHTML = treeHtml || '<p style="color:#888;">No files found</p>';
-}
-
-function renderTreeNode(node, path, depth) {
-    let html = '';
-    const indent = '  '.repeat(depth);
-    
-    for (const [name, item] of Object.entries(node)) {
-        if (name.startsWith('__')) continue;
-        
-        const fullPath = path ? `${path}/${name}` : name;
-        const isDir = item.__type === 'directory';
-        const icon = isDir ? '📁' : getFileIcon(item.extension);
-        
-        html += `${indent}<div style="margin: 2px 0;">
-            <span onclick="toggleDirectory('${fullPath}')" style="cursor: pointer; ${isDir ? 'font-weight: bold;' : ''}">
-                ${icon} ${name}
-            </span>
-            ${!isDir ? ` <button class="btn" style="font-size:0.7em;padding:2px 6px;" onclick="editFile('${fullPath}')">Edit</button>` : ''}
-        </div>`;
-        
-        if (isDir && item.__expanded) {
-            html += renderTreeNode(item.__children || {}, fullPath, depth + 1);
-        }
-    }
-    
-    return html;
-}
-
-function toggleDirectory(path) {
-    let current = fileTree;
-    const parts = path.split('/');
-    
-    for (const part of parts) {
-        if (current[part] && current[part].__type === 'directory') {
-            current[part].__expanded = !current[part].__expanded;
-            current = current[part].__children;
-        }
-    }
-    
-    renderFileTree(expandTreeToFiles(fileTree));
-}
-
-function expandTreeToFiles(node) {
-    const files = [];
-    
-    function traverse(current, path) {
-        for (const [name, item] of Object.entries(current)) {
-            if (name.startsWith('__')) continue;
-            
-            const fullPath = path ? `${path}/${name}` : name;
-            files.push({
-                name: item.name || name,
-                path: fullPath,
-                type: item.__type,
-                extension: item.extension || '',
-                size: item.size || 0,
-                modified: item.modified || ''
-            });
-            
-            if (item.__type === 'directory' && item.__children) {
-                traverse(item.__children, fullPath);
-            }
-        }
-    }
-    
-    traverse(node, '');
-    return files;
-}
-
-function getFileIcon(ext) {
-    const icons = {
-        '.py': '🐍', '.js': '📜', '.html': '🌐', '.css': '🎨', '.json': '📋',
-        '.md': '📖', '.txt': '📄', '.xml': '📄', '.yml': '📋', '.yaml': '📋',
-        '.sh': '⚡', '.bat': '⚡', '.ps1': '⚡', '.php': '🐘', '.sql': '🗄️',
-        '.png': '🖼️', '.jpg': '🖼️', '.jpeg': '🖼️', '.gif': '🖼️', '.svg': '🖼️'
-    };
-    return icons[ext] || '📄';
-}
-
-function editFile(path) {
-    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(path)}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) {
-                alert('Error loading file: ' + data.error);
-                return;
-            }
-            
-            currentFile = path;
-            document.getElementById('currentFile').textContent = path;
-            document.getElementById('fileEditor').value = data.content;
-            document.getElementById('editorContainer').style.display = 'block';
-            document.getElementById('fileEditor').focus();
-        })
-        .catch(e => alert('Error: ' + e));
-}
-
-function saveFile() {
-    if (!currentFile) return;
-    
-    const content = document.getElementById('fileEditor').value;
-    
-    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(currentFile)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: content })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            alert('File saved successfully!');
-        } else {
-            alert('Error saving file: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(e => alert('Error: ' + e));
-}
-
-function deleteFile() {
-    if (!currentFile) return;
-    
-    if (!confirm(`Are you sure you want to delete "${currentFile}"?`)) return;
-    
-    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(currentFile)}`, {
-        method: 'DELETE'
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            alert('File deleted successfully!');
-            closeEditor();
-            loadFiles();
-        } else {
-            alert('Error deleting file: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(e => alert('Error: ' + e));
-}
-
-function closeEditor() {
-    document.getElementById('editorContainer').style.display = 'none';
-    currentFile = null;
-    document.getElementById('fileEditor').value = '';
-}
-
-function createNewFile() {
-    document.getElementById('newFileName').value = '';
-    document.getElementById('newFileModal').style.display = 'block';
-}
-
-function createFile() {
-    const fileName = document.getElementById('newFileName').value.trim();
-    if (!fileName) {
-        alert('Please enter a file name');
-        return;
-    }
-    
-    // For now, create in root directory
-    editFile(fileName);
-    closeModal('newFileModal');
-}
-
-function createNewFolder() {
-    document.getElementById('newFolderName').value = '';
-    document.getElementById('newFolderModal').style.display = 'block';
-}
-
-function createFolder() {
-    const folderName = document.getElementById('newFolderName').value.trim();
-    if (!folderName) {
-        alert('Please enter a folder name');
-        return;
-    }
-    
-    // Create empty directory by "creating" a file in it and then deleting it
-    const tempFile = `${folderName}/.gitkeep`;
-    
-    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(tempFile)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: '' })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            loadFiles();
-            closeModal('newFolderModal');
-        } else {
-            alert('Error creating folder: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(e => alert('Error: ' + e));
-}
-
-function uploadFile() {
-    const fileInput = document.getElementById('fileUpload');
-    if (fileInput.files.length === 0) return;
-    
-    document.getElementById('uploadFileInput').files = fileInput.files;
-    document.getElementById('uploadModal').style.display = 'block';
-}
-
-function doUpload() {
-    const fileInput = document.getElementById('uploadFileInput');
-    const uploadPath = document.getElementById('uploadPath').value.trim();
-    const statusDiv = document.getElementById('uploadStatus');
-    
-    if (fileInput.files.length === 0) {
-        statusDiv.textContent = 'No file selected';
-        statusDiv.style.color = 'red';
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    if (uploadPath) {
-        formData.append('path', uploadPath);
-    }
-    
-    statusDiv.textContent = 'Uploading...';
-    statusDiv.style.color = 'orange';
-    
-    fetch(`/addons/modules/${currentModule}/api/upload`, {
-        method: 'POST',
-        body: formData
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            statusDiv.textContent = data.message;
-            statusDiv.style.color = 'green';
-            loadFiles();
-            setTimeout(() => closeModal('uploadModal'), 2000);
-        } else {
-            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown error');
-            statusDiv.style.color = 'red';
-        }
-    })
-    .catch(e => {
-        statusDiv.textContent = 'Error: ' + e;
-        statusDiv.style.color = 'red';
-    });
-}
-
-function toggleUIIntegration(action) {
-    const statusDiv = document.getElementById('uiStatus');
-    statusDiv.textContent = action === 'add' ? 'Adding to UI...' : 'Removing from UI...';
-    statusDiv.style.color = 'orange';
-    
-    fetch(`/addons/modules/${currentModule}/api/ui_integration`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: action })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            statusDiv.textContent = data.message;
-            statusDiv.style.color = 'green';
-            checkUIIntegration();
-        } else {
-            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown error');
-            statusDiv.style.color = 'red';
-        }
-    })
-    .catch(e => {
-        statusDiv.textContent = 'Error: ' + e;
-        statusDiv.style.color = 'red';
-    });
-}
-
-function checkUIIntegration() {
-    // Check if module is in UI by looking at the navigation
-    // This is a simple check - in a real app you'd have an API endpoint
-    const navLinks = document.querySelectorAll('nav a');
-    let isInUI = false;
-    
-    navLinks.forEach(link => {
-        if (link.href.includes(`/addons/modules/${currentModule}`)) {
-            isInUI = true;
-        }
-    });
-    
-    document.getElementById('addToUI').style.display = isInUI ? 'none' : 'inline-block';
-    document.getElementById('removeFromUI').style.display = isInUI ? 'inline-block' : 'none';
-}
-
-function refreshFiles() {
-    loadFiles();
-}
-
-function closeModal(modalId) {
-    document.getElementById(modalId).style.display = 'none';
-}
-
-// Initialize when page loads
-document.addEventListener('DOMContentLoaded', init);
-
-</script>
-
-<style>
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.8);
-}
-
-.modal-content {
-    background-color: #2d2d2d;
-    margin: 10% auto;
-    padding: 20px;
-    border-radius: 10px;
-    width: 80%;
-    max-width: 500px;
-    color: #e0e0e0;
-}
-
-.close {
-    color: #aaa;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.close:hover {
-    color: #4CAF50;
-}
-
-.card {
-    background: #2d2d2d;
-    border: 1px solid #444;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 20px;
-}
-</style>
-
-{% endblock %}"""
-
-
-
-ADDONS_MODULE_CONFIG_TEMPLATE = """{% extends "base.html" %}
-
-{% block content %}
-
-<div class="section">
-
-<h2>⚙️ Module Configuration</h2>
-
-<h3>{{ module_name }} - {{ config_file }}</h3>
-
-<div style="margin-bottom: 20px;">
-
-<a href="/addons/modules" class="btn">← Back to Modules</a>
-
-</div>
-
-<form method="POST" style="margin-bottom: 20px;">
-
-<label for="content" style="display: block; margin-bottom: 10px; font-weight: bold;">File Content:</label>
-
-<textarea name="content" id="content" style="width: 100%; height: 500px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; padding: 10px; font-family: monospace; font-size: 14px;" spellcheck="false">{{ content }}</textarea>
-
-<div style="margin-top: 20px;">
-
-<button type="submit" class="btn" style="background: #4CAF50;">💾 Save Changes</button>
-
-<button type="button" class="btn btn-warning" onclick="resetContent()">🔄 Reset</button>
-
-</div>
-
-</form>
-
-<script>
-
-let originalContent = document.getElementById('content').value;
-
-function resetContent() {
-
-    if (confirm('Reset to original content? Unsaved changes will be lost.')) {
-
-        document.getElementById('content').value = originalContent;
-
-    }
-
-}
-
-// Auto-save indicator
-
-let saveTimeout;
-
-document.getElementById('content').addEventListener('input', function() {
-
-    clearTimeout(saveTimeout);
-
-    saveTimeout = setTimeout(() => {
-
-        // Could implement auto-save here
-
-        console.log('Content changed');
-
-    }, 1000);
-
-});
-
-</script>
-
-</div>
-
-{% endblock %}"""
-
-
-
-ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
-
-{% block content %}
-
-<h2>Training Center</h2>
-
-<div style="display:flex;gap:20px;align-items:flex-start;">
-
-<div style="flex:1;max-width:420px;">
-
-<form id="trainForm" onsubmit="startTrain(event)">
-
-<label>Model path (relative to project): <input name="model" value="models/Phi-3-mini-4k-instruct-q4.gguf"></label>
-
-<label>Training file (data/echo_training/...): <input name="training_file" value=""></label>
-
-<label>Engine: <select name="engine"><option value="stub">stub</option><option value="peft">peft</option></select></label>
-
-<label>Epochs: <input name="epochs" value="1"></label>
-
-<label>Batch size: <input name="batch_size" value="8"></label>
-
-<label>Learning rate: <input name="lr" value="0.0001"></label>
-
-<button class="btn" type="submit">Start Training</button>
-
-</form>
-
-<div style="margin-top:12px;">Training jobs:</div>
-
-<div id="trainingJobsList" style="margin-top:8px;"></div>
-
-</div>
-
-<div style="flex:2">
-
-<h3>Logs</h3>
-
-<div id="trainLogModal" class="modal"><div class="modal-content"><span class="close" onclick="closeModal('trainLogModal')">&times;</span><pre id="trainLogContent">(logs)</pre></div></div>
-
-<p>Use the form to start a training job. The <b>peft</b> engine requires additional dependencies and GPUs for practical runs.</p>
-
-</div>
-
-</div>
-
-<script>loadTrainJobs();</script>
-
-{% endblock %}
-
-"""
-
-
-
 
 
 
@@ -5054,479 +1870,24 @@ ECHO_TRAINING_TEMPLATE = """{% extends "base.html" %}
 #  Pipeline Manager
 # ---------------------------------------------------------------------------
 
-PIPELINE_RUNS = {}
-
-class PipelineManager:
-    def __init__(self, db_path, runs_path):
-        self.db_path = Path(db_path)
-        self.runs_path = Path(runs_path)
-        self._ensure_db()
-
-    def _ensure_db(self):
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        for p, default in [(self.db_path, {'pipelines': []}), (self.runs_path, {'runs': []})]:
-            if not p.exists():
-                p.write_text(json.dumps(default, indent=2), encoding='utf-8')
-
-    def _load(self):
-        try:
-            return json.loads(self.db_path.read_text(encoding='utf-8'))
-        except Exception:
-            return {'pipelines': []}
-
-    def _save(self, data):
-        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-    def _load_runs(self):
-        try:
-            return json.loads(self.runs_path.read_text(encoding='utf-8'))
-        except Exception:
-            return {'runs': []}
-
-    def _save_runs(self, data):
-        self.runs_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-    def list_pipelines(self):
-        return self._load().get('pipelines', [])
-
-    def get_pipeline(self, pid):
-        for p in self._load().get('pipelines', []):
-            if p['id'] == pid:
-                return p
-        raise ValueError('Pipeline not found')
-
-    def create_pipeline(self, name, description=''):
-        d = self._load()
-        pipeline = {
-            'id': str(uuid.uuid4()), 'name': name, 'description': description,
-            'stages': [], 'created': datetime.now().isoformat(),
-            'updated': datetime.now().isoformat()
-        }
-        d.setdefault('pipelines', []).append(pipeline)
-        self._save(d)
-        return pipeline
-
-    def update_pipeline(self, pid, updates):
-        d = self._load()
-        for p in d.get('pipelines', []):
-            if p['id'] == pid:
-                for k, v in updates.items():
-                    if k not in ('id', 'created'):
-                        p[k] = v
-                p['updated'] = datetime.now().isoformat()
-                self._save(d)
-                return p
-        raise ValueError('Pipeline not found')
-
-    def delete_pipeline(self, pid):
-        d = self._load()
-        d['pipelines'] = [p for p in d.get('pipelines', []) if p['id'] != pid]
-        self._save(d)
-
-    def execute_pipeline(self, pid):
-        pipeline = self.get_pipeline(pid)
-        run = {
-            'id': str(uuid.uuid4()), 'pipeline_id': pid,
-            'pipeline_name': pipeline['name'], 'status': 'running',
-            'started': datetime.now().isoformat(), 'finished': None,
-            'stages': [], 'log': []
-        }
-        PIPELINE_RUNS[run['id']] = run
-        t = threading.Thread(target=self._run_pipeline, args=(run, pipeline), daemon=True)
-        t.start()
-        return run
-
-    def _run_pipeline(self, run, pipeline):
-        try:
-            for stage in sorted(pipeline.get('stages', []), key=lambda s: s.get('order', 0)):
-                stage_run = {
-                    'stage_id': stage['id'], 'name': stage.get('name', 'Stage'),
-                    'status': 'running', 'started': datetime.now().isoformat(),
-                    'finished': None, 'steps': []
-                }
-                run['stages'].append(stage_run)
-                run['log'].append(f"[{datetime.now().isoformat()}] Starting stage: {stage.get('name')}")
-                for step in stage.get('steps', []):
-                    step_run = self._execute_step(step, run)
-                    stage_run['steps'].append(step_run)
-                    if step_run['status'] == 'failed':
-                        stage_run['status'] = 'failed'
-                        stage_run['finished'] = datetime.now().isoformat()
-                        run['status'] = 'failed'
-                        run['finished'] = datetime.now().isoformat()
-                        run['log'].append(f"[{datetime.now().isoformat()}] Pipeline FAILED at stage: {stage.get('name')}")
-                        self._persist_run(run)
-                        return
-                stage_run['status'] = 'completed'
-                stage_run['finished'] = datetime.now().isoformat()
-            run['status'] = 'completed'
-            run['finished'] = datetime.now().isoformat()
-            run['log'].append(f"[{datetime.now().isoformat()}] Pipeline completed successfully")
-        except Exception as e:
-            run['status'] = 'failed'
-            run['finished'] = datetime.now().isoformat()
-            run['log'].append(f"[{datetime.now().isoformat()}] Pipeline error: {str(e)}")
-        self._persist_run(run)
-
-    def _execute_step(self, step, run):
-        step_run = {
-            'step_id': step.get('id', str(uuid.uuid4())),
-            'name': step.get('name', 'Step'), 'type': step.get('type', 'custom_command'),
-            'status': 'running', 'started': datetime.now().isoformat(),
-            'output': '', 'finished': None
-        }
-        run['log'].append(f"[{datetime.now().isoformat()}] Running step: {step.get('name')} (type={step.get('type')})")
-        try:
-            cfg = step.get('config', {})
-            cmd = None
-            cwd = cfg.get('working_dir') or None
-            if step.get('type') == 'script':
-                cmd = f"{cfg.get('script_path', '')} {cfg.get('args', '')}".strip()
-            elif step.get('type') == 'docker_build':
-                cmd = f"docker build -t {cfg.get('image_tag', 'latest')} -f {cfg.get('dockerfile_path', 'Dockerfile')} {cfg.get('context_dir', '.')}"
-            elif step.get('type') in ('terraform_apply', 'terraform_plan'):
-                action = 'apply -auto-approve' if step['type'] == 'terraform_apply' else 'plan'
-                var_file = f"-var-file={cfg['var_file']}" if cfg.get('var_file') else ''
-                cmd = f"terraform {action} {var_file}".strip()
-            elif step.get('type') == 'test_run':
-                cmd = cfg.get('test_command', 'echo No test command')
-            elif step.get('type') == 'deploy':
-                cmd = f"echo Deploying to {cfg.get('target', 'unknown')} with strategy {cfg.get('strategy', 'rolling')}"
-            elif step.get('type') == 'custom_command':
-                cmd = cfg.get('command', 'echo hello')
-            else:
-                cmd = f"echo Unknown step type: {step.get('type')}"
-            if cmd:
-                result = subprocess.run(
-                    cmd, shell=True, capture_output=True, text=True,
-                    timeout=int(cfg.get('timeout', 300)), cwd=cwd
-                )
-                step_run['output'] = result.stdout + result.stderr
-                step_run['status'] = 'completed' if result.returncode == 0 else 'failed'
-            else:
-                step_run['status'] = 'completed'
-                step_run['output'] = 'No command to run'
-        except subprocess.TimeoutExpired:
-            step_run['status'] = 'failed'
-            step_run['output'] = 'Step timed out'
-        except Exception as e:
-            step_run['status'] = 'failed'
-            step_run['output'] = str(e)
-        step_run['finished'] = datetime.now().isoformat()
-        return step_run
-
-    def _persist_run(self, run):
-        d = self._load_runs()
-        d.setdefault('runs', []).insert(0, run)
-        if len(d['runs']) > 100:
-            d['runs'] = d['runs'][:100]
-        self._save_runs(d)
-
-    def get_run(self, rid):
-        if rid in PIPELINE_RUNS:
-            return PIPELINE_RUNS[rid]
-        d = self._load_runs()
-        for r in d.get('runs', []):
-            if r['id'] == rid:
-                return r
-        raise ValueError('Run not found')
-
-    def get_runs(self, pipeline_id=None, limit=50):
-        runs = list(PIPELINE_RUNS.values())
-        d = self._load_runs()
-        for r in d.get('runs', []):
-            if r['id'] not in PIPELINE_RUNS:
-                runs.append(r)
-        if pipeline_id:
-            runs = [r for r in runs if r.get('pipeline_id') == pipeline_id]
-        runs.sort(key=lambda r: r.get('started', ''), reverse=True)
-        return runs[:limit]
-
-    def cancel_run(self, rid):
-        if rid in PIPELINE_RUNS:
-            PIPELINE_RUNS[rid]['status'] = 'cancelled'
-            PIPELINE_RUNS[rid]['finished'] = datetime.now().isoformat()
-            return PIPELINE_RUNS[rid]
-        raise ValueError('Run not found or already finished')
-
-
 # ---------------------------------------------------------------------------
-#  Cloud Dashboard Manager
-# ---------------------------------------------------------------------------
-
-class CloudProvider:
-    def list_resources(self, credentials):
-        return []
-    def get_resource(self, credentials, resource_id):
-        return None
-    def start_vm(self, credentials, vm_id):
-        return {'ok': True}
-    def stop_vm(self, credentials, vm_id):
-        return {'ok': True}
-
-class AzureProvider(CloudProvider):
-    def list_resources(self, credentials):
-        return [
-            {'id': 'azure-vm-1', 'name': 'prod-web-01', 'type': 'vm', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_D2s_v3', 'cost_monthly': 70.08, 'created': '2024-01-15'},
-            {'id': 'azure-vm-2', 'name': 'prod-api-01', 'type': 'vm', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_D4s_v3', 'cost_monthly': 140.16, 'created': '2024-01-15'},
-            {'id': 'azure-stor-1', 'name': 'prodstorage01', 'type': 'storage', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'Standard_LRS', 'cost_monthly': 21.84, 'created': '2024-02-01'},
-            {'id': 'azure-db-1', 'name': 'prod-sql-01', 'type': 'database', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': 'GP_Gen5_2', 'cost_monthly': 295.20, 'created': '2024-01-20'},
-            {'id': 'azure-net-1', 'name': 'prod-vnet', 'type': 'network', 'provider': 'azure', 'status': 'running', 'region': 'eastus', 'size': '10.0.0.0/16', 'cost_monthly': 0, 'created': '2024-01-10'},
-        ]
-
-class AWSProvider(CloudProvider):
-    def list_resources(self, credentials):
-        return [
-            {'id': 'aws-vm-1', 'name': 'staging-web', 'type': 'vm', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 't3.medium', 'cost_monthly': 30.37, 'created': '2024-03-01'},
-            {'id': 'aws-vm-2', 'name': 'staging-worker', 'type': 'vm', 'provider': 'aws', 'status': 'stopped', 'region': 'us-east-1', 'size': 't3.large', 'cost_monthly': 0, 'created': '2024-03-01'},
-            {'id': 'aws-stor-1', 'name': 'staging-s3-data', 'type': 'storage', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 'S3 Standard', 'cost_monthly': 15.50, 'created': '2024-03-05'},
-            {'id': 'aws-db-1', 'name': 'staging-rds', 'type': 'database', 'provider': 'aws', 'status': 'running', 'region': 'us-east-1', 'size': 'db.t3.medium', 'cost_monthly': 52.56, 'created': '2024-03-10'},
-        ]
-
-class GCPProvider(CloudProvider):
-    def list_resources(self, credentials):
-        return [
-            {'id': 'gcp-vm-1', 'name': 'dev-instance-1', 'type': 'vm', 'provider': 'gcp', 'status': 'running', 'region': 'us-central1', 'size': 'e2-medium', 'cost_monthly': 24.27, 'created': '2024-04-01'},
-            {'id': 'gcp-stor-1', 'name': 'dev-bucket', 'type': 'storage', 'provider': 'gcp', 'status': 'running', 'region': 'us-central1', 'size': 'Standard', 'cost_monthly': 8.50, 'created': '2024-04-05'},
-            {'id': 'gcp-db-1', 'name': 'dev-cloudsql', 'type': 'database', 'provider': 'gcp', 'status': 'stopped', 'region': 'us-central1', 'size': 'db-f1-micro', 'cost_monthly': 0, 'created': '2024-04-10'},
-        ]
-
-class CloudDashboardManager:
-    def __init__(self, db_path):
-        self.db_path = Path(db_path)
-        self._providers = {'azure': AzureProvider(), 'aws': AWSProvider(), 'gcp': GCPProvider()}
-        self._resource_cache = {}
-        self._ensure_db()
-
-    def _ensure_db(self):
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.db_path.exists():
-            self._save({'accounts': [
-                {'id': str(uuid.uuid4()), 'name': 'Azure Production', 'provider': 'azure', 'credential_secret_id': '', 'region': 'eastus', 'created': datetime.now().isoformat()},
-                {'id': str(uuid.uuid4()), 'name': 'AWS Staging', 'provider': 'aws', 'credential_secret_id': '', 'region': 'us-east-1', 'created': datetime.now().isoformat()},
-                {'id': str(uuid.uuid4()), 'name': 'GCP Development', 'provider': 'gcp', 'credential_secret_id': '', 'region': 'us-central1', 'created': datetime.now().isoformat()},
-            ]})
-        self.refresh()
-
-    def _load(self):
-        try:
-            return json.loads(self.db_path.read_text(encoding='utf-8'))
-        except Exception:
-            return {'accounts': []}
-
-    def _save(self, data):
-        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-    def get_accounts(self):
-        return self._load().get('accounts', [])
-
-    def add_account(self, name, provider, credential_secret_id='', region=''):
-        d = self._load()
-        acct = {'id': str(uuid.uuid4()), 'name': name, 'provider': provider,
-                'credential_secret_id': credential_secret_id, 'region': region,
-                'created': datetime.now().isoformat()}
-        d.setdefault('accounts', []).append(acct)
-        self._save(d)
-        self.refresh()
-        return acct
-
-    def remove_account(self, aid):
-        d = self._load()
-        d['accounts'] = [a for a in d.get('accounts', []) if a['id'] != aid]
-        self._save(d)
-        self._resource_cache.pop(aid, None)
-
-    def refresh(self):
-        self._resource_cache = {}
-        for acct in self.get_accounts():
-            provider = self._providers.get(acct['provider'])
-            if provider:
-                try:
-                    self._resource_cache[acct['id']] = provider.list_resources(acct.get('credential_secret_id'))
-                except Exception:
-                    self._resource_cache[acct['id']] = []
-
-    def get_resources(self, provider=None, rtype=None, status=None):
-        all_res = []
-        for acct_id, resources in self._resource_cache.items():
-            all_res.extend(resources)
-        if provider:
-            all_res = [r for r in all_res if r.get('provider') == provider]
-        if rtype:
-            all_res = [r for r in all_res if r.get('type') == rtype]
-        if status:
-            all_res = [r for r in all_res if r.get('status') == status]
-        return all_res
-
-    def get_resource(self, rid):
-        for resources in self._resource_cache.values():
-            for r in resources:
-                if r['id'] == rid:
-                    return r
-        raise ValueError('Resource not found')
-
-    def start_resource(self, rid):
-        for resources in self._resource_cache.values():
-            for r in resources:
-                if r['id'] == rid:
-                    r['status'] = 'running'
-                    return r
-        raise ValueError('Resource not found')
-
-    def stop_resource(self, rid):
-        for resources in self._resource_cache.values():
-            for r in resources:
-                if r['id'] == rid:
-                    r['status'] = 'stopped'
-                    r['cost_monthly'] = 0
-                    return r
-        raise ValueError('Resource not found')
-
-    def get_costs(self):
-        costs = {'azure': 0, 'aws': 0, 'gcp': 0, 'total': 0}
-        for r in self.get_resources():
-            p = r.get('provider', 'other')
-            c = r.get('cost_monthly', 0)
-            costs[p] = costs.get(p, 0) + c
-            costs['total'] += c
-        return costs
-
-
-# ---------------------------------------------------------------------------
-#  Marketplace Manager
-# ---------------------------------------------------------------------------
-
-class MarketplaceManager:
-    def __init__(self, db_path):
-        self.db_path = Path(db_path)
-        self._ensure_db()
-
-    def _ensure_db(self):
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.db_path.exists():
-            self._save({
-                'plugins': [
-                    {'id': 'terraform-iac', 'name': 'Terraform IaC', 'version': '1.2.0', 'author': 'MasterChief Team', 'category': 'DevOps', 'description': 'Infrastructure as Code automation with Terraform.', 'installed': True, 'rating': 4.5, 'review_count': 12, 'config': {'default_provider': 'azure', 'state_backend': 'local'}, 'dependencies': []},
-                    {'id': 'ansible-config', 'name': 'Ansible Config Management', 'version': '2.0.1', 'author': 'MasterChief Team', 'category': 'Automation', 'description': 'Server configuration management with Ansible playbooks.', 'installed': True, 'rating': 4.2, 'review_count': 8, 'config': {'inventory_path': '/etc/ansible/hosts'}, 'dependencies': []},
-                    {'id': 'k8s-deploy', 'name': 'Kubernetes Deployer', 'version': '3.1.0', 'author': 'MasterChief Team', 'category': 'DevOps', 'description': 'Kubernetes deployment automation with Helm charts.', 'installed': True, 'rating': 4.8, 'review_count': 25, 'config': {'default_namespace': 'default', 'context': 'minikube'}, 'dependencies': ['terraform-iac']},
-                    {'id': 'prometheus-monitor', 'name': 'Prometheus Monitoring', 'version': '1.5.0', 'author': 'MasterChief Team', 'category': 'Monitoring', 'description': 'Full metrics pipeline with Prometheus and Grafana.', 'installed': False, 'rating': 4.6, 'review_count': 18, 'config': {}, 'dependencies': []},
-                    {'id': 'vault-secrets', 'name': 'HashiCorp Vault', 'version': '0.9.0', 'author': 'Community', 'category': 'Security', 'description': 'Integration with HashiCorp Vault for secret management.', 'installed': False, 'rating': 4.0, 'review_count': 6, 'config': {}, 'dependencies': []},
-                    {'id': 'jenkins-ci', 'name': 'Jenkins CI Bridge', 'version': '1.0.0', 'author': 'Community', 'category': 'Integration', 'description': 'Bridge MasterChief pipelines with Jenkins CI/CD.', 'installed': False, 'rating': 3.8, 'review_count': 4, 'config': {}, 'dependencies': []},
-                    {'id': 'github-actions', 'name': 'GitHub Actions Sync', 'version': '2.1.0', 'author': 'Community', 'category': 'Integration', 'description': 'Sync GitHub Actions workflows with MasterChief pipelines.', 'installed': False, 'rating': 4.3, 'review_count': 14, 'config': {}, 'dependencies': []},
-                    {'id': 'sonarqube-scan', 'name': 'SonarQube Scanner', 'version': '1.3.0', 'author': 'Community', 'category': 'Security', 'description': 'Code quality and security scanning with SonarQube.', 'installed': False, 'rating': 4.1, 'review_count': 9, 'config': {}, 'dependencies': []},
-                    {'id': 'elk-logging', 'name': 'ELK Stack Logging', 'version': '2.0.0', 'author': 'MasterChief Team', 'category': 'Monitoring', 'description': 'Centralized logging with Elasticsearch, Logstash, and Kibana.', 'installed': False, 'rating': 4.4, 'review_count': 11, 'config': {}, 'dependencies': []},
-                    {'id': 'cost-optimizer', 'name': 'Cloud Cost Optimizer', 'version': '1.1.0', 'author': 'Community', 'category': 'DevOps', 'description': 'Analyze and optimize cloud spending.', 'installed': False, 'rating': 3.9, 'review_count': 7, 'config': {}, 'dependencies': []},
-                    {'id': 'postgres-manager', 'name': 'PostgreSQL Manager', 'version': '1.0.0', 'author': 'Community', 'category': 'Database', 'description': 'PostgreSQL database management with backups and monitoring.', 'installed': False, 'rating': 4.2, 'review_count': 5, 'config': {}, 'dependencies': []},
-                    {'id': 'nginx-proxy', 'name': 'Nginx Proxy Manager', 'version': '1.4.0', 'author': 'Community', 'category': 'Networking', 'description': 'Nginx reverse proxy management with SSL automation.', 'installed': False, 'rating': 4.5, 'review_count': 16, 'config': {}, 'dependencies': []},
-                ],
-                'reviews': []
-            })
-
-    def _load(self):
-        try:
-            return json.loads(self.db_path.read_text(encoding='utf-8'))
-        except Exception:
-            return {'plugins': [], 'reviews': []}
-
-    def _save(self, data):
-        self.db_path.write_text(json.dumps(data, indent=2), encoding='utf-8')
-
-    def list_plugins(self, query=None, category=None, installed_only=False):
-        d = self._load()
-        plugins = d.get('plugins', [])
-        if query:
-            q = query.lower()
-            plugins = [p for p in plugins if q in p.get('name', '').lower() or q in p.get('description', '').lower()]
-        if category and category != 'All':
-            plugins = [p for p in plugins if p.get('category') == category]
-        if installed_only:
-            plugins = [p for p in plugins if p.get('installed')]
-        return plugins
-
-    def get_plugin(self, pid):
-        for p in self._load().get('plugins', []):
-            if p['id'] == pid:
-                return p
-        raise ValueError('Plugin not found')
-
-    def install_plugin(self, pid):
-        d = self._load()
-        for p in d.get('plugins', []):
-            if p['id'] == pid:
-                deps = p.get('dependencies', [])
-                for dep in deps:
-                    dep_plugin = next((x for x in d['plugins'] if x['id'] == dep), None)
-                    if dep_plugin and not dep_plugin.get('installed'):
-                        raise ValueError(f'Dependency {dep} must be installed first')
-                p['installed'] = True
-                self._save(d)
-                return p
-        raise ValueError('Plugin not found')
-
-    def uninstall_plugin(self, pid):
-        d = self._load()
-        for p in d.get('plugins', []):
-            if p['id'] == pid:
-                dependents = [x['name'] for x in d['plugins'] if pid in x.get('dependencies', []) and x.get('installed')]
-                if dependents:
-                    raise ValueError(f'Cannot uninstall: {", ".join(dependents)} depend on this plugin')
-                p['installed'] = False
-                p['config'] = {}
-                self._save(d)
-                return p
-        raise ValueError('Plugin not found')
-
-    def get_config(self, pid):
-        p = self.get_plugin(pid)
-        return p.get('config', {})
-
-    def update_config(self, pid, config):
-        d = self._load()
-        for p in d.get('plugins', []):
-            if p['id'] == pid:
-                p['config'] = config
-                self._save(d)
-                return p
-        raise ValueError('Plugin not found')
-
-    def get_reviews(self, pid):
-        d = self._load()
-        return [r for r in d.get('reviews', []) if r.get('plugin_id') == pid]
-
-    def add_review(self, pid, rating, text, author='Anonymous'):
-        d = self._load()
-        review = {
-            'id': str(uuid.uuid4()), 'plugin_id': pid,
-            'rating': max(1, min(5, int(rating))), 'text': text,
-            'author': author, 'created': datetime.now().isoformat()
-        }
-        d.setdefault('reviews', []).append(review)
-        plugin_reviews = [r for r in d['reviews'] if r.get('plugin_id') == pid]
-        for p in d.get('plugins', []):
-            if p['id'] == pid:
-                p['review_count'] = len(plugin_reviews)
-                p['rating'] = round(sum(r['rating'] for r in plugin_reviews) / len(plugin_reviews), 1)
-                break
-        self._save(d)
-        return review
-
-
-###############################################################################
 #  Dynamic Module Loading
 ###############################################################################
 
 managers = {}
 for name, config in ENABLED_MODULES.items():
+    print(f"DEBUG: Processing module {name}, enabled={config.get('enabled', False)}")
     if not config.get('enabled', False):
         managers[name] = None
         continue
     try:
-        spec = importlib.util.spec_from_file_location(f"{name}_manager", f"templates/{name}_manager.py")
+        spec = importlib.util.spec_from_file_location(f"{name}_manager", f"managers/{name}.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         register_func = getattr(module, f'register_{name}_module')
         # Remove 'enabled' from config for kwargs
         kwargs = {k: v for k, v in config.items() if k != 'enabled'}
+        print(f"DEBUG: Calling register_{name}_module with kwargs={kwargs}")
         managers[name] = register_func(app, **kwargs)
         print(f"DEBUG: Loaded module {name}")
     except Exception as e:
@@ -5542,6 +1903,14 @@ cloud_mgr = managers.get('cloud')
 memory_mgr = managers.get('memory')
 marketplace_mgr = managers.get('marketplace')
 script_mgr = managers.get('script')
+
+# Register blueprints
+from blueprints import ide, terraform, mock, azure
+from renderers import render_resources_page, render_addons_modules_page, render_module_manager_page, render_addons_module_config_page, render_echo_training_page
+app.register_blueprint(ide.ide_bp)
+app.register_blueprint(terraform.terraform_bp)
+app.register_blueprint(mock.mock_bp)
+app.register_blueprint(azure.azure_bp)
 
 
 
@@ -5628,8 +1997,6 @@ def get_windows_services():
         pass
 
     return services
-
-script_mgr=ScriptManager(app.config['SCRIPTS_FOLDER'])
 
 # Execution jobs store for async/parallel execution
 
@@ -6163,85 +2530,7 @@ function refreshIndex(){
 
 </html>"""
 
-DASHBOARD_TEMPLATE="""{% extends "base.html" %}
 
-
-
-{% block content %}
-
-<div class="dashboard-grid">
-
-<div class="card">
-
-<h3>CPU Usage</h3>
-
-<div class="stat-value" id="cpu-value">{{ stats.cpu.percent }}%</div>
-
-<div class="progress-bar"><div class="progress-fill" id="cpu-progress" style="width:{{ stats.cpu.percent }}%"></div></div>
-
-<div class="stat-label">{{ stats.cpu.count }} Cores</div>
-
-</div>
-
-<div class="card">
-
-<h3>Memory Usage</h3>
-
-<div class="stat-value" id="mem-value">{{ stats.memory.percent }}%</div>
-
-<div class="progress-bar"><div class="progress-fill" id="mem-progress" style="width:{{ stats.memory.percent }}%"></div></div>
-
-<div class="stat-label">{{ (stats.memory.used/1024/1024/1024)|round(2) }} GB / {{ (stats.memory.total/1024/1024/1024)|round(2) }} GB</div>
-
-</div>
-
-<div class="card">
-
-<h3>Disk Usage</h3>
-
-<div class="stat-value" id="disk-value">{{ stats.disk.percent }}%</div>
-
-<div class="progress-bar"><div class="progress-fill" id="disk-progress" style="width:{{ stats.disk.percent }}%"></div></div>
-
-<div class="stat-label">{{ (stats.disk.used/1024/1024/1024)|round(2) }} GB / {{ (stats.disk.total/1024/1024/1024)|round(2) }} GB</div>
-
-</div>
-
-<div class="card">
-
-<h3>System Uptime</h3>
-
-<div class="stat-value">{{ (stats.uptime/3600)|int }}h</div>
-
-<div class="stat-label">{{ (stats.uptime/60)|int }} minutes</div>
-
-</div>
-
-</div>
-
-<div class="section">
-
-<h3>Quick Actions</h3>
-
-<a href="/scripts" class="btn">Script Manager</a>
-
-<a href="/processes" class="btn">Process Monitor</a>
-
-<a href="/services" class="btn">Service Monitor</a>
-
-<a href="/addons" class="btn">Install Addons</a>
-
-<a href="/web_ide" class="btn">Web IDE</a>
-
-<a href="/masterchief_code_ui" class="btn">MasterChief Code UI</a>
-
-<a href="/iac_manager" class="btn">IAC Manager</a>
-
-<a href="/github" class="btn">GitHub Integration</a>
-
-</div>
-
-{% endblock %}"""
 
 
 
@@ -7005,9 +3294,11 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 
 .chat-input-area{padding:20px;background:#2d2d2d;border-radius:0 0 10px 10px;border-top:2px solid #9370DB;}
 
-.chat-input-form{display:flex;gap:10px;}
+.chat-input-form{display:flex;flex-direction:column;gap:8px;}
 
-.chat-input{flex:1;padding:12px;background:#1a1a1a;border:2px solid #9370DB;color:#e0e0e0;border-radius:25px;font-size:1em;resize:vertical;}
+.chat-input{width:100%;box-sizing:border-box;padding:12px 18px;background:#1a1a1a;border:2px solid #9370DB;color:#e0e0e0;border-radius:12px;font-size:1em;resize:vertical;min-height:52px;}
+
+.chat-input-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
 
 .chat-input:focus{outline:none;border-color:#BA55D3;}
 
@@ -7175,7 +3466,7 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 
 <textarea id="chatInput" class="chat-input" placeholder="Type your message... ✨" autocomplete="off" required rows="2"></textarea>
 
-<div style="display:flex;gap:8px;align-items:center;margin-left:8px;">
+<div class="chat-input-controls">
 
     <label style="font-size:0.85em;color:#ccc;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="autoContinueToggle"> <span id="autoContinueLabel">Auto-continue</span></label>
 
@@ -8206,28 +4497,101 @@ MODULES_TEMPLATE="""{% extends "base.html" %}
 
 <h2>🧩 Module Management</h2>
 
-<p>Enable or disable MasterChief modules. Changes take effect on restart.</p>
+<p>Enable or disable MasterChief modules. Changes take effect immediately for most modules; full restart may be needed for newly enabled ones.</p>
+
+{% set module_meta = {
+  'rbac':         {'url': '/rbac',          'icon': '🔐', 'desc': 'Role-based access control — manage users, roles, and permissions.'},
+  'vault':        {'url': '/secrets',       'icon': '🔒', 'desc': 'Encrypted secrets vault — store and retrieve credentials securely.'},
+  'notification': {'url': '/notifications', 'icon': '🔔', 'desc': 'Alerts and notification channels — email, webhook, and in-app.'},
+  'pipeline':     {'url': '/pipelines',     'icon': '⚙️', 'desc': 'CI/CD pipelines — build, test, and deploy automation workflows.'},
+  'cloud':        {'url': '/cloud',         'icon': '☁️', 'desc': 'Cloud account manager — AWS, Azure, GCP resource control.'},
+  'memory':       {'url': '/echo',          'icon': '🧠', 'desc': 'Echo memory — persistent AI conversation history and context.'},
+  'marketplace':  {'url': '/marketplace',   'icon': '🛒', 'desc': 'Addon marketplace — browse and install community modules.'},
+  'script':       {'url': '/scripts',       'icon': '📜', 'desc': 'Script runner — manage and execute automation scripts.'}
+} %}
 
 <div class="modules-grid">
 {% for name, config in enabled_modules.items() %}
-<div class="card">
-<h3>{{ name|title }} Module</h3>
-<p>Status: <span class="status-{{ 'enabled' if config.enabled else 'disabled' }}">{{ 'Enabled' if config.enabled else 'Disabled' }}</span></p>
-<p>Manager: <code>{{ managers[name]|type if managers[name] else 'Not loaded' }}</code></p>
-<form method="POST" action="/api/modules/toggle" style="display:inline;">
-<input type="hidden" name="module" value="{{ name }}">
-<button type="submit" class="btn {{ 'btn-danger' if config.enabled else 'btn-success' }}">
-{{ 'Disable' if config.enabled else 'Enable' }}
-</button>
-</form>
+{% set meta = module_meta.get(name, {'url': None, 'icon': '🧩', 'desc': ''}) %}
+<div class="module-card {{ 'module-enabled' if config.enabled else 'module-disabled' }}">
+  <div class="module-card-header">
+    <span class="module-icon">{{ meta.icon }}</span>
+    <h3 class="module-title">{{ name|title }}</h3>
+    <span class="module-badge {{ 'badge-enabled' if config.enabled else 'badge-disabled' }}">
+      {{ 'Enabled' if config.enabled else 'Disabled' }}
+    </span>
+  </div>
+  <p class="module-desc">{{ meta.desc }}</p>
+  <p class="module-manager">Manager: <code>{{ managers[name].__class__.__name__ if managers.get(name) else 'Not loaded' }}</code></p>
+  <div class="module-actions">
+    <form method="POST" action="/api/modules/toggle" style="display:inline;">
+      <input type="hidden" name="module" value="{{ name }}">
+      <button type="submit" class="btn {{ 'btn-danger' if config.enabled else 'btn-success' }}">
+        {{ '⏸ Disable' if config.enabled else '▶ Enable' }}
+      </button>
+    </form>
+    {% if config.enabled and meta.url %}
+    <a href="{{ meta.url }}" class="btn btn-primary module-view-btn">🔗 View</a>
+    {% endif %}
+  </div>
 </div>
 {% endfor %}
 </div>
 
 <style>
-.modules-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-.status-enabled { color: #4CAF50; font-weight: bold; }
-.status-disabled { color: #f44336; font-weight: bold; }
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+.module-card {
+  background: var(--card-bg, #1e1e2e);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s;
+}
+.module-enabled { border-left: 4px solid #4CAF50; }
+.module-disabled { border-left: 4px solid #555; opacity: 0.75; }
+.module-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.module-icon { font-size: 1.4rem; }
+.module-title { margin: 0; font-size: 1.1rem; flex: 1; }
+.module-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-enabled  { background: #1b4d2e; color: #4CAF50; }
+.badge-disabled { background: #2d2d2d; color: #888; }
+.module-desc {
+  font-size: 0.88rem;
+  color: #aaa;
+  margin: 0;
+  line-height: 1.4;
+}
+.module-manager {
+  font-size: 0.8rem;
+  color: #777;
+  margin: 0;
+}
+.module-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.module-view-btn { text-decoration: none; }
 </style>
 
 {% endblock %}"""
@@ -8258,7 +4622,7 @@ def api_modules_toggle():
 
 @app.route('/api/test')
 def api_test():
-    return jsonify({'ok': True, 'message': 'API is working', 'script_mgr': str(type(script_mgr))})
+    return jsonify({'ok': True, 'message': 'API is working', 'script_mgr': str(type(script_mgr)), 'enterprise_tf_gen': str(type(enterprise_tf_gen))})
 
 @app.route('/api/stats')
 
@@ -8270,152 +4634,6 @@ def api_stats():
 
 
 
-@app.route('/scripts')
-
-@requires_permission('scripts')
-def scripts_list():
-
-    res = script_mgr.list_scripts(include_repo_paths=True)
-
-    # Backwards-compatible: if list_scripts returns categories, flatten for templates that expect a flat list
-
-    if res and isinstance(res, list) and isinstance(res[0], dict) and 'category' in res[0]:
-
-        categories = res
-
-        flat = []
-
-        for c in categories:
-
-            flat.extend(c.get('scripts',[]))
-
-        scripts = flat
-
-    else:
-
-        categories = [{'category':'all','scripts':res}]
-
-        scripts = res
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',SCRIPTS_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),scripts=scripts,categories=categories,request=request,get_flashed_messages=get_flashed_messages)
-
-
-
-
-
-@app.route('/scripts/refresh_index', methods=['POST'])
-
-def refresh_index():
-
-    # Admin token protection disabled for local development.
-
-    # This endpoint is intentionally left open in dev to simplify testing.
-
-    cache_file = Path(__file__).resolve().parent / 'data' / 'script_index.json'
-
-    try:
-
-        if cache_file.exists():
-
-            cache_file.unlink()
-
-        return jsonify({'ok':True,'message':'index invalidated'})
-
-    except Exception as e:
-
-        return jsonify({'ok':False,'error':str(e)}),500
-
-
-
-def _check_basic_auth():
-
-    # Basic auth disabled for local development — always allow.
-
-    return True
-
-
-
-def requires_basic_auth(f):
-
-    def wrapper(*args, **kwargs):
-
-        if not _check_basic_auth():
-
-            return ('Unauthorized', 401, {'WWW-Authenticate': 'Basic realm="MasterChief"'})
-
-        return f(*args, **kwargs)
-
-    wrapper.__name__ = f.__name__
-
-    return wrapper
-
-@app.route('/scripts/add',methods=['POST'])
-
-@requires_basic_auth
-
-def scripts_add():
-
-    filename=request.form.get('filename')
-
-    content=request.form.get('content')
-
-    if script_mgr.add_script(filename,content):
-
-        flash('Script added successfully!','success')
-
-    else:
-
-        flash('Failed to add script','error')
-
-    return redirect(url_for('scripts_list'))
-
-@app.route('/scripts/view/<filename>')
-
-@requires_permission('scripts')
-def scripts_view(filename):
-
-    content=script_mgr.get_script_content(filename)
-
-    if content is None:
-
-        flash('Script not found','error')
-
-        return redirect(url_for('scripts_list'))
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',SCRIPT_VIEW_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),filename=filename,content=content,request=request,get_flashed_messages=get_flashed_messages)
-
-@app.route('/scripts/execute/<filename>')
-
-@requires_permission('scripts')
-def scripts_execute(filename):
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',SCRIPT_EXECUTE_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),filename=filename,result=None,request=request,get_flashed_messages=get_flashed_messages)
-
-@app.route('/scripts/run/<filename>',methods=['POST'])
-
-@requires_permission('scripts')
-def scripts_run(filename):
-
-    args=request.form.get('args','')
-
-    result=script_mgr.execute_script(filename,args)
-
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',SCRIPT_EXECUTE_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),filename=filename,result=result,request=request,get_flashed_messages=get_flashed_messages)
-
-@app.route('/scripts/delete/<filename>')
-
-@requires_permission('scripts')
-def scripts_delete(filename):
-
-    if script_mgr.delete_script(filename):
-
-        flash('Script deleted successfully!','success')
-
-    else:
-
-        flash('Failed to delete script','error')
-
-    return redirect(url_for('scripts_list'))
 
 
 
@@ -8592,27 +4810,7 @@ def scripts_backup(b64path):
 
 
 
-    @app.route('/api/ide/scripts')
 
-    def api_ide_scripts():
-
-        files = []
-
-        try:
-
-            scripts_dir = Path(app.config['SCRIPTS_FOLDER'])
-
-            for p in sorted(scripts_dir.glob('*')):
-
-                if p.is_file():
-
-                    files.append({'name': p.name, 'size': p.stat().st_size, 'modified': datetime.fromtimestamp(p.stat().st_mtime).isoformat()})
-
-        except Exception as e:
-
-            return jsonify({'ok': False, 'error': str(e)}), 500
-
-        return jsonify({'ok': True, 'files': files})
 
 
 
@@ -9470,7 +5668,32 @@ def addons_install(filename):
 
             flash(f'⚠️ Could not save module info: {str(e)}', 'warning')
 
-        
+        # --- Auto-launch: detect entry point and start the application ---
+        launch_result = launch_addon(module_name, extract_dir)
+        if launch_result['status'] == 'started':
+            flash(f'🚀 Auto-launched {launch_result["entry_point"]} (PID {launch_result["pid"]})', 'success')
+            # Persist entry point info
+            try:
+                modules[module_name]['entry_point'] = launch_result['entry_point']
+                modules[module_name]['entry_type'] = launch_result['type']
+                with open(modules_file, 'w') as f:
+                    json.dump(modules, f, indent=2)
+            except Exception:
+                pass
+        elif launch_result['status'] == 'html':
+            flash(f'🌐 Static app detected — open via <a href="{launch_result["url"]}">{launch_result["entry_point"]}</a>', 'info')
+            try:
+                modules[module_name]['entry_point'] = launch_result['entry_point']
+                modules[module_name]['entry_type'] = 'html'
+                modules[module_name]['html_url'] = launch_result['url']
+                with open(modules_file, 'w') as f:
+                    json.dump(modules, f, indent=2)
+            except Exception:
+                pass
+        elif launch_result['status'] == 'no_entry_point':
+            flash('ℹ️ No entry point found (main.py / index.py / index.html / index.php / etc.) — use the module manager to add files', 'info')
+        else:
+            flash(f'⚠️ Could not auto-launch: {launch_result["message"]}', 'warning')
 
         flash(f'✅ Addon {filename} installed successfully', 'success')
 
@@ -9865,7 +6088,7 @@ def addons_modules():
                         # Skip modules with access issues
                         continue
     
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ADDONS_MODULES_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), installed_modules=installed_modules, request=request, get_flashed_messages=get_flashed_messages)
+    return render_addons_modules_page(installed_modules)
 
 @app.route('/addons/modules/<module_name>/manager')
 def module_manager(module_name):
@@ -9928,6 +6151,8 @@ def module_manager(module_name):
         return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', MODULE_MANAGER_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), 
                                     module=module_info, files=files, request=request, get_flashed_messages=get_flashed_messages)
         
+        return render_module_manager_page(module_info)
+        
     except Exception as e:
         flash(f'Error loading module manager: {str(e)}', 'error')
         return redirect('/addons/modules')
@@ -9946,8 +6171,7 @@ def addons_module_config(module_name, config_file):
         with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         
-        return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ADDONS_MODULE_CONFIG_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), 
-                                   module_name=module_name, config_file=config_file, content=content, request=request, get_flashed_messages=get_flashed_messages)
+        return render_addons_module_config_page(module_name, config_file, content)
     
     except Exception as e:
         flash(f'Error reading config file: {str(e)}', 'error')
@@ -10563,165 +6787,148 @@ def addons_module_build(module_name):
 
 @app.route('/addons/modules/<module_name>/')
 def addons_module_root(module_name):
-    """Serve the root page of a web-accessible module (for PHP/Node.js apps, etc.)"""
+    """Smart entry point for an addon module.
+    
+    Priority:
+    1. If process already running → proxy to it via /app/
+    2. If has a runnable entry point (py/js/php server / executable) → auto-launch + redirect to /app/
+    3. If has a static HTML/HTM index → serve it inline
+    4. If has index.php for CGI execution → run via php CLI inline
+    5. Fallback → directory listing with start button
+    """
     try:
-        # Find the actual module directory by searching both locations
         extract_dirs = [
             app.config['UPLOAD_FOLDER'] / 'extracted',
             Path(app.root_path) / '.claude' / 'worktrees' / 'cool-elbakyan' / 'data' / 'uploads' / 'extracted'
         ]
-        
         extract_dir = None
         for base_dir in extract_dirs:
-            if base_dir.exists():
-                # First try exact match
-                candidate = base_dir / module_name
-                if candidate.exists() and candidate.is_dir():
-                    extract_dir = candidate
+            if not base_dir.exists():
+                continue
+            candidate = base_dir / module_name
+            if candidate.exists() and candidate.is_dir():
+                extract_dir = candidate
+                break
+            for item in base_dir.iterdir():
+                if item.is_dir() and item.name.lower() == module_name.lower():
+                    extract_dir = item
                     break
-                
-                # Then try case-insensitive match
-                for item in base_dir.iterdir():
-                    if item.is_dir() and item.name.lower() == module_name.lower():
-                        extract_dir = item
-                        break
-                
-                if extract_dir:
-                    break
-        
+            if extract_dir:
+                break
+
         if not extract_dir:
             return f"Module not found: {module_name}", 404
 
-        # Detect project type
-        project_info = detect_project_type(extract_dir)
+        proxy_path = f'/addons/modules/{module_name}/app/'
 
-        # Look for index files in order of preference
-        # First check the root directory
-        index_files = ['index.php', 'index.html', 'index.htm', 'install.php', 'default.php', 'default.html']
-        index_file = None
-        
-        # Check root directory first
-        for filename in index_files:
-            candidate = extract_dir / filename
-            if candidate.exists() and candidate.is_file():
-                index_file = candidate
-                break
-        
-        # If no index file in root, check subdirectories
-        if not index_file:
-            for subdir in extract_dir.iterdir():
-                if subdir.is_dir():
-                    for filename in index_files:
-                        candidate = subdir / filename
-                        if candidate.exists() and candidate.is_file():
-                            index_file = candidate
-                            break
-                    if index_file:
-                        break
+        # ── 1. Already running? Proxy immediately. ────────────────────────────
+        svc = app.config.get('running_services', {}).get(module_name)
+        if svc:
+            proc = svc.get('process')
+            if proc and proc.poll() is None:
+                from flask import redirect as _redirect
+                return _redirect(proxy_path)
 
-        if index_file:
-            # Serve the index file
-            file_path = index_file  # Use the full path directly
+        # ── 2. Detect entry point ─────────────────────────────────────────────
+        ep = detect_entry_point(extract_dir)
 
-            if file_path.suffix.lower() == '.php':
-                # Execute PHP file using local PHP binary
-                import subprocess
-                try:
-                    # Use the local PHP installation
-                    php_path = Path(app.root_path) / 'php' / 'php.exe'
-                    if not php_path.exists():
-                        # Fallback to system PHP if local not found
-                        php_path = 'php'
-                    
-                    # Execute PHP with the file
-                    result = subprocess.run(
-                        [str(php_path), str(file_path)],
-                        cwd=str(extract_dir),
-                        capture_output=True,
-                        text=True,
-                        timeout=30
-                    )
-                    
-                    if result.returncode == 0:
-                        return result.stdout, 200, {'Content-Type': 'text/html'}
-                    else:
-                        # PHP execution failed, show error
-                        error_content = f"""
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <title>{module_name} - PHP Error</title>
-                            <style>
-                                body {{ font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 20px; }}
-                                .error {{ background: #f44336; color: white; padding: 15px; border-radius: 5px; }}
-                            </style>
-                        </head>
-                        <body>
-                            <div class="error">
-                                <strong>PHP Execution Error:</strong><br>
-                                {result.stderr}
-                            </div>
-                            <h2>PHP Source Code:</h2>
-                            <pre>{open(file_path, 'r', encoding='utf-8', errors='ignore').read()}</pre>
-                        </body>
-                        </html>
-                        """
-                        return error_content, 500
-                        
-                except subprocess.TimeoutExpired:
-                    return "PHP execution timed out", 504
-                except Exception as e:
-                    return f"PHP execution failed: {str(e)}", 500
+        if ep is None:
+            # No recognised entry point at all → directory listing
+            return _dir_listing(module_name, extract_dir)
 
-            else:
-                # For HTML files, serve directly
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                return content, 200, {'Content-Type': 'text/html'}
+        if ep['type'] == 'html':
+            # Static HTML — serve inline, no subprocess needed
+            with open(ep['file'], 'r', encoding='utf-8', errors='ignore') as fh:
+                return fh.read(), 200, {'Content-Type': 'text/html'}
 
+        if ep['type'] == 'php' and ep['cmd'] and ep['cmd'][0] == 'php':
+            # Run PHP inline via CLI (CGI-style) for simple PHP apps
+            try:
+                php_bin = Path(app.root_path) / 'php' / 'php.exe'
+                if not php_bin.exists():
+                    php_bin = 'php'
+                result = subprocess.run(
+                    [str(php_bin), str(ep['file'])],
+                    cwd=str(ep['working_dir']),
+                    capture_output=True, text=True, timeout=30
+                )
+                if result.returncode == 0:
+                    return result.stdout, 200, {'Content-Type': 'text/html'}
+                # PHP errored — fall through to launch as server instead
+            except Exception:
+                pass  # fall through to subprocess launch
+
+        # ── 3. Launch subprocess and redirect to proxy ────────────────────────
+        result = launch_addon(module_name, extract_dir)
+        if result['status'] == 'started':
+            # Redirect immediately; the proxy's auto-refresh page handles the
+            # startup wait — no blocking sleep needed here.
+            from flask import redirect as _redirect
+            return _redirect(proxy_path)
+        elif result['status'] == 'html':
+            # launch_addon returned html (shouldn't happen here, but handle it)
+            from flask import redirect as _redirect
+            return _redirect(result['url'])
         else:
-            # No index file found, show directory listing
-            files = []
-            for item in extract_dir.rglob('*'):
-                if item.is_file():
-                    rel_path = item.relative_to(extract_dir)
-                    files.append(str(rel_path))
-
-            html_content = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>{module_name} - Directory Listing</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; background: #1a1a1a; color: #e0e0e0; padding: 20px; }}
-                    .file-list {{ background: #2a2a2a; padding: 15px; border-radius: 5px; }}
-                    .file-link {{ color: #4CAF50; text-decoration: none; }}
-                    .file-link:hover {{ text-decoration: underline; }}
-                    .info {{ background: #2196F3; color: white; padding: 10px; border-radius: 5px; margin-bottom: 20px; }}
-                </style>
-            </head>
-            <body>
-                <div class="info">
-                    <strong>Module:</strong> {module_name}<br>
-                    <strong>Type:</strong> {project_info.get('type', 'Unknown')}<br>
-                    <strong>Frameworks:</strong> {', '.join(project_info.get('frameworks', [])) or 'None detected'}
-                </div>
-                <h2>Files in {module_name}:</h2>
-                <div class="file-list">
-            """
-
-            for file in sorted(files):
-                html_content += f'<div><a class="file-link" href="/addons/modules/{module_name}/web/{file}">{file}</a></div>'
-
-            html_content += """
-                </div>
-            </body>
-            </html>
-            """
-            return html_content
+            # Launch failed — show error + directory listing
+            return _dir_listing(module_name, extract_dir,
+                                error=result.get('message', 'Could not start app'))
 
     except Exception as e:
         return f"Error serving module {module_name}: {str(e)}", 500
+
+
+def _dir_listing(module_name, extract_dir, error=None):
+    """Render a directory listing with a Start Service button."""
+    project_info = detect_project_type(extract_dir)
+    files = sorted(
+        str(p.relative_to(extract_dir))
+        for p in extract_dir.rglob('*') if p.is_file()
+    )
+    error_html = (f'<div style="background:#b71c1c;color:#fff;padding:10px;border-radius:5px;margin-bottom:16px">'
+                  f'⚠️ {error}</div>') if error else ''
+    file_links = ''.join(
+        f'<div><a style="color:#4CAF50;text-decoration:none" '
+        f'href="/addons/modules/{module_name}/web/{f}">{f}</a></div>'
+        for f in files
+    )
+    return f"""<!DOCTYPE html>
+<html><head><title>{module_name}</title>
+<style>body{{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;padding:24px}}
+.card{{background:#2a2a2a;padding:16px;border-radius:8px;margin-bottom:16px}}
+.btn{{display:inline-block;padding:8px 18px;border-radius:5px;border:none;cursor:pointer;
+      font-size:0.95em;text-decoration:none}}
+.btn-green{{background:#4CAF50;color:#fff}}.btn-blue{{background:#2196F3;color:#fff}}
+pre{{background:#111;padding:10px;border-radius:5px;overflow-x:auto;font-size:0.85em}}
+</style></head><body>
+<h2>📦 {module_name}</h2>
+{error_html}
+<div class="card">
+  <strong>Type:</strong> {project_info.get('type','Unknown')} &nbsp;
+  <strong>Frameworks:</strong> {', '.join(project_info.get('frameworks',[])) or 'None'}<br><br>
+  <button class="btn btn-green" onclick="startAndOpen()">▶️ Start App</button>
+  &nbsp;
+  <a class="btn btn-blue" href="/addons/modules/{module_name}/manager">🗂️ Manage Files</a>
+  <div id="msg" style="margin-top:12px"></div>
+</div>
+<div class="card">
+  <strong>Files:</strong>
+  <div style="margin-top:8px">{file_links}</div>
+</div>
+<script>
+function startAndOpen(){{
+  document.getElementById('msg').innerHTML='⏳ Starting…';
+  fetch('/addons/modules/{module_name}/start',{{method:'POST'}})
+    .then(r=>r.json()).then(d=>{{
+      if(d.error){{ document.getElementById('msg').innerHTML='❌ '+d.error; return; }}
+      document.getElementById('msg').innerHTML='✅ '+d.message+' — redirecting…';
+      setTimeout(()=>{{ window.location='/addons/modules/{module_name}/app/'; }},1200);
+    }}).catch(e=>{{ document.getElementById('msg').innerHTML='❌ '+e; }});
+}}
+</script>
+</body></html>""", 200, {{'Content-Type': 'text/html'}}
+
+
 
 @app.route('/addons/modules/<module_name>/web/<path:filepath>')
 def addons_module_web(module_name, filepath):
@@ -10834,76 +7041,511 @@ def addons_module_web(module_name, filepath):
     except Exception as e:
         return f"Error serving file: {str(e)}", 500
 
+
+# ---------------------------------------------------------------------------
+# Addon entry-point detection and auto-launch helpers
+# ---------------------------------------------------------------------------
+
+ENTRY_POINT_PRIORITY = [
+    # (filename, handler_type)
+    ('main.py',       'python'),
+    ('index.py',      'python'),
+    ('app.py',        'python'),
+    ('run.py',        'python'),
+    ('__main__.py',   'python_module'),
+    # PHP installers — run these before app entry points if present
+    ('install.php',   'php'),
+    ('setup.php',     'php'),
+    ('installer.php', 'php'),
+    ('wizard.php',    'php'),
+    ('index.php',     'php'),
+    ('main.php',      'php'),
+    ('index.html',    'html'),
+    ('index.htm',     'html'),
+    ('server.js',     'node'),
+    ('app.js',        'node'),
+    ('index.js',      'node'),
+    ('main',          'executable'),
+]
+
+
+def detect_entry_point(extract_dir: Path):
+    """
+    Walk extract_dir looking for a known entry-point file.
+    Returns a dict:
+        { 'file': Path, 'working_dir': Path, 'type': str,
+          'cmd': list|None, 'html_url': str|None }
+    or None if nothing is found.
+
+    Search strategy (most-to-least specific):
+      1. Exact priority filenames at root, then 1-level subdirs, then full recursion.
+      2. Any .py/.php/.js file whose name looks like an entry point (excluding libs).
+      3. Any .html/.htm file.
+    """
+    def _build_result(candidate: Path, search_dir: Path, handler: str):
+        cmd = None
+        html_url = None
+        fname = candidate.name
+        if handler == 'python':
+            cmd = [sys.executable, fname]
+        elif handler == 'python_module':
+            cmd = [sys.executable, '-m', search_dir.name]
+        elif handler == 'php':
+            cmd = ['php', '-S', f'localhost:0', fname]
+        elif handler == 'node':
+            cmd = ['node', fname]
+        elif handler == 'executable':
+            cmd = [f'./{fname}']
+        elif handler == 'html':
+            rel = candidate.relative_to(extract_dir)
+            html_url = f'/addons/modules/{extract_dir.name}/files/{rel.as_posix()}'
+            cmd = None
+        return {
+            'file': candidate,
+            'working_dir': search_dir,
+            'type': handler,
+            'cmd': cmd,
+            'html_url': html_url,
+        }
+
+    # --- Pass 1: exact-name priority list, shallow then recursive ---
+    # Build search order: root first, then immediate subdirs, then all deeper dirs
+    search_dirs = [extract_dir]
+    try:
+        for d in extract_dir.iterdir():
+            if d.is_dir() and not d.name.startswith('.') and d.name not in ('node_modules', 'vendor', '__pycache__', '.git', 'venv', 'env'):
+                search_dirs.append(d)
+    except Exception:
+        pass
+    # Also collect deeper dirs for a recursive pass
+    deep_dirs = []
+    try:
+        for d in extract_dir.rglob('*'):
+            if d.is_dir() and not any(part.startswith('.') or part in ('node_modules', 'vendor', '__pycache__', 'venv', 'env') for part in d.parts):
+                if d not in search_dirs:
+                    deep_dirs.append(d)
+    except Exception:
+        pass
+
+    for search_dir in search_dirs + deep_dirs:
+        for fname, handler in ENTRY_POINT_PRIORITY:
+            candidate = search_dir / fname
+            if candidate.exists():
+                return _build_result(candidate, search_dir, handler)
+
+    # --- Pass 2: fuzzy fallback — any .py/.php/.js/.html file ---
+    # Score candidates: prefer shallower paths and entry-point-sounding names
+    _SKIP_DIRS = {'node_modules', 'vendor', '__pycache__', 'venv', 'env', '.git', 'dist', 'build', 'migrations'}
+    _PY_ENTRY_HINTS  = {'start', 'run', 'server', 'api', 'application', 'bootstrap', 'launch', 'web', 'http', 'serve', 'bot', 'app', 'main'}
+    _PHP_ENTRY_HINTS = {'start', 'run', 'server', 'api', 'bootstrap', 'launch', 'app', 'web', 'portal', 'admin', 'home'}
+    _JS_ENTRY_HINTS  = {'start', 'run', 'server', 'api', 'index', 'app', 'main', 'http', 'bot', 'web'}
+
+    best_py = best_php = best_js = best_html = None
+    best_py_score = best_php_score = best_js_score = best_html_score = 999
+
+    try:
+        for f in extract_dir.rglob('*'):
+            if not f.is_file():
+                continue
+            # Skip files inside blacklisted dirs
+            if any(part in _SKIP_DIRS for part in f.parts):
+                continue
+            depth = len(f.relative_to(extract_dir).parts)
+            stem = f.stem.lower()
+            ext  = f.suffix.lower()
+
+            if ext == '.py':
+                hint_bonus = 0 if stem in _PY_ENTRY_HINTS else 5
+                score = depth + hint_bonus
+                if score < best_py_score:
+                    best_py_score = score
+                    best_py = f
+            elif ext == '.php':
+                hint_bonus = 0 if stem in _PHP_ENTRY_HINTS else 5
+                score = depth + hint_bonus
+                if score < best_php_score:
+                    best_php_score = score
+                    best_php = f
+            elif ext == '.js' and not f.name.endswith('.min.js'):
+                hint_bonus = 0 if stem in _JS_ENTRY_HINTS else 5
+                score = depth + hint_bonus
+                if score < best_js_score:
+                    best_js_score = score
+                    best_js = f
+            elif ext in ('.html', '.htm'):
+                score = depth
+                if score < best_html_score:
+                    best_html_score = score
+                    best_html = f
+    except Exception:
+        pass
+
+    # Prefer py → php → js → html
+    for candidate, handler in [(best_py, 'python'), (best_php, 'php'), (best_js, 'node'), (best_html, 'html')]:
+        if candidate is not None:
+            return _build_result(candidate, candidate.parent, handler)
+
+    return None
+
+
+def _find_free_port(start: int = 9100, end: int = 9300) -> int:
+    """
+    Return a free TCP port in [start, end) and immediately reserve it so
+    concurrent calls never hand out the same number.
+    """
+    import socket as _socket
+    # Ports already committed to running services OR reserved-but-not-yet-started
+    used = {v.get('port') for v in app.config.get('running_services', {}).values() if v.get('port')}
+    used |= app.config.setdefault('_reserved_ports', set())
+    for port in range(start, end):
+        if port in used:
+            continue
+        with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('', port))
+                # Claim it immediately — before the subprocess even starts
+                app.config['_reserved_ports'].add(port)
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(f'No free port found in range {start}-{end}')
+
+
+def _sniff_port(module_name: str, proc: subprocess.Popen, fallback_port: int):
+    """
+    Read the subprocess stdout+stderr in a background thread looking for the
+    port it actually bound to.  Updates running_services[module_name]['port']
+    in-place so the proxy always forwards to the right place.
+
+    Patterns recognised:
+      * Running on http://127.0.0.1:PORT
+      * Listening on port PORT
+      * Server started on PORT
+      * localhost:PORT  (PHP built-in)
+      * ":PORT"  (Node / generic)
+    """
+    import re, threading
+
+    _port_re = re.compile(
+        r'(?:\[MC\] Running on https?://[^:]+:|Running on https?://[^:]+:|[Ll]istening on (?:port |localhost:)|'
+        r'[Ss]erver (?:started|running) on (?:port )?|:)(\d{2,5})'
+    )
+
+    def _read(stream):
+        try:
+            for raw in stream:
+                try:
+                    line = raw.decode('utf-8', errors='replace').strip()
+                except Exception:
+                    continue
+                m = _port_re.search(line)
+                if m:
+                    detected = int(m.group(1))
+                    # sanity check — ignore well-known non-app ports
+                    if 1024 <= detected <= 65535 and detected != 8080:
+                        svc = app.config.get('running_services', {}).get(module_name)
+                        if svc and svc.get('port') != detected:
+                            svc['port'] = detected
+                        return  # found it, stop reading
+        except Exception:
+            pass
+
+    for stream in (proc.stdout, proc.stderr):
+        if stream:
+            t = threading.Thread(target=_read, args=(stream,), daemon=True)
+            t.start()
+
+
+def launch_addon(module_name: str, extract_dir: Path):
+    """
+    Detect and launch the addon entry point.
+    Returns a dict describing the result including a proxy_url.
+    """
+    ep = detect_entry_point(extract_dir)
+    if ep is None:
+        return {'status': 'no_entry_point', 'message': 'No recognised entry-point file found'}
+
+    if ep['type'] == 'html':
+        # Static HTML — served directly by Flask, no subprocess
+        return {
+            'status': 'html',
+            'entry_point': ep['file'].name,
+            'url': ep['html_url'],
+            'proxy_url': ep['html_url'],
+            'message': f"Static app — open {ep['file'].name} in the browser",
+        }
+
+    # Assign a free port — we pass it to the subprocess but also sniff its
+    # actual output in case the app ignores the env var.
+    try:
+        port = _find_free_port()
+    except RuntimeError as e:
+        return {'status': 'error', 'message': str(e)}
+
+    cmd = list(ep['cmd'])
+    env = os.environ.copy()
+    env['PORT'] = str(port)          # honoured by many frameworks
+
+    if ep['type'] == 'php':
+        cmd = ['php', '-S', f'localhost:{port}', ep['file'].name]
+    elif ep['type'] in ('python', 'python_module'):
+        env['FLASK_RUN_PORT'] = str(port)
+        env['FLASK_RUN_HOST'] = '0.0.0.0'
+
+        # ── Port-injection wrapper ────────────────────────────────────────────
+        # Many Flask apps call app.run() with no arguments (defaulting to 5000).
+        # We write a tiny launcher that monkeypatches flask.Flask.run so the
+        # assigned port is always used, regardless of what the module does.
+        entry_file = str(ep['file']).replace('\\', '\\\\')
+        wrapper_src = f'''import os, sys
+_PORT = int(os.environ.get('PORT', {port}))
+# Force Flask to bind to our assigned port
+try:
+    import flask as _flask
+    _orig_run = _flask.Flask.run
+    def _patched_run(self, host=None, port=None, debug=None, **kw):
+        print(f"[MC] Running on http://localhost:{{_PORT}}", flush=True)
+        _orig_run(self, host=host or '0.0.0.0', port=_PORT, debug=False, **kw)
+    _flask.Flask.run = _patched_run
+except ImportError:
+    pass
+# Run the actual entry point
+import runpy
+sys.argv[0] = r'{entry_file}'
+runpy.run_path(r'{entry_file}', run_name='__main__')
+'''
+        wrapper_path = ep['working_dir'] / '_mc_launcher.py'
+        try:
+            wrapper_path.write_text(wrapper_src, encoding='utf-8')
+            cmd = [sys.executable, '_mc_launcher.py']
+        except Exception:
+            pass  # fall back to running entry directly
+
+    proxy_url = f'/addons/modules/{module_name}/app/'
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(ep['working_dir']),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+        app.config.setdefault('running_services', {})[module_name] = {
+            'process': proc,
+            'pid': proc.pid,
+            'port': port,            # may be updated by _sniff_port
+            'start_time': datetime.now().isoformat(),
+            'command': cmd,
+            'entry_point': ep['file'].name,
+            'type': ep['type'],
+            'proxy_url': proxy_url,
+        }
+        # Start background reader so we detect the real bound port
+        _sniff_port(module_name, proc, port)
+        return {
+            'status': 'started',
+            'pid': proc.pid,
+            'port': port,
+            'entry_point': ep['file'].name,
+            'type': ep['type'],
+            'proxy_url': proxy_url,
+            'message': f"Started {ep['file'].name} (PID {proc.pid})",
+        }
+    except FileNotFoundError:
+        runtime = {'python': 'Python', 'php': 'PHP', 'node': 'Node.js', 'executable': ''}.get(ep['type'], ep['type'])
+        return {
+            'status': 'error',
+            'message': f'{runtime} runtime not found — cannot execute {ep["file"].name}',
+        }
+    except Exception as exc:
+        return {'status': 'error', 'message': str(exc)}
+
+
+
 @app.route('/addons/modules/<module_name>/start', methods=['POST'])
 def addons_module_start(module_name):
-    """Start a module service"""
+    """Start a module service by auto-detecting its entry point."""
+    extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
+    if not extract_dir.exists():
+        return jsonify({'error': f'Module not found: {module_name}'}), 404
+
+    # Check if already running
+    running_services = app.config.get('running_services', {})
+    svc = running_services.get(module_name)
+    if svc:
+        proc = svc.get('process')
+        if proc and proc.poll() is None:  # still alive
+            return jsonify({'message': f'Service already running (PID: {svc["pid"]})',
+                            'status': 'running', 'pid': svc['pid'],
+                            'proxy_url': svc.get('proxy_url', f'/addons/modules/{module_name}/app/')}), 200
+
+    result = launch_addon(module_name, extract_dir)
+
+    if result['status'] == 'started':
+        return jsonify({'message': result['message'], 'status': 'starting',
+                        'pid': result['pid'], 'port': result.get('port'),
+                        'entry_point': result['entry_point'],
+                        'proxy_url': result['proxy_url']}), 200
+    elif result['status'] == 'html':
+        return jsonify({'message': result['message'], 'status': 'html',
+                        'url': result['url'], 'proxy_url': result['proxy_url'],
+                        'entry_point': result['entry_point']}), 200
+    elif result['status'] == 'no_entry_point':
+        return jsonify({'error': result['message']}), 400
+    else:
+        return jsonify({'error': result['message']}), 500
+
+
+@app.route('/addons/modules/<module_name>/app/', defaults={'subpath': ''})
+@app.route('/addons/modules/<module_name>/app/<path:subpath>')
+def addons_module_proxy(module_name, subpath):
+    """Transparent reverse-proxy to a running addon subprocess."""
+    import requests as _requests
+    import socket as _socket
+
+    svc = app.config.get('running_services', {}).get(module_name)
+    if not svc:
+        return _proxy_not_running(module_name), 503
+
+    proc = svc.get('process')
+    if proc and proc.poll() is not None:
+        # Capture stderr for diagnosis
+        try:
+            err_out = proc.stderr.read().decode('utf-8', errors='replace')[-800:] if proc.stderr else ''
+        except Exception:
+            err_out = ''
+        return (f'<h2 style="font-family:Arial;color:#f44336">Module <b>{module_name}</b> crashed '
+                f'(exit {proc.returncode})</h2>'
+                f'<pre style="background:#111;color:#eee;padding:12px;border-radius:6px;'
+                f'white-space:pre-wrap">{err_out or "(no output)"}</pre>'
+                f'<p><a href="/addons/modules">⬅ Back</a></p>'), 503
+
+    stored_port = svc.get('port')
+    svc_type    = svc.get('type', 'python')
+
+    # ── Port discovery ────────────────────────────────────────────────────────
+    # Priority: (1) stored/sniffed port, (2) type-default ports that are NOT
+    # already owned by another running module.  We never fall back to a port
+    # that belongs to a different module (fixes cross-module bleed-over).
+    def _port_open(p):
+        try:
+            with _socket.create_connection(('localhost', p), timeout=0.4):
+                return True
+        except Exception:
+            return False
+
+    # Ports owned by OTHER running modules — never touch these
+    other_ports = {
+        v.get('port')
+        for k, v in app.config.get('running_services', {}).items()
+        if k != module_name and v.get('port')
+    }
+
+    # Type-appropriate defaults for apps that ignore the PORT env var
+    _TYPE_DEFAULTS = {
+        'python':        [5000, 8000, 5001],
+        'python_module': [5000, 8000, 5001],
+        'node':          [3000, 8000, 4000],
+        'php':           [],        # PHP built-in server always uses assigned port
+    }
+    type_defaults = [p for p in _TYPE_DEFAULTS.get(svc_type, []) if p not in other_ports]
+
+    candidate_ports = []
+    if stored_port:
+        candidate_ports.append(stored_port)
+    for p in type_defaults:
+        if p not in candidate_ports:
+            candidate_ports.append(p)
+
+    live_port = None
+    for p in candidate_ports:
+        if _port_open(p):
+            live_port = p
+            break
+
+    if live_port is None:
+        return _proxy_starting(module_name, stored_port, subpath), 202
+
+    # Update stored port when we discovered a different real port
+    if live_port != stored_port:
+        svc['port'] = live_port
+
+    qs = ('?' + request.query_string.decode('utf-8')) if request.query_string else ''
+    target = f'http://localhost:{live_port}/{subpath}{qs}'
+
     try:
-        extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
-        
-        if not extract_dir.exists():
-            return {'error': f'Module not found: {module_name}'}, 404
-        
-        # Check if already running
-        import psutil
-        running_processes = []
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                if proc.info['cmdline'] and any(module_name in str(cmd) for cmd in proc.info['cmdline']):
-                    running_processes.append(proc.info)
-            except:
-                pass
-        
-        if running_processes:
-            return {'message': f'Service already running (PID: {running_processes[0]["pid"]})', 'status': 'running', 'pid': running_processes[0]['pid']}
-        
-        # Detect how to start the service
-        import subprocess
-        import threading
-        
-        # Look for startup scripts or main files
-        startup_commands = []
-        
-        # Python modules
-        if (extract_dir / 'main.py').exists():
-            startup_commands.append([sys.executable, 'main.py'])
-        elif (extract_dir / 'app.py').exists():
-            startup_commands.append([sys.executable, 'app.py'])
-        elif (extract_dir / 'run.py').exists():
-            startup_commands.append([sys.executable, 'run.py'])
-        elif (extract_dir / '__main__.py').exists():
-            startup_commands.append([sys.executable, '-m', module_name])
-        
-        # Node.js
-        elif (extract_dir / 'server.js').exists():
-            startup_commands.append(['node', 'server.js'])
-        elif (extract_dir / 'app.js').exists():
-            startup_commands.append(['node', 'app.js'])
-        elif (extract_dir / 'index.js').exists():
-            startup_commands.append(['node', 'index.js'])
-        
-        # PHP
-        elif (extract_dir / 'index.php').exists():
-            startup_commands.append(['php', '-S', 'localhost:0', 'index.php'])
-        
-        if startup_commands:
-            cmd = startup_commands[0]
-            process = subprocess.Popen(cmd, cwd=str(extract_dir), 
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            # Store process info (in a real implementation, you'd use a proper process manager)
-            app.config.setdefault('running_services', {})[module_name] = {
-                'process': process,
-                'pid': process.pid,
-                'start_time': datetime.now(),
-                'command': cmd
-            }
-            
-            return {'message': f'Service started successfully (PID: {process.pid})', 'status': 'starting', 'pid': process.pid}
-        else:
-            return {'error': 'No suitable startup script found'}, 400
-            
-    except Exception as e:
-        return {'error': str(e)}, 500
+        resp = _requests.request(
+            method=request.method,
+            url=target,
+            headers={k: v for k, v in request.headers
+                     if k.lower() not in ('host', 'content-length')},
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False,
+            timeout=15,
+        )
+        excluded = {'content-encoding', 'transfer-encoding', 'connection', 'keep-alive'}
+        headers = [(k, v) for k, v in resp.headers.items() if k.lower() not in excluded]
+        return resp.content, resp.status_code, headers
+
+    except _requests.exceptions.ConnectionError:
+        return _proxy_starting(module_name, live_port, subpath), 202
+    except Exception as exc:
+        return f'<h2>Proxy error</h2><p>{exc}</p>', 500
+
+
+def _proxy_not_running(module_name):
+    return (f'<!DOCTYPE html><html><head>'
+            f'<meta http-equiv="refresh" content="3;url=/addons/modules/{module_name}/app/">'
+            f'<style>body{{font-family:Arial;background:#1a1a1a;color:#e0e0e0;padding:30px}}'
+            f'.btn{{display:inline-block;padding:8px 18px;border-radius:5px;background:#4CAF50;'
+            f'color:#fff;text-decoration:none;border:none;cursor:pointer;font-size:1em}}</style>'
+            f'</head><body>'
+            f'<h2>📦 Module <b>{module_name}</b> is not running</h2>'
+            f'<p>Starting it now…</p>'
+            f'<script>'
+            f'fetch("/addons/modules/{module_name}/start",{{method:"POST"}})'
+            f'.then(r=>r.json()).then(d=>{{ setTimeout(()=>location.reload(),2000); }});'
+            f'</script>'
+            f'<a href="/addons/modules" class="btn">⬅ Back to Modules</a>'
+            f'</body></html>')
+
+
+def _proxy_starting(module_name, port, subpath):
+    dest = f'/addons/modules/{module_name}/app/{subpath}'
+    return (f'<!DOCTYPE html><html><head>'
+            f'<meta http-equiv="refresh" content="2;url={dest}">'
+            f'<style>body{{font-family:Arial;background:#1a1a1a;color:#e0e0e0;padding:30px;text-align:center}}'
+            f'.spinner{{display:inline-block;width:40px;height:40px;border:4px solid #333;'
+            f'border-top-color:#4CAF50;border-radius:50%;animation:spin 0.8s linear infinite}}'
+            f'@keyframes spin{{to{{transform:rotate(360deg)}}}}</style></head><body>'
+            f'<div class="spinner"></div>'
+            f'<h2 style="margin-top:20px">⏳ Starting <b>{module_name}</b>…</h2>'
+            f'<p style="color:#888">Port {port} — auto-refreshing in 2 s</p>'
+            f'<p><a href="{dest}" style="color:#4CAF50">Refresh now</a> &nbsp;|&nbsp; '
+            f'<a href="/addons/modules" style="color:#888">⬅ Back</a></p>'
+            f'</body></html>')
+
+
+
+@app.route('/addons/modules/<module_name>/status')
+def addons_module_status(module_name):
+    """Return running status of an addon subprocess."""
+    svc = app.config.get('running_services', {}).get(module_name)
+    if not svc:
+        return jsonify({'status': 'stopped', 'pid': None, 'port': None})
+    proc = svc.get('process')
+    alive = proc and proc.poll() is None
+    return jsonify({
+        'status': 'running' if alive else 'stopped',
+        'pid': svc.get('pid') if alive else None,
+        'port': svc.get('port') if alive else None,
+        'entry_point': svc.get('entry_point'),
+        'proxy_url': svc.get('proxy_url') if alive else None,
+        'start_time': svc.get('start_time'),
+    })
+
 
 @app.route('/addons/modules/<module_name>/stop', methods=['POST'])
 def addons_module_stop(module_name):
@@ -10932,51 +7574,78 @@ def addons_module_stop(module_name):
         except subprocess.TimeoutExpired:
             process.kill()
         
-        # Remove from running services
+        # Remove from running services and release reserved port
+        port = service_info.get('port')
         del running_services[module_name]
+        if port:
+            app.config.get('_reserved_ports', set()).discard(port)
         
         return {'message': 'Service stopped successfully', 'status': 'stopped'}
         
     except Exception as e:
         return {'error': str(e)}, 500
 
-@app.route('/addons/modules/<module_name>/status')
-def addons_module_status(module_name):
-    """Get status of a module service"""
+@app.route('/addons/modules/<module_name>/delete', methods=['POST'])
+def addons_module_delete(module_name):
+    """Stop and permanently delete a single installed addon module."""
+    import shutil
+
     try:
+        # Stop running service first
         running_services = app.config.get('running_services', {})
-        service_info = running_services.get(module_name)
-        
-        if service_info:
-            process = service_info['process']
-            if process.poll() is None:  # Still running
-                return {
-                    'status': 'running',
-                    'pid': process.pid,
-                    'start_time': service_info['start_time'].isoformat(),
-                    'command': service_info['command']
-                }
-            else:
-                # Process ended, clean up
-                del running_services[module_name]
-        
-        # Check if process is still running by name
-        import psutil
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-            try:
-                if proc.info['cmdline'] and any(module_name in str(cmd) for cmd in proc.info['cmdline']):
-                    return {
-                        'status': 'running',
-                        'pid': proc.info['pid'],
-                        'command': proc.info['cmdline']
-                    }
-            except:
-                pass
-        
-        return {'status': 'stopped'}
-        
+        svc = running_services.get(module_name)
+        if svc:
+            proc = svc.get('process')
+            if proc:
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=5)
+                except Exception:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+            if svc:
+                app.config.get('_reserved_ports', set()).discard(svc.get('port'))
+            running_services.pop(module_name, None)
+
+        # Locate and remove the extracted directory
+        extract_dirs = [
+            app.config['UPLOAD_FOLDER'] / 'extracted',
+            Path(app.root_path) / '.claude' / 'worktrees' / 'cool-elbakyan' / 'data' / 'uploads' / 'extracted',
+        ]
+        deleted = False
+        for base in extract_dirs:
+            candidate = base / module_name
+            if candidate.exists() and candidate.is_dir():
+                shutil.rmtree(candidate)
+                deleted = True
+                break
+            # case-insensitive match
+            if base.exists():
+                for d in base.iterdir():
+                    if d.is_dir() and d.name.lower() == module_name.lower():
+                        shutil.rmtree(d)
+                        deleted = True
+                        break
+            if deleted:
+                break
+
+        # Also remove the launcher wrapper if present
+        for base in extract_dirs:
+            for launcher in (base / module_name / '_mc_launcher.py',):
+                try:
+                    if launcher.exists():
+                        launcher.unlink()
+                except Exception:
+                    pass
+
+        if deleted:
+            return {'success': True, 'message': f'{module_name} deleted successfully'}
+        return {'success': False, 'error': 'Module directory not found'}, 404
+
     except Exception as e:
-        return {'error': str(e)}, 500
+        return {'success': False, 'error': str(e)}, 500
 
 @app.route('/addons/modules/delete_all', methods=['POST'])
 def delete_all_modules():
@@ -11264,7 +7933,7 @@ def resources_list():
 
     """Simple UI for uploading and managing reference/template/example files."""
 
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ECHO_RESOURCES_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')))
+    return render_resources_page()
 
 
 
@@ -13847,7 +10516,7 @@ def api_echo_models():
 @requires_permission('training')
 def echo_train_page():
 
-    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',ECHO_TRAINING_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')))
+    return render_echo_training_page()
 
 
 
