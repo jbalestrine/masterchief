@@ -453,6 +453,7 @@ class GitHubIntegration:
                     'path': content.path,
                     'type': content.type,  # 'file' or 'dir'
                     'size': content.size if hasattr(content, 'size') else 0,
+                    'last_modified': 'N/A',  # Placeholder for last modified date
                     'download_url': content.download_url if hasattr(content, 'download_url') else None,
                     'url': content.url if hasattr(content, 'url') else None,
                     'sha': content.sha if hasattr(content, 'sha') else None
