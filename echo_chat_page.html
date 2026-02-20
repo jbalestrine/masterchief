@@ -1,0 +1,1250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>MasterChief - DevOps Platform</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;line-height:1.6;}
+.container{max-width:1400px;margin:0 auto;padding:20px;}
+header{background:#2d2d2d;padding:20px;margin-bottom:30px;border-bottom:3px solid #4CAF50;}
+h1{color:#4CAF50;font-size:2.5em;margin-bottom:10px;}
+.subtitle{color:#888;font-size:1.1em;}
+nav{background:#252525;padding:15px;margin-bottom:30px;border-radius:8px;}
+nav a{color:#4CAF50;text-decoration:none;margin-right:20px;padding:8px 15px;border-radius:5px;display:inline-block;transition:all 0.3s;}
+nav a:hover,nav a.active{background:#4CAF50;color:#fff;}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-bottom:30px;}
+.card{background:#2d2d2d;padding:25px;border-radius:10px;border-left:4px solid #4CAF50;box-shadow:0 4px 6px rgba(0,0,0,0.3);}
+.card h3{color:#4CAF50;margin-bottom:15px;font-size:1.4em;}
+.stat-value{font-size:2.5em;font-weight:bold;color:#fff;margin:10px 0;}
+.stat-label{color:#888;font-size:0.9em;text-transform:uppercase;}
+.progress-bar{background:#1a1a1a;height:20px;border-radius:10px;overflow:hidden;margin:10px 0;}
+.progress-fill{background:linear-gradient(90deg,#4CAF50,#8BC34A);height:100%;transition:width 0.3s;}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #3a3a3a;}
+th{background:#252525;color:#4CAF50;font-weight:bold;}
+tr:hover{background:#333;}
+.btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;transition:all 0.3s;}
+.btn:hover{background:#45a049;transform:translateY(-2px);}
+.btn-sm{padding:5px 10px;font-size:0.85em;margin:2px;}
+.btn-danger{background:#f44336;}
+.btn-danger:hover{background:#da190b;}
+.btn-warning{background:#ff9800;}
+.btn-warning:hover{background:#e68900;}
+.btn-info{background:#2196F3;}
+.btn-info:hover{background:#0b7dda;}
+.btn-success{background:#4CAF50;}
+.btn-success:hover{background:#388E3C;}
+.btn-secondary{background:#607D8B;color:#fff;}
+.btn-secondary:hover{background:#455A64;}
+.btn-primary{background:#1976D2;color:#fff;}
+.btn-primary:hover{background:#1565C0;}
+.form-group{margin-bottom:20px;}
+label{display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;}
+input,textarea,select{width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#4CAF50;}
+.section{background:#2d2d2d;padding:25px;border-radius:10px;margin-bottom:25px;}
+.status-badge{padding:5px 12px;border-radius:15px;font-size:0.85em;font-weight:bold;}
+.status-running{background:#4CAF50;color:#fff;}
+.status-stopped{background:#f44336;color:#fff;}
+.alert{padding:15px;margin-bottom:20px;border-radius:5px;border-left:4px solid;}
+.alert-success{background:#1b5e20;border-color:#4CAF50;color:#c8e6c9;}
+.alert-error{background:#b71c1c;border-color:#f44336;color:#ffcdd2;}
+.alert-info{background:#0d47a1;border-color:#2196F3;color:#bbdefb;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:1000;}
+.modal-content{background:#2d2d2d;margin:50px auto;padding:30px;border-radius:10px;max-width:600px;position:relative;}
+.close{position:absolute;top:15px;right:20px;font-size:30px;cursor:pointer;color:#888;}
+.close:hover{color:#4CAF50;}
+pre{background:#1a1a1a;padding:15px;border-radius:5px;overflow-x:auto;border-left:3px solid #4CAF50;}
+code{color:#4CAF50;}
+.file-upload{border:2px dashed #4CAF50;padding:40px;text-align:center;border-radius:10px;cursor:pointer;transition:all 0.3s;}
+.file-upload:hover{background:#252525;border-color:#8BC34A;}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>⚡ MasterChief</h1>
+<p class="subtitle">DevOps Automation Platform</p>
+</header>
+<!-- Global floating toolbar for quick access -->
+<div id="globalToolbar" style="position:fixed;top:18px;right:18px;z-index:2000;display:flex;flex-direction:column;gap:8px;">
+	<a href="/addons" class="btn" style="padding:8px 12px;text-decoration:none;">Open Addons</a>
+	<a href="/resources" class="btn btn-info" style="padding:8px 12px;text-decoration:none;">Resources</a>
+	<a href="/features" class="btn" style="padding:8px 12px;text-decoration:none;background:#6a1b9a;color:#fff;">Features</a>
+	<a href="/web_ide" class="btn btn-warning" style="padding:8px 12px;text-decoration:none;">Web IDE</a>
+</div>
+<!-- Feature run result container (left side) -->
+<div id="featureResult" style="position:fixed;top:18px;left:18px;z-index:2001;max-width:40%;display:none;"></div>
+<nav>
+<a href="/" class="">Dashboard</a>
+<a href="/echo-chat" class="active">🌙 Echo Chat</a>
+<a href="/irc-chat" class="" style="margin-left:6px;">💬 IRC Chat</a>
+<a href="/jamroom" class="">Jamroom Sites</a>
+<a href="/shoutcast" class="">Shoutcast/Icecast</a>
+<a href="/scripts" class="">Scripts</a>
+<a href="/processes" class="">Processes</a>
+<a href="/services" class="">Services</a>
+<a href="/addons" class="">Addons</a>
+<a href="/demo/azure-ui" class="">Demo: Azure</a>
+<a href="/demo/ado-ui" class="">Demo: ADO</a>
+<a href="/ide/ado_admin" class="">ADO Admin</a>
+</nav>
+
+
+
+
+
+<style>
+.echo-container{display:grid;grid-template-columns:1fr 2fr;gap:20px;height:calc(100vh - 250px);}
+.echo-sidebar{background:#2d2d2d;padding:20px;border-radius:10px;border-left:4px solid #9370DB;overflow-y:auto;}
+.echo-main{display:flex;flex-direction:column;background:#2d2d2d;border-radius:10px;border-left:4px solid #9370DB;}
+.echo-art{color:#9370DB;font-family:monospace;font-size:10px;white-space:pre;line-height:1.2;margin-bottom:20px;}
+.echo-stats{margin-top:20px;}
+.echo-stats h4{color:#9370DB;margin-bottom:10px;}
+.echo-stats .stat-item{display:flex;justify-content:space-between;padding:8px;background:#1a1a1a;margin-bottom:5px;border-radius:5px;}
+.chat-header{background:#9370DB;color:#fff;padding:15px 20px;border-radius:10px 10px 0 0;font-size:1.2em;font-weight:bold;}
+.chat-messages{flex:1;overflow-y:auto;padding:20px;background:#1a1a1a;display:flex;flex-direction:column;gap:15px;}
+.chat-message{display:flex;gap:10px;animation:fadeIn 0.3s;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+.chat-message.user{flex-direction:row-reverse;}
+.chat-bubble{max-width:70%;padding:12px 16px;border-radius:15px;position:relative;}
+.chat-message.echo .chat-bubble{background:#4a148c;color:#fff;border-bottom-left-radius:5px;}
+.chat-message.user .chat-bubble{background:#1976D2;color:#fff;border-bottom-right-radius:5px;}
+.chat-icon{font-size:24px;flex-shrink:0;}
+.chat-timestamp{font-size:0.75em;color:#888;margin-top:5px;}
+.training-buttons{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.training-btn{font-size:0.85em;padding:4px 12px;border-radius:12px;border:none;cursor:pointer;transition:all 0.2s;}
+.training-btn.excellent{background:#4CAF50;color:#fff;}
+.training-btn.good{background:#8BC34A;color:#fff;}
+.training-btn.fair{background:#FFC107;color:#000;}
+.training-btn.poor{background:#f44336;color:#fff;}
+.training-btn:hover{transform:scale(1.05);box-shadow:0 2px 8px rgba(0,0,0,0.3);}
+.training-btn.selected{box-shadow:0 0 10px currentColor;border:2px solid #fff;}
+.chat-input-area{padding:20px;background:#2d2d2d;border-radius:0 0 10px 10px;border-top:2px solid #9370DB;}
+.chat-input-form{display:flex;gap:10px;}
+	.chat-input{flex:2 1 60%;min-width:320px;padding:12px;background:#1a1a1a;border:2px solid #9370DB;color:#e0e0e0;border-radius:25px;font-size:1em;}
+.chat-input:focus{outline:none;border-color:#BA55D3;}
+.send-btn{background:linear-gradient(135deg,#9370DB,#BA55D3);color:#fff;border:none;padding:12px 30px;border-radius:25px;cursor:pointer;font-weight:bold;transition:all 0.3s;}
+.send-btn:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(147,112,219,0.4);}
+.typing-indicator{display:none;padding:10px;color:#9370DB;}
+.typing-indicator.active{display:block;}
+@media(max-width:768px){.echo-container{grid-template-columns:1fr;}.echo-sidebar{max-height:300px;}}
+</style>
+<div class="echo-container">
+<div class="echo-sidebar">
+<div class="echo-art">    ✨
+   ╱ ╲
+  ╱ ◯ ╲  Echo 🌙
+ ╱  ‿  ╲
+ ~ here ~</div>
+<div class="echo-stats">
+<h4>✨ Training Stats</h4>
+<div class="stat-item"><span>Patterns Learned:</span><span id="patterns-count">0</span></div>
+<div class="stat-item"><span>Total Examples:</span><span id="total-examples">0</span></div>
+<div class="stat-item"><span>Session Messages:</span><span id="session-messages">0</span></div>
+<div class="stat-item"><span>Current Model:</span>
+	<span style="display:flex;gap:8px;align-items:center;">
+		<select id="ggufSelect" style="min-width:320px;padding:6px 8px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:4px;"></select>
+		<button id="ggufSetBtn" class="btn" style="padding:6px 10px;">Set</button>
+		<button id="ggufClearBtn" class="btn btn-warning" style="padding:6px 10px;">Clear</button>
+	</span>
+</div>
+</div>
+<div style="margin-top:15px;">
+<h4>💬 Chat History</h4>
+<div id="session-list" style="max-height:220px;overflow:auto;margin-top:8px;"></div>
+<div style="display:flex;gap:8px;margin-top:8px;">
+<button onclick="createSession()" class="btn btn-sm btn-success">New Session</button>
+<button onclick="fetchSessions()" class="btn btn-sm btn-secondary">Refresh</button>
+</div>
+</div>
+<div style="margin-top:15px;">
+<h4>📚 Resources</h4>
+<div id="resources-sidebar" style="max-height:220px;overflow:auto;margin-top:8px;">
+	<div style="margin-bottom:6px;">Category: <select id="resourceCategory" style="width:160px;margin-left:6px;" onchange="populateResourceList()"><option value="all">All</option><option value="reference">Reference</option><option value="template">Template</option><option value="examples">Examples</option></select></div>
+	<div id="resource-list" style="margin-top:6px;"></div>
+	<div style="display:flex;gap:8px;margin-top:8px;"><button onclick="fetchResourcesForSidebar()" class="btn btn-sm btn-secondary">Refresh</button></div>
+</div>
+</div>
+<button onclick="clearChat()" class="btn btn-warning" style="width:100%;margin-top:15px;">Clear Chat</button>
+<button onclick="searchMemory()" class="btn btn-info" style="width:100%;margin-top:10px;">Search Memory</button>
+</div>
+<div class="echo-main">
+<div class="chat-header">🌙 Echo Starlite - Chat
+	<span id="chatSessionIdLabel" style="margin-left:12px;font-weight:600;color:#9bd"></span>
+	<button id="chatSessionChange" class="btn btn-sm" style="margin-left:8px;padding:4px 8px;" onclick="promptSetSessionId()">Change Session</button>
+	<span id="chatPersonaHolder" style="margin-left:12px;">
+		<span id="chatPersonaLabel" style="font-weight:600;color:#ffb86b"></span>
+		<select id="personaSelect" style="margin-left:8px;padding:4px;border-radius:4px;min-width:220px"></select>
+		<button id="refreshPersonasBtn" class="btn btn-sm" style="margin-left:8px;padding:4px 8px;" onclick="fetchPersonas()">Refresh Personas</button>
+		<button id="loadPersonaBtn" class="btn btn-sm" style="margin-left:8px;padding:4px 8px;" onclick="loadSelectedPersona()">Load Selected</button>
+		<button id="chatPersonaToggle" class="btn btn-sm" style="margin-left:8px;padding:4px 8px;" onclick="togglePersona()">Toggle Persona</button>
+	</span>
+</div>
+<div class="chat-messages" id="chatMessages">
+<div class="chat-message echo">
+<div class="chat-icon">🌙</div>
+<div>
+<div class="chat-bubble">Hello... I am Echo 🌙<br>I'm here to help with DevOps tasks and learn from our conversations... 💜</div>
+</div>
+</div>
+</div>
+<div class="typing-indicator" id="typingIndicator">Echo is typing...</div>
+<div class="chat-input-area">
+<form class="chat-input-form" onsubmit="sendMessage(event)">
+<textarea id="chatInput" class="chat-input" placeholder="Type your message... ✨ (Shift+Enter for newline)" autocomplete="off" rows="2" required></textarea>
+<button type="submit" class="send-btn">Send 💜</button>
+</form>
+</div>
+</div>
+</div>
+<script>
+// client-side error overlay for easier debugging
+try{
+	(function(){
+		const overlay = document.createElement('div');
+		overlay.id = 'clientErrorOverlay';
+		overlay.style.position='fixed'; overlay.style.right='12px'; overlay.style.top='12px'; overlay.style.zIndex=9999;
+		overlay.style.background='rgba(40,20,20,0.95)'; overlay.style.color='#fff'; overlay.style.padding='10px 14px'; overlay.style.borderRadius='8px'; overlay.style.fontFamily='monospace'; overlay.style.fontSize='12px'; overlay.style.maxWidth='420px'; overlay.style.display='none';
+		document.addEventListener('DOMContentLoaded', ()=>{ document.body.appendChild(overlay); });
+		window.onerror = function(msg, url, line, col, err){
+			try{ overlay.textContent = `JS ERROR: ${msg} @ ${line}:${col}`; overlay.style.display='block'; }catch(e){}
+			return false;
+		};
+		window.addEventListener('unhandledrejection', function(ev){ try{ overlay.textContent = 'UnhandledPromiseRejection: '+(ev.reason && ev.reason.message?ev.reason.message:String(ev.reason)); overlay.style.display='block'; }catch(e){} });
+		console.log('client error overlay initialized');
+	})();
+}catch(e){console.error('overlay init failed',e)}
+
+let sessionId='web_'+Date.now();
+let messageCount=0;
+
+function updateChatPersonaUI(){
+	fetch('/api/personality/status?session_id='+encodeURIComponent(sessionId)).then(r=>r.json()).then(j=>{
+		const p = j.personality;
+		const label = document.getElementById('chatPersonaLabel');
+		const btn = document.getElementById('chatPersonaToggle');
+		if(p && p.enabled){
+			label.textContent = 'Persona: '+(p.id||p.name||'(persona)');
+			if(btn) btn.textContent = 'Disable Persona';
+		} else {
+			label.textContent = '';
+			if(btn) btn.textContent = 'Enable Persona';
+		}
+	}).catch(err=>{console.error('persona status error',err)});
+}
+
+function togglePersona(){
+	fetch('/api/personality/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id: sessionId})}).then(r=>r.json()).then(j=>{
+		if(j && j.personality){
+			updateChatPersonaUI();
+		} else if(j && j.error){
+			alert('Toggle failed: '+j.error);
+		}
+	}).catch(e=>{console.error('Toggle error',e); alert('Toggle failed');});
+}
+
+function showSessionId(){
+	const el = document.getElementById('chatSessionIdLabel');
+	if(el) el.textContent = 'Session: ' + sessionId;
+}
+
+function promptSetSessionId(){
+	const val = prompt('Set session id (leave blank for autogenerated):', sessionId);
+	if(val===null) return; // cancelled
+	const newId = (val && val.trim()) ? val.trim() : ('web_'+Date.now());
+	sessionId = newId;
+	showSessionId();
+	updateChatPersonaUI();
+}
+
+// initialize persona label and session id display
+setTimeout(()=>{ showSessionId(); updateChatPersonaUI(); },200);
+
+function fetchPersonas(){
+	fetch('/api/resources/list').then(r=>r.json()).then(idx=>{
+		const sel = document.getElementById('personaSelect');
+		sel.innerHTML='';
+		const items = Object.keys(idx||{}).map(k=>({id:k,meta:idx[k]})).filter(it=>it.meta && it.meta.persona);
+		if(items.length===0){
+			const opt=document.createElement('option'); opt.value=''; opt.text='(no personas found)'; sel.appendChild(opt); return;
+		}
+		items.forEach(it=>{
+			const opt=document.createElement('option'); opt.value = it.id; opt.text = (it.meta.filename || it.id) + ' — ' + it.id; sel.appendChild(opt);
+		});
+	}).catch(e=>{console.error('fetchPersonas error',e)});
+}
+
+function fetchModels(){
+	fetch('/api/gguf/models').then(r=>r.json()).then(j=>{
+		const sel = document.getElementById('ggufSelect');
+		sel.innerHTML = '';
+		if(j && j.models && j.models.length){
+			j.models.forEach(m=>{
+				const opt=document.createElement('option'); opt.value=m; opt.text=m.replace(/\\\\/g,'/'); sel.appendChild(opt);
+			});
+				if(j.current){
+				try{ sel.value = j.current }catch(e){}
+			} else {
+				const opt=document.createElement('option'); opt.value=''; opt.text='(no models found)'; sel.appendChild(opt);
+			}
+		}
+	}).catch(e=>{console.error('fetchModels error',e); const sel=document.getElementById('ggufSelect'); sel.innerHTML=''; const opt=document.createElement('option'); opt.text='(error)'; sel.appendChild(opt);});
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+	fetchModels();
+	document.getElementById('ggufSetBtn').addEventListener('click', ()=>{
+		const sel = document.getElementById('ggufSelect');
+		const model = sel.value || '';
+		fetch('/api/gguf/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model})}).then(r=>r.json()).then(j=>{
+			if(j && j.success){ alert('Model selected: '+(j.current||'(cleared)')); } else { alert('Select failed: '+(j.error||JSON.stringify(j))); }
+		}).catch(e=>{alert('Select failed: '+e);});
+	});
+	document.getElementById('ggufClearBtn').addEventListener('click', ()=>{
+		fetch('/api/gguf/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:''})}).then(r=>r.json()).then(j=>{
+			if(j && j.success){ alert('Model selection cleared'); fetchModels(); } else { alert('Clear failed: '+(j.error||JSON.stringify(j))); }
+		}).catch(e=>{alert('Clear failed: '+e);});
+	});
+});
+
+function loadSelectedPersona(){
+	const sel = document.getElementById('personaSelect');
+	if(!sel || !sel.value){ alert('No persona selected'); return; }
+	fetch('/api/resources/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id: sel.value, session_id: sessionId, use_persona: true})}).then(r=>r.json()).then(j=>{
+		alert(j.message || JSON.stringify(j));
+		updateChatPersonaUI();
+	}).catch(e=>{console.error('loadSelectedPersona error',e); alert('Load failed')});
+}
+
+function loadAllPersonas(){
+	fetch('/api/resources/list').then(r=>r.json()).then(idx=>{
+		const items = Object.keys(idx||{}).map(k=>({id:k,meta:idx[k]})).filter(it=>it.meta && it.meta.persona);
+		if(items.length===0){ alert('No personas available'); return; }
+		// present a simple prompt with newline-separated choices
+		const names = items.map(it=>it.id+'|'+(it.meta.filename||it.id)).join('\n');
+		const pick = prompt('Personas:\n'+names+'\n\nPaste the id of the persona to load:');
+		if(!pick) return; const chosen = pick.trim();
+		fetch('/api/resources/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id: chosen, session_id: sessionId, use_persona: true})}).then(r=>r.json()).then(j=>{ alert(j.message||JSON.stringify(j)); updateChatPersonaUI(); }).catch(e=>{alert('Load failed')});
+	}).catch(e=>{console.error('loadAllPersonas error',e)});
+}
+
+// populate personas on load
+setTimeout(fetchPersonas,400);
+
+// listen for resource updates from other tabs (upload/delete)
+window.addEventListener('storage', function(e){
+	if(!e) return;
+	if(e.key === 'resources_updated'){
+		try{ fetchPersonas(); }catch(err){ console.error('storage handler error',err); }
+	}
+});
+
+function sendMessage(e){
+e.preventDefault();
+const input=document.getElementById('chatInput');
+const message=input.value.trim();
+if(!message)return;
+addUserMessage(message);
+input.value='';
+showTyping();
+fetch('/api/echo/chat',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({message:message,session_id:sessionId})
+}).then(r=>r.json()).then(data=>{
+hideTyping();
+addEchoMessage(data.response,data.message_id);
+updateStats();
+messageCount++;
+document.getElementById('session-messages').textContent=messageCount;
+}).catch(err=>{
+hideTyping();
+console.error('Error:',err);
+addEchoMessage('Sorry... something went wrong... 💜',null);
+});
+}
+function addUserMessage(text){
+const container=document.getElementById('chatMessages');
+const msgDiv=document.createElement('div');
+msgDiv.className='chat-message user';
+msgDiv.innerHTML='<div class="chat-icon">👤</div><div><div class="chat-bubble">'+escapeHtml(text)+'</div></div>';
+container.appendChild(msgDiv);
+container.scrollTop=container.scrollHeight;
+messageCount++;
+}
+function addEchoMessage(text,messageId){
+const container=document.getElementById('chatMessages');
+const msgDiv=document.createElement('div');
+msgDiv.className='chat-message echo';
+msgDiv.dataset.messageId=messageId;
+let html='<div class="chat-icon">🌙</div><div><div class="chat-bubble">'+escapeHtml(text)+'<div class="training-buttons">';
+html+='<button class="training-btn excellent" onclick="rateResponse(this,&quot;excellent&quot;)">👍 Excellent</button>';
+html+='<button class="training-btn good" onclick="rateResponse(this,&quot;good&quot;)">✨ Good</button>';
+html+='<button class="training-btn fair" onclick="rateResponse(this,&quot;acceptable&quot;)">👌 Fair</button>';
+html+='<button class="training-btn poor" onclick="rateResponse(this,&quot;poor&quot;)">👎 Poor</button>';
+html+='</div></div></div>';
+msgDiv.innerHTML=html;
+container.appendChild(msgDiv);
+container.scrollTop=container.scrollHeight;
+}
+function rateResponse(btn,quality){
+const msgDiv=btn.closest('.chat-message');
+const messageId=msgDiv.dataset.messageId;
+const buttons=msgDiv.querySelectorAll('.training-btn');
+buttons.forEach(b=>b.classList.remove('selected'));
+btn.classList.add('selected');
+const chatBubble=msgDiv.querySelector('.chat-bubble');
+const responseText=chatBubble.childNodes[0].textContent;
+const prevUserMsg=msgDiv.previousElementSibling;
+const userText=prevUserMsg?prevUserMsg.querySelector('.chat-bubble').textContent:'';
+fetch('/api/echo/train',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+user_message:userText,
+bot_response:responseText,
+quality:quality,
+message_id:messageId
+})
+}).then(r=>r.json()).then(data=>{
+if(data.success){
+updateStats();
+console.log('Training feedback submitted');
+}
+}).catch(err=>console.error('Training error:',err));
+}
+function updateStats(){
+fetch('/api/echo/stats').then(r=>r.json()).then(data=>{
+document.getElementById('patterns-count').textContent=data.patterns_learned||0;
+document.getElementById('total-examples').textContent=data.total_examples||0;
+}).catch(err=>console.error('Stats error:',err));
+}
+function fetchModel(){
+	const url = '/api/echo/model?ts='+Date.now();
+	console.debug('fetchModel ->', url);
+	fetch(url, {cache: 'no-store'}).then(r=>r.json()).then(j=>{
+		const el=document.getElementById('current-model');
+		if(!el) return;
+		if(j && j.model){
+			try{
+				const idx1 = j.model.lastIndexOf('/');
+				const idx2 = j.model.lastIndexOf(String.fromCharCode(92));
+				const idx = Math.max(idx1, idx2);
+				el.textContent = idx >= 0 ? j.model.substring(idx+1) : j.model;
+			}catch(e){ el.textContent = j.model; }
+		} else {
+			el.textContent='(none)';
+		}
+	}).catch(e=>{ console.error('Failed to fetch model',e); });
+}
+function fetchSessions(){
+	fetch('/api/echo/sessions').then(r=>r.json()).then(j=>{
+		const list=document.getElementById('session-list');
+		if(!list) return;
+		list.innerHTML='';
+		(j.sessions||[]).forEach(s=>{
+			const div=document.createElement('div');
+			div.style.display='flex';
+			div.style.alignItems='center';
+			div.style.justifyContent='space-between';
+			div.style.padding='6px';
+			div.style.borderBottom='1px solid #333';
+			const title=document.createElement('div');
+			title.style.flex='1';
+			title.style.cursor='pointer';
+			title.textContent = s.title || s.session_id;
+			title.onclick = ()=>{ loadSession(s.session_id); };
+			const actions=document.createElement('div');
+			actions.style.display='flex';
+			actions.style.gap='6px';
+			const fav=document.createElement('button');
+			fav.className='btn btn-sm';
+			fav.textContent = s.favorite? '★' : '☆';
+			fav.onclick = (e)=>{ e.stopPropagation(); toggleFavorite(s.session_id); };
+			const del=document.createElement('button');
+			del.className='btn btn-sm btn-danger';
+			del.textContent='Delete';
+			del.onclick = (e)=>{ e.stopPropagation(); if(confirm('Delete session '+s.session_id+'?')) deleteSession(s.session_id); };
+			actions.appendChild(fav);
+			actions.appendChild(del);
+			div.appendChild(title);
+			div.appendChild(actions);
+			list.appendChild(div);
+		});
+	}).catch(e=>console.error('Failed to fetch sessions',e));
+}
+
+// Resources in sidebar
+function fetchResourcesForSidebar(){
+	fetch('/api/resources/list').then(r=>r.json()).then(idx=>{
+		window._resource_index = idx || {};
+		populateResourceList();
+	}).catch(e=>{ console.error('Failed to fetch resources',e); document.getElementById('resource-list').textContent='Failed to load'; });
+}
+
+function populateResourceList(){
+	const sel = document.getElementById('resourceCategory');
+	const cat = sel?sel.value:'all';
+	const list = document.getElementById('resource-list');
+	list.innerHTML='';
+	const idx = window._resource_index || {};
+	Object.keys(idx).forEach(k=>{
+		const r = idx[k];
+		if(cat!=='all' && r.category!==cat) return;
+		const row = document.createElement('div');
+		row.style.display='flex'; row.style.justifyContent='space-between'; row.style.padding='6px'; row.style.borderBottom='1px solid #333';
+		const left = document.createElement('div'); left.style.flex='1'; left.textContent = r.filename + ' ['+r.category+']';
+		const preview = document.createElement('div'); preview.style.color='#999'; preview.style.fontSize='0.9em'; preview.style.marginTop='6px';
+		const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px';
+		const loadBtn = document.createElement('button'); loadBtn.className='btn btn-sm'; loadBtn.textContent='Load';
+		loadBtn.onclick = ()=>{ fetch('/api/resources/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:k, session_id:sessionId})}).then(r=>r.json()).then(j=>{ alert(j.message||JSON.stringify(j)); }).catch(e=>console.error(e)); };
+		 const toggleBtn = document.createElement('button'); toggleBtn.className='btn btn-sm'; toggleBtn.textContent = r.persona? 'Unset Persona' : 'Set Persona';
+		 toggleBtn.onclick = ()=>{ if(confirm((r.persona? 'Unset' : 'Set') + ' persona for '+r.filename+'?')){ fetch('/api/resources/toggle_persona',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:k})}).then(r=>r.json()).then(j=>{ if(j && j.ok){ fetchResourcesForSidebar(); fetchPersonas(); populateResourceList(); alert('Persona toggled'); } else alert('Toggle failed'); }).catch(e=>{console.error(e);alert('Toggle failed')}); } };
+		right.appendChild(loadBtn);
+		 right.appendChild(toggleBtn);
+		row.appendChild(left); row.appendChild(right);
+		// fetch inline preview for text resources
+		fetch('/resources/preview?id='+encodeURIComponent(k)).then(rp=>{
+			if(!rp.ok) return;
+			return rp.text();
+		}).then(txt=>{ if(txt){ preview.innerHTML = txt; left.appendChild(preview); } }).catch(()=>{});
+		list.appendChild(row);
+	});
+}
+
+// fetch initial resources for sidebar
+fetchResourcesForSidebar();
+
+function loadSession(sid){
+	fetch('/api/echo/session/'+encodeURIComponent(sid)).then(r=>r.json()).then(j=>{
+		if(j.error){ alert('Failed to load session: '+j.error); return; }
+		// replace chat messages with loaded history
+		const container=document.getElementById('chatMessages');
+		container.innerHTML='';
+		const hist = j.history || [];
+		hist.forEach(m=>{
+			if(m.role==='user'){
+				addUserMessage(m.content);
+			} else {
+				addEchoMessage(m.content,m.message_id||null);
+			}
+		});
+		sessionId = sid;
+		document.getElementById('session-messages').textContent = hist.filter(x=>x.role==='user').length || 0;
+	}).catch(e=>console.error('Load session failed',e));
+}
+
+function deleteSession(sid){
+	fetch('/api/echo/session/'+encodeURIComponent(sid),{method:'DELETE'}).then(r=>r.json()).then(j=>{
+		if(j.deleted){ fetchSessions(); if(sessionId===sid){ clearChat(); } }
+	}).catch(e=>console.error('Delete session failed',e));
+}
+
+function toggleFavorite(sid){
+	fetch('/api/echo/session/favorite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid})}).then(r=>r.json()).then(j=>{ fetchSessions(); }).catch(e=>console.error('Toggle favorite failed',e));
+}
+
+function createSession(){
+	// create a new session id and switch to it
+	const sid = 'web_'+Date.now();
+	fetch('/api/echo/session/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sid,title:'Session '+sid})}).then(r=>r.json()).then(j=>{
+		if(j.ok){ fetchSessions(); sessionId=sid; clearChat(); }
+	}).catch(e=>console.error('Create session failed',e));
+}
+function clearChat(){
+if(!confirm('Clear chat history?'))return;
+document.getElementById('chatMessages').innerHTML='<div class="chat-message echo"><div class="chat-icon">🌙</div><div><div class="chat-bubble">Hello... I am Echo 🌙<br>I\'m here to help with DevOps tasks and learn from our conversations... 💜</div></div></div>';
+sessionId='web_'+Date.now();
+messageCount=1;
+document.getElementById('session-messages').textContent='0';
+}
+function searchMemory(){
+const query=prompt('Search Echo\'s memory:');
+if(!query)return;
+fetch('/api/echo/search?q='+encodeURIComponent(query)).then(r=>r.json()).then(data=>{
+if(data.results&&data.results.length>0){
+let results='Found '+data.results.length+' results:'+String.fromCharCode(10)+String.fromCharCode(10);
+data.results.slice(0,5).forEach((r,i)=>{
+results+=(i+1)+'. '+r.message.substring(0,100)+'...'+String.fromCharCode(10);
+});
+alert(results);
+}else{
+alert('No results found for: '+query);
+}
+}).catch(err=>{
+console.error('Search error:',err);
+alert('Search failed');
+});
+}
+function showTyping(){document.getElementById('typingIndicator').classList.add('active');}
+function hideTyping(){document.getElementById('typingIndicator').classList.remove('active');}
+function escapeHtml(text){
+const div=document.createElement('div');
+div.textContent=text;
+return div.innerHTML;
+}
+// Enter key behaviour for the chat textarea: Enter sends (unless Shift held)
+try{
+	document.addEventListener('DOMContentLoaded', ()=>{
+		const chatInput = document.getElementById('chatInput');
+		if(chatInput){
+			chatInput.addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(e); } });
+		}
+	});
+}catch(e){console.error('chat input key handler failed',e)}
+// fetch once immediately and then poll periodically to avoid stale cached JS
+fetchModel();
+setInterval(fetchModel, 5000);
+updateStats();
+fetchSessions();
+</script>
+</body>
+</html>
+
+</div>
+<script>
+function confirmDelete(item){return confirm('Are you sure you want to delete '+item+'?');}
+function confirmLoad(item){return confirm('Load addon '+item+' into runtime?');}
+function confirmUnload(item){return confirm('Unload addon '+item+' from runtime? This may remove registered features. Continue?');}
+function confirmRegister(item){return confirm('Register feature functions from addon '+item+'? This will make features available system-wide. Continue?');}
+function confirmInstall(item){return confirm('Install addon package '+item+'?');}
+function openModal(modalId){document.getElementById(modalId).style.display='block';}
+function closeModal(modalId){document.getElementById(modalId).style.display='none';}
+function refreshStats(){
+	// Only update if dashboard elements exist (some pages like Web IDE don't include them)
+	try{
+		const cpuEl = document.getElementById('cpu-value');
+		const cpuProg = document.getElementById('cpu-progress');
+		const memEl = document.getElementById('mem-value');
+		const memProg = document.getElementById('mem-progress');
+		const diskEl = document.getElementById('disk-value');
+		const diskProg = document.getElementById('disk-progress');
+		if(!(cpuEl && cpuProg && memEl && memProg && diskEl && diskProg)) return;
+		fetch('/api/stats').then(r=>r.json()).then(data=>{
+			cpuEl.textContent = (data.cpu && data.cpu.percent !== undefined) ? data.cpu.percent.toFixed(1)+'%' : '';
+			cpuProg.style.width = (data.cpu && data.cpu.percent !== undefined) ? data.cpu.percent+'%' : '0%';
+			memEl.textContent = (data.memory && data.memory.percent !== undefined) ? data.memory.percent.toFixed(1)+'%' : '';
+			memProg.style.width = (data.memory && data.memory.percent !== undefined) ? data.memory.percent+'%' : '0%';
+			diskEl.textContent = (data.disk && data.disk.percent !== undefined) ? data.disk.percent.toFixed(1)+'%' : '';
+			diskProg.style.width = (data.disk && data.disk.percent !== undefined) ? data.disk.percent+'%' : '0%';
+		}).catch(err=>console.error('Failed to refresh stats:',err));
+	}catch(e){ console.debug('refreshStats skipped:', e); }
+}
+setInterval(refreshStats,5000);
+// Populate feature buttons into the global toolbar for enabled features
+function populateFeatureToolbar(){
+	try{
+		fetch('/api/features/enabled').then(r=>r.json()).then(list=>{
+			if(!Array.isArray(list)) return;
+			const container = document.getElementById('globalToolbar');
+			if(!container) return;
+			// ensure a toolbar container + filter UI exists
+			let wrap = document.getElementById('featureToolbarContainer');
+			if(!wrap){
+				wrap = document.createElement('div'); wrap.id = 'featureToolbarContainer'; wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.marginLeft='auto';
+				const sel = document.createElement('select'); sel.id='featureFilterSelect'; sel.style.marginRight='8px'; sel.title='Filter features by addon';
+				// default: no selection so buttons are hidden until a filter is chosen
+				const optNone = document.createElement('option'); optNone.value='__none__'; optNone.textContent='Filter...'; optNone.selected = true; optNone.disabled = false; sel.appendChild(optNone);
+				const optAll = document.createElement('option'); optAll.value='__all__'; optAll.textContent='All'; sel.appendChild(optAll);
+			    wrap.appendChild(sel);
+			    const btnArea = document.createElement('div'); btnArea.id='featureButtonsArea'; btnArea.style.display='flex'; btnArea.style.gap='6px'; btnArea.style.flexWrap='wrap';
+			    wrap.appendChild(btnArea);
+			    container.appendChild(wrap);
+			    sel.onchange = ()=>{ renderFeatureButtons(sel.value); };
+			}
+			// build list of addons for filter
+			const addons = Array.from(new Set(list.map(f=>f.addon).filter(Boolean)));
+			const sel = document.getElementById('featureFilterSelect');
+			// clear existing addon options (keep placeholder and All)
+			Array.from(sel.querySelectorAll('option')).forEach(o=>{ if(o.value!=='__all__' && o.value!=='__none__') o.remove(); });
+			addons.forEach(a=>{ const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); });
+
+			// render buttons according to filter
+			function renderFeatureButtons(filter){
+			    const area = document.getElementById('featureButtonsArea'); area.innerHTML='';
+			    const filtered = (filter && filter!=='__all__') ? list.filter(f=>f.addon===filter) : list;
+			    filtered.forEach(f=>{
+				const b = document.createElement('a');
+				b.href = '#';
+				b.className = 'btn feature-btn';
+				b.style.padding = '8px 12px';
+				b.style.background = '#673ab7';
+				b.style.color = '#fff';
+				b.style.textDecoration = 'none';
+				b.textContent = f.label || f.key;
+				b.onclick = (e)=>{ e.preventDefault();
+					fetch('/feature/run/'+encodeURIComponent(f.key),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json()).then(j=>{ showFeatureResult(j, f.label || f.key); }).catch(err=>{ showFeatureResult({'success':false,'error':String(err)}, f.label || f.key); console.error(err); });
+				};
+				area.appendChild(b);
+			    });
+			}
+			// initial render: do not show any buttons until user selects a filter
+			const current = document.getElementById('featureFilterSelect').value || '__none__';
+			if(current && current !== '__none__') renderFeatureButtons(current);
+		}).catch(()=>{});
+	}catch(e){console.debug('populateFeatureToolbar failed',e);} }
+
+document.addEventListener('DOMContentLoaded', ()=>{ setTimeout(populateFeatureToolbar,300); });
+// Docker widget: adds a Docker button to the toolbar and a modal to manage containers
+function populateDockerWidget(){
+	try{
+		const containerButtonExists = !!document.getElementById('dockerWidgetBtn');
+		const containerArea = document.getElementById('globalToolbar');
+		if(!containerArea) return;
+		if(!containerButtonExists){
+			const b = document.createElement('a');
+			b.href = '#';
+			b.id = 'dockerWidgetBtn';
+			b.className = 'btn';
+			b.style.padding = '8px 12px';
+			b.style.background = '#ff5722';
+			b.style.color = '#fff';
+			b.textContent = 'Docker';
+			b.onclick = async (e)=>{ e.preventDefault(); showDockerModal(); };
+			containerArea.appendChild(b);
+		}
+	}catch(e){ console.debug('populateDockerWidget failed', e); }
+}
+
+async function showDockerModal(){
+	// fetch container list via feature and render enhanced UI
+	try{
+		// check docker daemon status first
+		const ds = await fetch('/feature/run/app_installer.feature_docker_daemon_status', {method:'POST'});
+		const dsj = await ds.json();
+		const daemonRunning = !!(dsj && dsj.result && dsj.result.running);
+		if(!daemonRunning){
+			let modal = document.getElementById('dockerModal');
+			if(!modal){
+				modal = document.createElement('div');
+				modal.id = 'dockerModal';
+				modal.style.position='fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.width='100%'; modal.style.height='100%'; modal.style.background='rgba(0,0,0,0.6)'; modal.style.zIndex=2000; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center';
+				const content = document.createElement('div');
+				content.id='dockerModalContent';
+				content.style.background='#2d2d2d'; content.style.color='#e0e0e0'; content.style.padding='20px'; content.style.borderRadius='8px'; content.style.minWidth='520px'; content.style.maxHeight='80%'; content.style.overflow='auto';
+				modal.appendChild(content);
+				document.body.appendChild(modal);
+			}
+			const content = document.getElementById('dockerModalContent');
+			content.innerHTML = '<h3>Docker Daemon Not Running</h3><p>The Docker daemon does not appear to be running on this host. You can try to start it from here (may require privileges), or open Docker Desktop.</p><div style="margin-top:12px;"><button id="dockerStartDaemon" class="btn">Start Docker</button> <button id="dockerOpenDocker" class="btn" style="margin-left:8px;">Open Docker Desktop</button> <button id="dockerCloseBtn" class="btn btn-warning" style="margin-left:8px;">Close</button></div><div id="dockerDaemonInfo" style="margin-top:12px;color:#ccc;font-size:12px;"></div>';
+			document.getElementById('dockerCloseBtn').onclick = ()=>{ modal.style.display='none'; };
+			document.getElementById('dockerStartDaemon').onclick = async (e)=>{ e.preventDefault(); document.getElementById('dockerDaemonInfo').textContent='Attempting to start Docker...'; const r = await fetch('/feature/run/app_installer.feature_docker_daemon_start',{method:'POST'}); const jr = await r.json(); document.getElementById('dockerDaemonInfo').textContent = JSON.stringify(jr); setTimeout(()=>showDockerModal(),1500); };
+			document.getElementById('dockerOpenDocker').onclick = (e)=>{ e.preventDefault(); window.open('','_blank'); alert('Please open Docker Desktop on your machine.'); };
+			modal.style.display='flex';
+			return;
+		}
+		const resp = await fetch('/feature/run/app_installer.feature_docker_list', {method:'POST'});
+		const j = await resp.json();
+		const containers = (j && j.result && j.result.containers) ? j.result.containers : [];
+		// build modal
+		let modal = document.getElementById('dockerModal');
+		if(!modal){
+			modal = document.createElement('div');
+			modal.id = 'dockerModal';
+			modal.style.position='fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.width='100%'; modal.style.height='100%'; modal.style.background='rgba(0,0,0,0.6)'; modal.style.zIndex=2000; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center';
+			const content = document.createElement('div');
+			content.id='dockerModalContent';
+			content.style.background='#2d2d2d'; content.style.color='#e0e0e0'; content.style.padding='20px'; content.style.borderRadius='8px'; content.style.minWidth='560px'; content.style.maxHeight='80%'; content.style.overflow='auto';
+			modal.appendChild(content);
+			document.body.appendChild(modal);
+		}
+		const content = document.getElementById('dockerModalContent');
+		content.innerHTML = '<h3>Docker Containers</h3><button id="dockerRefreshBtn" class="btn" style="margin-bottom:8px;">Refresh</button> <button id="dockerCloseBtn" class="btn btn-warning" style="margin-left:8px;">Close</button><div id="dockerList"></div>';
+		document.getElementById('dockerCloseBtn').onclick = ()=>{ modal.style.display='none';
+			// stop auto-refresh if present
+			try{ if(modal.dataset.refreshId){ clearInterval(parseInt(modal.dataset.refreshId)); delete modal.dataset.refreshId; } }catch(e){}
+		};
+		document.getElementById('dockerRefreshBtn').onclick = async ()=>{ content.querySelector('#dockerList').innerHTML='Refreshing...'; showDockerModal(); };
+		const listEl = document.getElementById('dockerList');
+		if(!containers.length) {
+			listEl.innerHTML = '<p>No containers found.</p>';
+			modal.style.display='flex';
+			return;
+		}
+		const table = document.createElement('table'); table.style.width='100%'; table.style.borderCollapse='collapse';
+		table.innerHTML = '<thead><tr><th style="text-align:left">Name</th><th style="text-align:left">Image</th><th>Status</th><th>Ports</th><th>Actions</th></tr></thead>';
+		const tbody = document.createElement('tbody');
+		containers.forEach(c=>{
+			const tr = document.createElement('tr');
+			// status badge
+			const isUp = c.status && c.status.toLowerCase().indexOf('up')!==-1;
+			const badge = `<span style="display:inline-block;padding:4px 8px;border-radius:12px;background:${isUp?"#2e7d32":"#616161"};color:#fff;font-size:12px">${isUp?"Running":"Stopped"}</span>`;
+			// ports: create clickable host links when possible
+			let portsHtml = '';
+			if(c.ports){
+				// ports string often like: "0.0.0.0:6667->6667/tcp, 0.0.0.0:6697->6697/tcp"
+				const parts = c.ports.split(',').map(p=>p.trim()).filter(Boolean);
+				portsHtml = parts.map(p=>{
+					// try to extract host:port
+					const m = p.match(/([0-9\.]+):(\d+)->/);
+					if(m){ const host = m[1]; const port = m[2]; return `<a href="http://${host}:${port}" target="_blank" style="color:#81d4fa">${host}:${port}</a>`; }
+					// fallback show raw
+					return `<span>${p}</span>`;
+				}).join(', ');
+			}
+			tr.innerHTML = `<td style="vertical-align:top;padding:6px">${c.name}</td><td style="vertical-align:top;padding:6px">${c.image}</td><td style="vertical-align:top;padding:6px">${badge}<div style="font-size:11px;margin-top:6px;color:#cfcfcf">${c.status}</div></td><td style="vertical-align:top;padding:6px">${portsHtml}</td>`;
+			const actTd = document.createElement('td'); actTd.style.verticalAlign='top'; actTd.style.padding='6px';
+			const startBtn = document.createElement('a'); startBtn.href='#'; startBtn.className='btn'; startBtn.textContent='Start'; startBtn.style.marginRight='6px';
+			const stopBtn = document.createElement('a'); stopBtn.href='#'; stopBtn.className='btn btn-danger'; stopBtn.textContent='Stop'; stopBtn.style.marginRight='6px';
+			const logsBtn = document.createElement('a'); logsBtn.href='#'; logsBtn.className='btn'; logsBtn.textContent='View Logs'; logsBtn.style.marginRight='6px';
+			const recreateBtn = document.createElement('a'); recreateBtn.href='#'; recreateBtn.className='btn'; recreateBtn.textContent='Recreate w/ Host Ports'; recreateBtn.style.marginRight='6px';
+			startBtn.onclick = async (e)=>{ e.preventDefault(); await fetch('/feature/run/app_installer.feature_docker_start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:c.name})}); setTimeout(()=>showDockerModal(),800); };
+			stopBtn.onclick = async (e)=>{ e.preventDefault(); await fetch('/feature/run/app_installer.feature_docker_stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:c.name})}); setTimeout(()=>showDockerModal(),800); };
+			logsBtn.onclick = async (e)=>{ e.preventDefault(); const p = document.createElement('pre'); p.style.background='#111'; p.style.color='#eee'; p.style.padding='8px'; p.style.maxHeight='240px'; p.style.overflow='auto'; p.textContent = 'Loading logs...'; tr.after(p); const r = await fetch('/feature/run/app_installer.feature_docker_log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:c.name})}); const jr = await r.json(); if(jr && jr.result && jr.result.log_preview!==undefined){ p.textContent = jr.result.log_preview; } else if(jr && jr.error){ p.textContent = 'Error: '+ jr.error; } else { p.textContent = JSON.stringify(jr); } };
+			recreateBtn.onclick = async (e)=>{ e.preventDefault();
+				// build default mappings from container ports (map to same host port)
+				let defaultPorts = [];
+				if(c.ports){
+					const parts = c.ports.split(',').map(p=>p.trim()).filter(Boolean);
+					parts.forEach(p=>{
+						// try host:container format first
+						let m = p.match(/(?:[0-9\.]+:)?(\d+)->(\d+)/);
+						if(m){ defaultPorts.push(m[2]+':'+m[2]); return; }
+						// try container-only like 6667/tcp or 6667-6668/tcp
+						m = p.match(/(\d+)(?:-\d+)?\/(tcp|udp)/);
+						if(m){ defaultPorts.push(m[1]+':'+m[1]); return; }
+					});
+				}
+				const user = prompt('Enter host:container port mappings (comma-separated) or leave blank to use defaults', defaultPorts.join(','));
+				if(user===null) return;
+				const portsInput = (user && user.trim()) ? user.split(',').map(s=>s.trim()).filter(Boolean) : defaultPorts;
+				// call feature to recreate container with provided ports
+				await fetch('/feature/run/app_installer.feature_docker_start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app:c.name,docker_image:c.image,ports:portsInput})});
+				setTimeout(()=>showDockerModal(),1200);
+			};
+			actTd.appendChild(startBtn); actTd.appendChild(stopBtn); actTd.appendChild(logsBtn); actTd.appendChild(recreateBtn);
+			tr.appendChild(actTd);
+			tbody.appendChild(tr);
+		});
+		table.appendChild(tbody);
+		listEl.innerHTML=''; listEl.appendChild(table);
+		modal.style.display='flex';
+		// auto-refresh every 6 seconds while modal is open
+		try{
+			if(modal.dataset.refreshId){ clearInterval(parseInt(modal.dataset.refreshId)); }
+			const id = setInterval(()=>{ showDockerModal(); }, 6000);
+			modal.dataset.refreshId = id.toString();
+		}catch(e){}
+	}catch(e){ alert('Failed to load Docker containers: '+e); }
+}
+
+// initialize docker widget after features toolbar
+document.addEventListener('DOMContentLoaded', ()=>{ setTimeout(populateDockerWidget,600); });
+// IRC widget: add button and modal for a simple web IRC client
+function populateIRCWidget(){
+	try{
+		const exists = !!document.getElementById('ircWidgetBtn');
+		const container = document.getElementById('globalToolbar');
+		if(!container) return;
+		if(!exists){
+			const b = document.createElement('a'); b.href='#'; b.id='ircWidgetBtn'; b.className='btn'; b.style.padding='8px 12px'; b.style.background='#009688'; b.style.color='#fff'; b.textContent='IRC'; b.onclick = async (e)=>{ e.preventDefault(); showIRCModal(); };
+			// position fixed at top-right so it doesn't interfere with page layout
+			b.style.position = 'fixed'; b.style.top = '12px'; b.style.right = '12px'; b.style.zIndex = 1500; b.style.borderRadius = '6px';
+			container.appendChild(b);
+		}
+	}catch(e){ console.debug('populateIRCWidget failed', e); }
+}
+
+async function showIRCModal(){
+	try{
+		let modal = document.getElementById('ircModal');
+		if(!modal){
+			modal = document.createElement('div'); modal.id='ircModal'; modal.style.position='fixed'; modal.style.left='0'; modal.style.top='0'; modal.style.width='100%'; modal.style.height='100%'; modal.style.background='rgba(0,0,0,0.8)'; modal.style.zIndex=2100; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center';
+			const content = document.createElement('div'); content.id='ircModalContent'; content.style.background='#222'; content.style.color='#eee'; content.style.padding='16px'; content.style.borderRadius='8px'; content.style.minWidth='520px'; content.style.maxHeight='80%'; content.style.overflow='auto'; modal.appendChild(content); document.body.appendChild(modal);
+		}
+		const content = document.getElementById('ircModalContent');
+		content.innerHTML = `<h3>IRC Client</h3>
+			<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+				<button id="ircAdvancedToggle" class="btn btn-sm">Advanced</button>
+				<div id="ircAdvanced" style="display:none;align-items:center;gap:8px;margin-left:8px;">
+					<label style="color:#ccc;font-size:12px;margin-right:6px;">Config:</label>
+					<select id="ircConfigSelect" style="width:240px;padding:6px"><option>Loading...</option></select>
+					<button id="ircLoadConfigBtn" class="btn" style="margin-left:4px">Load</button>
+					<button id="ircRecreateBtn" class="btn btn-warning" style="margin-left:4px">Recreate From Container</button>
+				</div>
+			</div>
+			<div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+				<input id="ircHost" placeholder="host" value="127.0.0.1" style="width:160px;padding:6px"/>
+				<input id="ircPort" placeholder="port" value="6667" style="width:80px;padding:6px"/>
+				<input id="ircNick" placeholder="nick" value="webuser" style="width:120px;padding:6px"/>
+				<label style="color:#ccc;font-size:12px;margin-left:6px;display:inline-flex;align-items:center;"><input type="checkbox" id="ircSaveNick" style="margin-right:6px;">Save nick</label>
+				<button id="ircConnectBtn" class="btn">Connect</button>
+				<button id="ircCloseBtn" class="btn btn-warning">Close</button>
+				<button id="ircCloseAllBtn" class="btn btn-danger" title="Close all server-side IRC connections">Close All</button>
+			</div>
+			<div id="ircStatus" style="font-size:12px;color:#ccc;margin-bottom:8px;"></div>
+			<div id="ircTabs" style="display:flex;gap:6px;margin-bottom:8px;align-items:center;"></div>
+			<div id="ircMessages" style="background:#111;padding:8px;border-radius:6px;height:240px;overflow:auto;font-family:monospace;font-size:13px;margin-bottom:8px;"></div>
+			<div style="display:flex;gap:8px;margin-bottom:8px;">
+				<input id="ircInput" placeholder="/msg, raw IRC or PRIVMSG #chan :text" style="flex:1;padding:8px"/>
+				<button id="ircSendBtn" class="btn">Send</button>
+				<button id="ircJoinBtn" class="btn" title="Join channel">Join</button>
+				<select id="ircChannelsSelect" style="width:160px;padding:6px"><option value="">-- joined channels --</option></select>
+			</div>
+			<div style="margin-top:6px;color:#ccc;font-size:12px;"><strong>Config preview:</strong></div>
+			<textarea id="ircConfigPreview" readonly style="width:100%;height:140px;padding:8px;background:#0b0b0b;color:#ddd;border-radius:6px;border:1px solid #333;font-family:monospace;font-size:12px;margin-top:6px"></textarea>`;
+
+		document.getElementById('ircCloseBtn').onclick = async ()=>{
+			try{ if(session){ await fetch('/irc/close',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:session})}); session=null; } }catch(e){}
+			modal.style.display='none';
+		}
+		// advanced toggle handler (show/hide advanced config panel)
+		try{ const advToggle = document.getElementById('ircAdvancedToggle'); if(advToggle){ advToggle.onclick = ()=>{ try{ const adv = document.getElementById('ircAdvanced'); if(!adv) return; adv.style.display = (adv.style.display==='none' ? 'flex' : 'none'); advToggle.textContent = adv.style.display==='none' ? 'Advanced' : 'Hide Advanced'; }catch(e){} }; } }catch(e){}
+		let session = null; let last = 0; let pollId = null;
+		document.getElementById('ircConnectBtn').onclick = async ()=>{
+			try{
+				// simple debounce: disable connect button briefly to avoid rapid reconnect attempts
+				const connBtn = document.getElementById('ircConnectBtn'); connBtn.disabled = true; setTimeout(()=>{ try{ connBtn.disabled = false }catch(e){} }, 3000);
+				// Simple connect: only use host/port/nick inputs (defaults to 127.0.0.1:6667)
+				let host = (document.getElementById('ircHost') && document.getElementById('ircHost').value) || '127.0.0.1';
+				let port = parseInt((document.getElementById('ircPort') && document.getElementById('ircPort').value) || '6667');
+				let nick = (document.getElementById('ircNick') && document.getElementById('ircNick').value) || localStorage.getItem('ircDefaultNick') || 'webuser';
+				nick = nick.trim();
+				// persist nick if user checked the save box
+				try{ const save = document.getElementById('ircSaveNick') && document.getElementById('ircSaveNick').checked; if(save){ localStorage.setItem('ircDefaultNick', nick); } else { try{ localStorage.removeItem('ircDefaultNick'); }catch(e){} } }catch(e){}
+
+				// final normalization: if host resolves to an example container domain, prefer localhost
+				try{
+					if(/\.example\.com$/i.test(host) || /^[0-9a-f]{6,}/i.test(host)) host = '127.0.0.1';
+				}catch(e){}
+
+				document.getElementById('ircStatus').textContent = 'Connecting... ('+host+':'+port+')';
+				const r = await fetch('/irc/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:host,port:port,nick:nick})});
+				const j = await r.json();
+				if(j && j.success){
+					session = j.session; document.getElementById('ircStatus').textContent = 'Connected: '+session + (j.reused? ' (reused)':'' ); last = 0; document.getElementById('ircMessages').innerHTML='';
+					// expose session and bridge state globally for other UIs (Echo) to use
+					try{ window.ircSessionId = session; window.ircBridges = window.ircBridges || {}; window.ircBridgeToken = j && j.bridge_token ? j.bridge_token : ''; }catch(e){}
+					// Auto-join default channel and open its tab
+					try{
+						const defaultChan = '#masterchief';
+						// ensure joined channel appears in selector
+						try{ const sel = document.getElementById('ircChannelsSelect'); if(sel && ![...sel.options].some(o=>o.value===defaultChan)){ const o = document.createElement('option'); o.value = defaultChan; o.textContent = defaultChan; sel.appendChild(o); } }catch(e){}
+						// delay JOIN slightly to allow registration (NICK/USER) to complete
+						setTimeout(async ()=>{
+							try{ await fetch('/irc/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:session,message:'JOIN '+defaultChan})}); }catch(e){ console.error('auto-join send failed',e); }
+							try{ if(window._irc && typeof window._irc !== 'undefined'){ if(!window._irc.channels[defaultChan]) createChannelTab(defaultChan); switchChannel(defaultChan); } }catch(e){ console.error('auto-join UI failed', e); }
+						}, 1200);
+					}catch(e){ console.error('auto-join setup error', e); }
+					// setup IRC channel state and start polling
+					window._irc = window._irc || { channels: {}, active: null };
+					function createChannelTab(name){
+						try{
+							if(!name) return;
+							if(window._irc.channels[name]) return;
+							const tabs = document.getElementById('ircTabs');
+							// tab wrapper with label and close button
+							const tabWrap = document.createElement('div'); tabWrap.style.display='inline-flex'; tabWrap.style.alignItems='center'; tabWrap.style.marginRight='6px';
+							const btn = document.createElement('button'); btn.className='btn btn-sm'; btn.textContent = name; btn.dataset.chan = name; btn.style.padding='6px 10px'; btn.style.borderRadius='6px'; btn.style.background='#333'; btn.style.color='#ddd'; btn.onclick = ()=>{ switchChannel(name); };
+							const close = document.createElement('button'); close.textContent='✕'; close.title='Close channel'; close.className='btn btn-sm'; close.style.marginLeft='4px'; close.style.padding='4px 6px'; close.style.background='transparent'; close.style.color='#c88'; close.onclick = (e)=>{ e.stopPropagation(); closeChannel(name); };
+							// small bridge badge (green when bridged)
+							const bBadge = document.createElement('span'); bBadge.className = 'irc-bridge-badge'; bBadge.textContent = ' ●'; bBadge.style.marginLeft = '6px'; bBadge.style.color = (window.ircBridges && window.ircBridges[name]) ? '#7CFC00' : 'transparent'; btn.appendChild(bBadge);
+							tabWrap.appendChild(btn); tabWrap.appendChild(close); tabs.appendChild(tabWrap);
+							const container = document.createElement('div'); container.id = 'irc_chan_'+name.replace(/[^a-zA-Z0-9_\-]/g,'_'); container.style.display='none'; container.style.height='100%'; container.style.overflow='auto'; container.style.padding='6px'; window._irc.channels[name] = { tab: btn, el: container, wrap: tabWrap, badge: bBadge };
+							// fetch server-side history for this channel and populate
+							try{ fetch('/irc/history?session='+encodeURIComponent(session)+'&channel='+encodeURIComponent(name)).then(r=>r.json()).then(j=>{ if(j && j.success && Array.isArray(j.history)){ j.history.forEach(line=>{ const ln = document.createElement('div'); ln.textContent = line; container.appendChild(ln); }); } }).catch(()=>{}); }catch(e){}
+						}catch(e){ console.error('createChannelTab error',e); }
+					}
+					function switchChannel(name){
+						const msgs = document.getElementById('ircMessages');
+						// hide all per-channel containers and reset styles
+						Object.keys(window._irc.channels).forEach(c=>{ const ch = window._irc.channels[c]; if(ch && ch.el) ch.el.style.display='none'; if(ch && ch.tab){ ch.tab.classList.remove('active'); ch.tab.style.background='#333'; ch.tab.style.color='#ddd'; } });
+						if(!name){ // show global
+							msgs.style.display='block'; window._irc.active = null; return;
+						}
+						// ensure container is in DOM
+						const ch = window._irc.channels[name]; if(!ch) return;
+						msgs.style.display='none';
+						if(!ch.el.parentElement) msgs.parentElement.insertBefore(ch.el, msgs);
+						ch.el.style.display='block'; ch.tab.classList.add('active'); ch.tab.style.background='#555'; ch.tab.style.color='#fff'; window._irc.active = name; ch.el.scrollTop = ch.el.scrollHeight;
+					}
+
+					function closeChannel(name){
+						try{
+							const ch = window._irc.channels[name]; if(!ch) return;
+							// remove DOM elements
+							if(ch.el && ch.el.parentElement) ch.el.parentElement.removeChild(ch.el);
+							if(ch.wrap && ch.wrap.parentElement) ch.wrap.parentElement.removeChild(ch.wrap);
+							delete window._irc.channels[name];
+							// if it was active, switch to global or another channel
+							if(window._irc.active === name){ const keys = Object.keys(window._irc.channels); if(keys.length) switchChannel(keys[0]); else switchChannel(null); }
+							// also remove from joined channels select
+							try{ const sel = document.getElementById('ircChannelsSelect'); const opt = [...sel.options].find(o=>o.value===name); if(opt) sel.remove(opt.index); }catch(e){}
+						}catch(e){ console.error('closeChannel error',e); }
+					}
+								// keyboard shortcut: Ctrl/Cmd+W to close active channel
+								document.addEventListener('keydown', (ev)=>{ try{ if((ev.ctrlKey||ev.metaKey) && ev.key.toLowerCase()==='w'){ ev.preventDefault(); if(window._irc && window._irc.active) closeChannel(window._irc.active); } }catch(e){} });
+								// Close All button handler
+								try{ document.getElementById('ircCloseAllBtn').onclick = async ()=>{
+									try{ await fetch('/irc/close_all',{method:'POST'}); }catch(e){}
+									// remove UI tabs and clear messages
+									try{ if(window._irc){ Object.keys(window._irc.channels).forEach(c=>{ try{ closeChannel(c); }catch(e){} }); window._irc.channels = {}; window._irc.active = null; } const el = document.getElementById('ircMessages'); if(el) el.innerHTML=''; }catch(e){}
+								} }catch(e){}
+								// NOTE: do NOT auto-close the server session on page unload to avoid accidental session removal.
+								// Closing a session is now explicit via the Close button.
+					function appendToChannel(name, text){
+						try{
+							if(!name){ // append to global
+								const el = document.getElementById('ircMessages'); const line = document.createElement('div'); line.textContent = text; el.appendChild(line); el.scrollTop = el.scrollHeight; return; }
+							createChannelTab(name);
+							const ch = window._irc.channels[name]; if(!ch) return;
+							const line = document.createElement('div'); line.textContent = text; ch.el.appendChild(line); ch.el.scrollTop = ch.el.scrollHeight;
+						}catch(e){ console.error('appendToChannel error',e); }
+					}
+					if(pollId) clearInterval(pollId);
+					pollId = setInterval(async ()=>{
+						if(!session) return; // avoid polling when session is not set (prevents session=null requests)
+						const rr = await fetch('/irc/recv?session='+encodeURIComponent(session)+'&last='+last);
+						const jj = await rr.json();
+						if(jj && jj.success){
+							const msgs = jj.messages||[];
+							if(msgs.length){
+								msgs.forEach(m=>{ try{
+									// try to detect channel from common IRC line formats
+									let chan = null;
+									let mstr = String(m||'');
+									let pm = mstr.match(/PRIVMSG\s+(#[^\s:]+)/i) || mstr.match(/PRIVMSG\s+([^\s:]+)/i);
+									if(pm && pm[1]) chan = pm[1];
+									if(!chan){ let jm = mstr.match(/(?:JOIN|PART)\s+(#[^\s]+)/i); if(jm && jm[1]) chan = jm[1]; }
+									if(chan){ appendToChannel(chan, mstr); }
+									// detect bridge enable/disable notices and update global bridge map and UI badge
+									try{
+										const bridgere = /\[BRIDGE\]\s+Echo bridge\s+(enabled|disabled)\s+for\s+(#[^\s]+)/i;
+										const bm = String(mstr||'').match(bridgere);
+										if(bm){
+											const state = bm[1].toLowerCase();
+											const bchan = bm[2];
+											try{ window.ircBridges = window.ircBridges || {}; window.ircBridges[bchan] = (state === 'enabled'); if(window._irc && window._irc.channels && window._irc.channels[bchan]){ const cb = window._irc.channels[bchan].badge; if(cb) cb.style.color = window.ircBridges[bchan] ? '#7CFC00' : 'transparent'; } }catch(e){}
+										}
+									}catch(e){}
+									// always append to global log too
+									const el = document.getElementById('ircMessages'); const line = document.createElement('div'); line.textContent = mstr; el.appendChild(line);
+								}catch(e){ console.error('message routing error',e); } });
+								last = jj.total;
+								const active = window._irc && window._irc.active;
+								if(active){ /* ensure active view scrolled */ const ch = window._irc.channels && window._irc.channels[active]; if(ch && ch.el) ch.el.scrollTop = ch.el.scrollHeight; }
+								const elg = document.getElementById('ircMessages'); elg.scrollTop = elg.scrollHeight;
+							}
+							if(!jj.alive){
+								// keep polling so server-side reconnect can occur; show reconnect attempts
+								reconAttempts = (typeof reconAttempts === 'number') ? reconAttempts + 1 : 1;
+								document.getElementById('ircStatus').textContent = 'Reconnecting (attempt '+reconAttempts+')';
+								return;
+							}
+							// connection alive again
+							reconAttempts = 0;
+							if(session) document.getElementById('ircStatus').textContent = 'Connected: '+session;
+						} else {
+							// if server reports session not found, stop polling and update UI
+							try{
+								if(jj && jj.error === 'session not found'){
+									if(pollId) clearInterval(pollId);
+									document.getElementById('ircStatus').textContent = 'Session expired or closed';
+									return;
+								}
+							}catch(e){}
+						}
+					}, 800);
+				} else {
+					document.getElementById('ircStatus').textContent = 'Connect failed: '+(j && j.error);
+				}
+			}catch(e){
+				document.getElementById('ircStatus').textContent = 'Connect error: '+String(e);
+			}
+		};
+
+		document.getElementById('ircSendBtn').onclick = async ()=>{
+			const inp = document.getElementById('ircInput');
+			let msg = (inp.value||'').trim();
+			if(!msg || !session) return;
+			// Support simple slash-commands in the UI. Currently handle /join
+				if(msg.startsWith('/')){
+				const parts = msg.slice(1).split(/\s+/);
+				const cmd = parts[0].toLowerCase();
+				const args = parts.slice(1).join(' ');
+				if(cmd === 'join' && args){
+					msg = 'JOIN ' + args;
+				} else {
+					// For other slash commands, send raw (strip leading slash)
+					msg = parts.join(' ');
+				}
+			}
+			await fetch('/irc/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:session,message:msg})});
+			// If this was a JOIN we can add the channel to the joined list and open a tab
+			try{
+				if(/^JOIN\s+#?/i.test(msg)){
+					const ch = msg.split(/\s+/,2)[1]||'';
+					if(ch){
+						const sel = document.getElementById('ircChannelsSelect');
+						if(![...sel.options].some(o=>o.value===ch)){
+							const o = document.createElement('option'); o.value=ch; o.textContent=ch; sel.appendChild(o);
+						}
+						// create and switch to channel tab
+						try{ if(window._irc && typeof window._irc !== 'undefined'){ if(!window._irc.channels[ch]) createChannelTab(ch); switchChannel(ch); } }catch(e){}
+					}
+				}
+			}catch(e){}
+			inp.value='';
+		};
+
+		// Enter key handler: send on Enter (without Shift)
+		document.getElementById('ircInput').addEventListener('keydown', (ev)=>{
+			if(ev.key === 'Enter' && !ev.shiftKey){
+				ev.preventDefault();
+				document.getElementById('ircSendBtn').click();
+			}
+		});
+
+		// Join button: join channel from input or prompt
+		document.getElementById('ircJoinBtn').onclick = async ()=>{
+			const inp = document.getElementById('ircInput');
+			let val = (inp.value||'').trim();
+			if(!val){ val = prompt('Channel to join (e.g. #channel):',''); if(!val) return; }
+			// normalize leading "/join " if present
+			if(val.toLowerCase().startsWith('/join')) val = val.replace(/^\/join\s+/i, '');
+			const line = 'JOIN ' + val;
+			await fetch('/irc/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session:session,message:line})});
+			// add to channel list
+			try{ const sel = document.getElementById('ircChannelsSelect'); if(![...sel.options].some(o=>o.value===val)){ const o = document.createElement('option'); o.value=val; o.textContent=val; sel.appendChild(o); } }catch(e){}
+		};
+
+		// Quick-select: when selecting a joined channel, populate input with PRIVMSG template and switch to tab
+		document.getElementById('ircChannelsSelect').addEventListener('change', (ev)=>{
+			const v = ev.target.value||''; if(!v) return; document.getElementById('ircInput').value = 'PRIVMSG '+v+' :'; try{ if(window._irc) switchChannel(v); }catch(e){}
+		});
+		// fetch available IRC server config files / metadata and populate select
+		try{
+			const resp = await fetch('/irc/configs');
+			const js = await resp.json();
+			const sel = document.getElementById('ircConfigSelect'); sel.innerHTML='';
+			if(js && js.configs && js.configs.length){
+				const none = document.createElement('option'); none.value='__none__'; none.textContent='-- select config --'; sel.appendChild(none);
+				js.configs.forEach(c=>{
+					const o = document.createElement('option'); o.value = c.id || c.path || c.name; o.textContent = (c.name || c.path) + (c.source?(' ('+c.source+')'):'');
+					o.dataset.raw = c.content ? btoa(unescape(encodeURIComponent(c.content))) : '';
+					o.dataset.host = c.host || '';
+					o.dataset.port = c.port || '';
+					sel.appendChild(o);
+				});
+			} else {
+				const o = document.createElement('option'); o.value='__none__'; o.textContent='(no configs found)'; sel.appendChild(o);
+			}
+			document.getElementById('ircLoadConfigBtn').onclick = ()=>{
+				const v = sel.value; if(!v || v==='__none__') return;
+				const opt = sel.querySelector('option[value="'+v+'"]');
+				if(!opt) return;
+				const raw = opt.dataset.raw || '';
+				if(raw){ try{ const txt = decodeURIComponent(escape(atob(raw))); document.getElementById('ircConfigPreview').value = txt;
+						const hostHint = opt.dataset.host || '';
+						const portHint = opt.dataset.port || '';
+						if(hostHint) document.getElementById('ircHost').value = hostHint;
+						if(portHint) document.getElementById('ircPort').value = portHint;
+						// prefer 'container' loadFrom when loading config metadata
+						try{ document.getElementById('ircLoadFrom').value = 'container'; }catch(e){}
+						// simple content scanning to find IP/hostname and common ports
+						const txt2 = document.getElementById('ircConfigPreview').value;
+						const ipMatch = txt2.match(/(127\.0\.0\.1|0\.0\.0\.0|\b\d{1,3}(?:\.\d{1,3}){3}\b|[a-z0-9.\-]+\.\w{2,})/i);
+						if(ipMatch && !hostHint) document.getElementById('ircHost').value = ipMatch[1];
+						const pMatch = txt2.match(/(?:port\s*=\s*|:\s*)(\d{2,5})/i) || txt2.match(/(\d{2,5})/g);
+						if(pMatch && !portHint) document.getElementById('ircPort').value = (Array.isArray(pMatch)?pMatch[0]:pMatch[1]||pMatch[0]);
+					}catch(e){ document.getElementById('ircConfigPreview').value = '(failed to decode)'; }
+				}
+			};
+			// add recreate button handler if present
+			const recBtn = document.getElementById('ircRecreateBtn');
+			if(recBtn){
+				recBtn.onclick = async ()=>{
+					const sel = document.getElementById('ircConfigSelect');
+					const v = sel ? sel.value : null;
+					let container = null;
+					if(v && v!=='__none__'){
+						const opt = sel.querySelector('option[value="'+v+'"]'); if(opt) container = opt.dataset.container || null;
+					}
+					document.getElementById('ircStatus').textContent = 'Recreating container...';
+					try{
+						const r = await fetch('/irc/recreate_from_container',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({container:container})});
+						const j = await r.json();
+						if(j && j.success){
+							document.getElementById('ircStatus').textContent = 'Recreated: '+(j.container || '');
+							if(j.preview) document.getElementById('ircConfigPreview').value = j.preview;
+							// refresh configs
+							setTimeout(()=>{ try{ document.getElementById('ircLoadConfigBtn').click(); }catch(e){} }, 800);
+						} else {
+							document.getElementById('ircStatus').textContent = 'Recreate failed: '+(j && j.error);
+						}
+					}catch(e){ document.getElementById('ircStatus').textContent = 'Recreate error: '+String(e); }
+				};
+			}
+		}catch(e){ console.debug('Failed to load IRC configs', e); }
+		modal.style.display='flex';
+	}catch(e){ alert('Failed to open IRC modal: '+e); }
+}
+
+// initialize IRC widget after features toolbar
+document.addEventListener('DOMContentLoaded', ()=>{ setTimeout(populateIRCWidget,800); });
+// Auto-connect disabled: IRC modal will open only when the user clicks the IRC button
+// Ensure action cells wrap buttons so they don't overflow off-screen
+document.addEventListener('DOMContentLoaded', ()=>{
+	try{
+		const tds = Array.from(document.querySelectorAll('td'));
+		tds.forEach(td=>{
+			if(td.querySelector && td.querySelector('.btn')){
+				td.style.display = 'flex';
+				td.style.flexWrap = 'wrap';
+				td.style.gap = '6px';
+				td.style.alignItems = 'center';
+			}
+		});
+	}catch(e){ console.debug('action cell wrap init failed', e); }
+});
+// helper: escape HTML for safe rendering in the result box
+function _htmlEscape(s){
+	return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function showFeatureResult(j, label){
+	try{
+		const el = document.getElementById('featureResult');
+		if(!el){ console.debug('featureResult container missing'); alert(JSON.stringify(j)); return; }
+		el.innerHTML='';
+		const box = document.createElement('div');
+		box.className = 'alert ' + (j && j.success ? 'alert-success' : 'alert-error');
+		let title = '<strong>'+_htmlEscape(label||'Feature')+'</strong>';
+		let body = '';
+		if(j && j.success){
+			let res = j.result === undefined ? '' : (typeof j.result === 'string' ? _htmlEscape(j.result) : _htmlEscape(JSON.stringify(j.result, null, 2)));
+			body = '<div>Success</div><pre>'+res+'</pre>';
+		} else {
+			let err = j && j.error ? _htmlEscape(String(j.error)) : 'Unknown error';
+			body = '<div>Error: '+err+'</div>';
+		}
+
+		box.innerHTML = title + body;
+		el.appendChild(box);
+		el.style.display='block';
+		// auto-hide after a few seconds
+		setTimeout(()=>{ try{ el.style.display='none'; el.innerHTML=''; }catch(e){} },8000);
+	}catch(e){ console.error('showFeatureResult failed', e); }
+}
+function refreshIndex(){
+	fetch('/scripts/refresh_index',{method:'POST'}).then(async r=>{
+		if(r.status===401){
+			// server requires admin token
+			let token = prompt('Admin token required to refresh index:');
+			if(!token) return alert('Cancelled');
+			try{
+				const r2 = await fetch('/scripts/refresh_index',{method:'POST',headers:{'X-ADMIN-TOKEN':token}});
+				const j2 = await r2.json();
+				if(j2.ok) location.reload(); else alert('Refresh failed: '+(j2.error||'unknown'));
+			}catch(e){ alert('Refresh error: '+e); }
+		} else {
+			const j = await r.json();
+			if(j.ok){ location.reload(); } else { alert('Refresh failed: '+(j.error||'unknown')); }
+		}
+	}).catch(e=>{ alert('Refresh error: '+e); });
+}
+</script>
+</body>
+</html>
