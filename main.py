@@ -563,7 +563,19 @@ def init_chat():
 
         from echo.runtime import model_runtime
 
+        from echo.conversation_storage import get_storage as _get_storage
+
         chatbot = get_chat_bot()
+
+        # Pre-warm conversation storage so the first API request isn't slow
+
+        try:
+
+            _get_storage()
+
+        except Exception:
+
+            app.logger.exception('Failed to pre-warm conversation storage')
 
         model_path = get_default_model_path()
 
