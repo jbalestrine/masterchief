@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 def main():
-    """Main entry point for MasterChief mc_platform."""
+    """Main entry point for MasterChief platform."""
     # Ensure we're in the right directory
     base_dir = Path(__file__).parent
     os.chdir(base_dir)
@@ -61,7 +61,7 @@ def main():
     sys.path.insert(0, str(base_dir / 'platform'))
     
     try:
-        from mc_platform.app import create_app, run_app
+        from platform.app import create_app, run_app
         
         print("\n🚀 Starting MasterChief Platform...")
         print("   This may take a few seconds...\n")
@@ -81,7 +81,7 @@ def main():
         print("   pip install -r requirements.txt")
         sys.exit(1)
     except KeyboardInterrupt:
-        print("\n\n👋 Shutting down MasterChief mc_platform...")
+        print("\n\n👋 Shutting down MasterChief platform...")
         sys.exit(0)
     except Exception as e:
         print(f"❌ Fatal error: {e}")

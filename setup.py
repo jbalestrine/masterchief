@@ -9,17 +9,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="masterchief",
-    version="1.2.1",
+    version="1.0.0",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jbalestrine/masterchief",
     packages=find_packages(),
-    include_package_data=True,
-    package_data={
-        'tf_wizard': ['templates/**', 'static/**', 'examples/**']
-    },
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
@@ -72,7 +68,6 @@ setup(
     entry_points={
         "console_scripts": [
             "masterchief=core.cli.main:cli",
-            "tf_wizard=tf_wizard.cli:main",
         ],
     },
 )

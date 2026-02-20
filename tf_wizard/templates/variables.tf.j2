@@ -1,8 +1,0 @@
-// Variables
-{% for v in variables %}
-variable "{{ v.name }}" {
-  type = {{ v.tf_type }}
-  {% if v.default is defined and v.default is not none %}default = {{ v.default|tojson }}{% endif %}
-  {% if v.description is defined and v.description %}description = {{ v.description|tojson }}{% endif %}
-}
-{% endfor %}

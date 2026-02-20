@@ -1,8 +1,8 @@
 """Unit tests for Script Wizard module."""
 
 import unittest
-from mc_platform.script_wizard import ScriptWizard, ScriptTemplate, ScriptGenerator
-from mc_platform.script_wizard.templates import DeploymentTemplate, MonitoringTemplate
+from platform.script_wizard import ScriptWizard, ScriptTemplate, ScriptGenerator
+from platform.script_wizard.templates import DeploymentTemplate, MonitoringTemplate
 
 
 class TestScriptWizard(unittest.TestCase):

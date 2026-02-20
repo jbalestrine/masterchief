@@ -113,7 +113,7 @@ def script_run(ctx, script_name, args, category):
 def script_generate(ctx, template, output):
     """Generate a custom script using the Script Wizard."""
     try:
-        from mc_platform.script_wizard import ScriptWizard
+        from platform.script_wizard import ScriptWizard
 
         wizard = ScriptWizard()
         templates = wizard.list_templates()

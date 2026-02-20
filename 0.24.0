@@ -1,5 +1,0 @@
-Defaulting to user installation because normal site-packages is not writeable
-Requirement already satisfied: uvicorn in c:\python314\lib\site-packages (0.40.0)
-Requirement already satisfied: click>=7.0 in c:\python314\lib\site-packages (from uvicorn) (8.3.1)
-Requirement already satisfied: h11>=0.8 in c:\python314\lib\site-packages (from uvicorn) (0.16.0)
-Requirement already satisfied: colorama in c:\python314\lib\site-packages (from click>=7.0->uvicorn) (0.4.6)

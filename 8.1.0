@@ -1,3 +1,0 @@
-Defaulting to user installation because normal site-packages is not writeable
-Requirement already satisfied: click in c:\python314\lib\site-packages (8.3.1)
-Requirement already satisfied: colorama in c:\python314\lib\site-packages (from click) (0.4.6)

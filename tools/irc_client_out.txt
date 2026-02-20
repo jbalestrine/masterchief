@@ -1,7 +1,0 @@
-RECV: :minimal 001 realtest :Welcome to Minimal IRC Server
-
-JOINED #masterchief, listening for 15s
-LINE: :minimal 375 realtest :- ""-" MOTD ""
-:minimal 372 realtest :- Welcome to Minimal IRC Server
-LINE: :minimal 372 realtest :- This server is for local testing only.
-:minimal 376 realtest :End of /MOTD command.

@@ -1,7 +1,7 @@
 """Tests for platform event bus."""
 import pytest
 import asyncio
-from mc_platform.event_bus import EventType, EventPublisher
+from platform.event_bus import EventType, EventPublisher
 from core.event_bus import Event, EventBus
 
 
