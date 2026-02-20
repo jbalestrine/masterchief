@@ -5464,6 +5464,13 @@ TEAMS_TEMPLATE = """
             style="font-size:.87rem;padding:7px 12px;">
         </div>
 
+        <!-- Client ID (Office 365 / Azure AD app registration) -->
+        <div class="tm-field">
+          <label style="color:#7ec8e3;">App Client ID <span style="color:#555;font-size:.71rem;">(from your Office 365 app registration)</span></label>
+          <input id="tm-quick-clientid" class="tm-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off"
+            style="font-size:.83rem;padding:7px 12px;letter-spacing:.3px;font-family:monospace;">
+        </div>
+
         <button class="tm-btn" onclick="tmQuickLogin()" style="width:100%;margin-top:4px;padding:10px;font-size:.92rem;letter-spacing:.3px;">
           &#128274;&nbsp; Sign in with Microsoft
         </button>
@@ -5719,6 +5726,7 @@ let _tmMode = 'upw';
 var _deviceCode = null;
 var _deviceInterval = null;
 var _devicePollTenant = 'common';
+var _devicePollClientId = '';
 
 // Init date range defaults
 (function(){
@@ -5736,9 +5744,10 @@ var _devicePollTenant = 'common';
   if(saved.client_id) document.getElementById('tm-client-id').value = saved.client_id;
   if(saved.upn)       document.getElementById('tm-upn').value = saved.upn;
   if(saved.mode)      tmSetMode(saved.mode);
-  // Restore quick-login email/tenant
-  if(saved.quick_email)  { var qe=document.getElementById('tm-quick-email');  if(qe) qe.value=saved.quick_email; }
-  if(saved.quick_tenant) { var qt=document.getElementById('tm-quick-tenant'); if(qt) qt.value=saved.quick_tenant; }
+  // Restore quick-login email/tenant/clientid
+  if(saved.quick_email)    { var qe=document.getElementById('tm-quick-email');    if(qe) qe.value=saved.quick_email; }
+  if(saved.quick_tenant)   { var qt=document.getElementById('tm-quick-tenant');   if(qt) qt.value=saved.quick_tenant; }
+  if(saved.quick_clientid) { var qc=document.getElementById('tm-quick-clientid'); if(qc) qc.value=saved.quick_clientid; }
   // Check for Okta SSO (persisted from Okta page)
   setTimeout(tmCheckOktaSSO, 100);
 })();
@@ -5757,26 +5766,30 @@ function tmToggleAdvanced(){
 }
 
 function tmQuickLogin(){
-  var email  = (document.getElementById('tm-quick-email').value||'').trim();
-  var tenant = (document.getElementById('tm-quick-tenant').value||'').trim() || 'common';
-  var st     = document.getElementById('tm-quick-status');
-  var box    = document.getElementById('tm-quick-device-box');
+  var email    = (document.getElementById('tm-quick-email').value||'').trim();
+  var tenant   = (document.getElementById('tm-quick-tenant').value||'').trim() || 'common';
+  var clientId = (document.getElementById('tm-quick-clientid').value||'').trim();
+  var st       = document.getElementById('tm-quick-status');
+  var box      = document.getElementById('tm-quick-device-box');
   st.textContent='Starting sign-in…';
   box.style.display='none';
   if(_tmQuickPollInterval){ clearInterval(_tmQuickPollInterval); _tmQuickPollInterval=null; }
   // Persist email hint
   try{
     var s=JSON.parse(localStorage.getItem('tm_creds')||'{}');
-    s.quick_email=email; s.quick_tenant=tenant;
+    s.quick_email=email; s.quick_tenant=tenant; s.quick_clientid=clientId;
     localStorage.setItem('tm_creds',JSON.stringify(s));
   }catch(e){}
+  var startBody = {tenant_id:tenant};
+  if(clientId) startBody.client_id = clientId;
   fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:tenant})})
+    body:JSON.stringify(startBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.user_code){
-      _tmQuickDeviceCode = j.device_code;
-      _devicePollTenant  = tenant;
-      _teamsUpn          = email;
+      _tmQuickDeviceCode  = j.device_code;
+      _devicePollTenant   = tenant;
+      _devicePollClientId = clientId;
+      _teamsUpn           = email;
       document.getElementById('tm-quick-code').textContent = j.user_code;
       var urlEl = document.getElementById('tm-quick-url');
       urlEl.href = j.verification_uri||'https://microsoft.com/devicelogin';
@@ -5841,8 +5854,10 @@ function tmQuickPoll(auto){
   var st = document.getElementById('tm-quick-poll-status');
   if(!_tmQuickDeviceCode){ if(st) st.textContent='\u26A0 Start sign-in first.'; return; }
   if(!auto && st) st.textContent='Checking\u2026';
+  var pollBody = {tenant_id:_devicePollTenant, device_code:_tmQuickDeviceCode};
+  if(_devicePollClientId) pollBody.client_id = _devicePollClientId;
   fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:_devicePollTenant, device_code:_tmQuickDeviceCode})})
+    body:JSON.stringify(pollBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.token){
       if(_tmQuickPollInterval){ clearInterval(_tmQuickPollInterval); _tmQuickPollInterval=null; }
@@ -5863,11 +5878,11 @@ function tmQuickPoll(auto){
       // Save UPN
       try{
         var s=JSON.parse(localStorage.getItem('tm_creds')||'{}');
-        s.quick_email=who; s.mode='mfa'; s.quick_tenant=_devicePollTenant;
+        s.quick_email=who; s.mode='mfa'; s.quick_tenant=_devicePollTenant; s.quick_clientid=_devicePollClientId;
         localStorage.setItem('tm_creds',JSON.stringify(s));
       }catch(e){}
-      // Load chats if on chat tab
-      if(_tcMainMode==='chat') chatLoad();
+      // Switch to chat tab and load
+      tcMainTab('chat');
     } else if(j.pending){
       if(!auto && st) st.textContent='Still waiting for sign-in\u2026';
     } else if(j.expired){
@@ -5987,13 +6002,17 @@ function teamsDeviceStart(){
   var tenant = (document.getElementById('tm-tenant').value.trim()||'common');
   if(tenant.toLowerCase()==='common') tenant='common';
   _devicePollTenant = tenant;
+  var clientIdEl = document.getElementById('tm-quick-clientid');
+  _devicePollClientId = clientIdEl ? clientIdEl.value.trim() : '';
   var st  = document.getElementById('tm-device-start-status');
   var box = document.getElementById('tm-device-code-box');
   st.textContent='Starting device login…';
   box.style.display='none';
   if(_deviceInterval){ clearInterval(_deviceInterval); _deviceInterval=null; }
+  var startBody = {tenant_id:tenant};
+  if(_devicePollClientId) startBody.client_id = _devicePollClientId;
   fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:tenant})})
+    body:JSON.stringify(startBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.user_code){
       _deviceCode = j.device_code;
@@ -6016,8 +6035,10 @@ function teamsDevicePoll(auto){
   var st = document.getElementById('tm-device-poll-status');
   if(!_deviceCode){ st.textContent='⚠ Start device login first.'; return; }
   if(!auto) st.textContent='Checking…';
+  var pollBody = {tenant_id:_devicePollTenant, device_code:_deviceCode};
+  if(_devicePollClientId) pollBody.client_id = _devicePollClientId;
   fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:_devicePollTenant, device_code:_deviceCode})})
+    body:JSON.stringify(pollBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.token){
       if(_deviceInterval){ clearInterval(_deviceInterval); _deviceInterval=null; }
@@ -6032,6 +6053,7 @@ function teamsDevicePoll(auto){
       var save={mode:'mfa',tenant:_devicePollTenant};
       if(_teamsUpn) save.username=_teamsUpn;
       localStorage.setItem('tm_creds',JSON.stringify(save));
+      tcMainTab('chat');
     } else if(j.pending){
       if(!auto) st.textContent='Still waiting for sign-in…';
     } else if(j.expired){
@@ -6094,23 +6116,27 @@ function teamsPSConnect(){
 
 function teamsPSAcquireGraphToken(tenantId, upn){
   // Ensure the MFA/device-code box is ready even though we're in PS tab
-  _devicePollTenant = tenantId || 'common';
+  _devicePollTenant = tenantId || _devicePollTenant || 'common';
   _teamsUpn = upn || _teamsUpn;
-  // Show an inline prompt inside the PS box
-  var conn = document.getElementById('tm-ps-conn-status');
+  // Show an inline prompt — target the PS connection status area, fall back to the tab pane
+  var conn = document.getElementById('tm-ps-conn-status')
+          || document.getElementById('tm-ps-tab')
+          || document.querySelector('.tm-tab-pane');
   var chatBox = document.getElementById('tm-ps-chat-auth-box');
   if(!chatBox){
     chatBox = document.createElement('div');
     chatBox.id = 'tm-ps-chat-auth-box';
     chatBox.style.cssText = 'margin-top:12px;background:#0d0d1a;border:1px solid #7ec8e3;border-radius:8px;padding:14px;';
-    conn.parentNode.insertBefore(chatBox, conn.nextSibling);
+    if(conn) conn.parentNode.insertBefore(chatBox, conn.nextSibling);
+    else document.body.appendChild(chatBox);
   }
   chatBox.innerHTML = '<div style="font-size:.78rem;color:#aaa;margin-bottom:8px;">&#128172; <strong style="color:#7ec8e3;">One more step for Chat access</strong><br>Microsoft requires a separate Graph token to read your chats. Click below — a code will appear that you enter at microsoft.com/devicelogin.</div>'
     +'<button class="tm-btn tm-btn-sm" id="tm-ps-chat-auth-btn" onclick="teamsPSStartGraphDevice()">&#128274; Authorize Chat Access</button>'
+    +'<div id="tm-ps-chat-start-status" style="font-size:.75rem;margin-top:6px;"></div>'
     +'<div id="tm-ps-chat-code-box" style="display:none;margin-top:10px;text-align:center;">'
-    +'<div style="font-size:.75rem;color:#aaa;">Open: <a href="https://microsoft.com/devicelogin" target="_blank" rel="noopener" style="color:#7ec8e3;">microsoft.com/devicelogin ↗</a></div>'
+    +'<div style="font-size:.75rem;color:#aaa;">Open: <a href="https://microsoft.com/devicelogin" target="_blank" rel="noopener" style="color:#7ec8e3;">microsoft.com/devicelogin &#8599;</a></div>'
     +'<div id="tm-ps-chat-user-code" style="font-size:1.6rem;font-weight:900;color:#00b4d8;letter-spacing:6px;font-family:monospace;padding:6px 0;"></div>'
-    +'<button class="tm-btn tm-btn-sm" onclick="teamsPSPollGraphDevice(false)" style="margin-top:6px;">&#8635; I&#39;ve signed in &#8212; check now</button>'
+    +'<button class="tm-btn tm-btn-sm" onclick="teamsPSPollGraphDevice(false)" style="margin-top:6px;">&#8635; I&#39;ve signed in &mdash; check now</button>'
     +'<div id="tm-ps-chat-poll-status" style="font-size:.75rem;margin-top:4px;"></div>'
     +'</div>';
 }
@@ -6121,26 +6147,29 @@ var _psGraphPollInterval = null;
 function teamsPSStartGraphDevice(){
   var btn = document.getElementById('tm-ps-chat-auth-btn');
   var box = document.getElementById('tm-ps-chat-code-box');
+  var startSt = document.getElementById('tm-ps-chat-start-status');
   if(btn) btn.disabled = true;
+  if(startSt) startSt.innerHTML = '<span style="color:#7ec8e3;">Starting\u2026</span>';
   if(_psGraphPollInterval){ clearInterval(_psGraphPollInterval); _psGraphPollInterval=null; }
+  var psStartBody = {tenant_id:_devicePollTenant};
+  if(_devicePollClientId) psStartBody.client_id = _devicePollClientId;
   fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:_devicePollTenant})})
+    body:JSON.stringify(psStartBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.user_code){
       _psGraphDeviceCode = j.device_code;
       document.getElementById('tm-ps-chat-user-code').textContent = j.user_code;
+      if(startSt) startSt.textContent = '';
       if(box) box.style.display='';
       if(btn) btn.style.display='none';
       _psGraphPollInterval = setInterval(function(){ teamsPSPollGraphDevice(true); }, 5000);
     } else {
-      var st = document.getElementById('tm-ps-chat-poll-status');
-      if(st) st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||'Failed to start device login')+'</span>';
+      if(startSt) startSt.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||JSON.stringify(j))+'</span>';
       if(btn){ btn.disabled=false; }
     }
   }).catch(function(e){
     if(btn) btn.disabled=false;
-    var st=document.getElementById('tm-ps-chat-poll-status');
-    if(st) st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>';
+    if(startSt) startSt.innerHTML='<span style="color:#f55;">Error: '+e+'</span>';
   });
 }
 
@@ -6148,8 +6177,10 @@ function teamsPSPollGraphDevice(auto){
   var st = document.getElementById('tm-ps-chat-poll-status');
   if(!_psGraphDeviceCode){ if(st) st.textContent='\u26A0 Start device login first.'; return; }
   if(!auto && st) st.textContent='Checking\u2026';
+  var pollBody = {tenant_id:_devicePollTenant, device_code:_psGraphDeviceCode};
+  if(_devicePollClientId) pollBody.client_id = _devicePollClientId;
   fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:_devicePollTenant, device_code:_psGraphDeviceCode})})
+    body:JSON.stringify(pollBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.token){
       if(_psGraphPollInterval){ clearInterval(_psGraphPollInterval); _psGraphPollInterval=null; }
@@ -6157,13 +6188,13 @@ function teamsPSPollGraphDevice(auto){
       if(j.upn) _teamsUpn = j.upn;
       // Hide the auth box and show success
       var box = document.getElementById('tm-ps-chat-auth-box');
-      if(box) box.innerHTML='<span style="color:#4caf50;font-size:.82rem;">\u2705 Chat access granted. Switch to the Chat tab to view your messages.</span>';
+      if(box) box.innerHTML='<span style="color:#4caf50;font-size:.82rem;">\u2705 Chat access granted.</span>';
       // Update the top banner
       document.getElementById('teams-connected-banner').style.display='flex';
       var who = _teamsUpn ? ' ('+_teamsUpn+')' : '';
       document.getElementById('teams-connected-who').textContent=who;
-      // If chat tab is already open, reload it
-      if(_tcMainMode==='chat') chatLoad();
+      // Auto-switch to chat tab and load
+      tcMainTab('chat');
     } else if(j.pending){
       if(!auto && st) st.textContent='Still waiting for sign-in\u2026';
     } else if(j.expired){
@@ -6391,8 +6422,10 @@ function chatInlineAuth(){
   }
   if(!tenant) tenant = 'common';
   _devicePollTenant = tenant;  // store so chatInlinePoll uses the same tenant
+  var inlineBody = {tenant_id:tenant};
+  if(_devicePollClientId) inlineBody.client_id = _devicePollClientId;
   fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:tenant})})
+    body:JSON.stringify(inlineBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.user_code){
       _chatInlineDeviceCode = j.device_code;
@@ -6411,8 +6444,10 @@ function chatInlinePoll(auto){
   if(!_chatInlineDeviceCode){ if(st) st.textContent='Start auth first.'; return; }
   if(!auto && st) st.textContent='Checking…';
   var tenant = _devicePollTenant || 'common';
+  var pollBody = {tenant_id:tenant, device_code:_chatInlineDeviceCode};
+  if(_devicePollClientId) pollBody.client_id = _devicePollClientId;
   fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({tenant_id:tenant, device_code:_chatInlineDeviceCode})})
+    body:JSON.stringify(pollBody)})
   .then(function(r){ return r.json(); }).then(function(j){
     if(j.token){
       if(_chatInlinePollInterval){ clearInterval(_chatInlinePollInterval); _chatInlinePollInterval=null; }
@@ -6423,7 +6458,7 @@ function chatInlinePoll(auto){
       document.getElementById('chat-noconn-msg').style.display = 'none';
       document.getElementById('teams-connected-banner').style.display = 'flex';
       if(j.upn) document.getElementById('teams-connected-who').textContent = ' '+escHtml(j.upn);
-      chatLoad();
+      tcMainTab('chat');
     } else if(j.pending){
       if(!auto && st) st.textContent='Still waiting…';
     } else if(j.expired){
@@ -6771,7 +6806,9 @@ def api_teams_device_start():
         tenant_id = data.get('tenant_id', 'common').strip() or 'common'
         if tenant_id.lower() == 'consumers':
             tenant_id = 'common'
-        client_id = '04b07795-8542-4c45-a359-a4867a4e20c5'  # Azure CLI public client
+        # Use caller-supplied client_id (e.g. from an Office 365 app registration),
+        # fall back to Azure CLI public client which works for basic Graph access.
+        client_id = data.get('client_id', '').strip() or '04b07795-8542-4c45-a359-a4867a4e20c5'
         url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/devicecode'
         form = _up.urlencode({
             'client_id': client_id,
@@ -6801,7 +6838,7 @@ def api_teams_device_poll():
         device_code = data.get('device_code', '').strip()
         if not device_code:
             return jsonify({'error': 'device_code required'}), 400
-        client_id = '04b07795-8542-4c45-a359-a4867a4e20c5'
+        client_id = data.get('client_id', '').strip() or '04b07795-8542-4c45-a359-a4867a4e20c5'
         url  = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
         form = _up.urlencode({
             'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
