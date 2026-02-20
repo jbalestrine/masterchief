@@ -1,0 +1,1858 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>MasterChief - Web IDE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+/* ── Reset & Base ────────────────────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#1a1a1a; --bg2:#232323; --bg3:#2d2d2d; --bg4:#333;
+  --accent:#4CAF50; --accent2:#8BC34A; --accent-dim:#2e7d32;
+  --text:#e0e0e0; --text2:#aaa; --text3:#888; --border:#3a3a3a;
+  --danger:#f44336; --warn:#ff9800; --info:#2196F3; --purple:#9C27B0;
+  --py:#3572A5; --ps:#012456; --sh:#89e051; --tf:#7b42bc; --cs:#178600;
+  --sidebar-w:280px; --topbar-h:48px; --statusbar-h:28px;
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+button{font-family:inherit;font-size:inherit;cursor:pointer;}
+input,textarea,select{font-family:inherit;font-size:inherit;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:8px 10px;outline:none;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);}
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+/* ── Layout Shell ────────────────────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100vh;}
+#topbar{height:var(--topbar-h);background:var(--bg3);display:flex;align-items:center;padding:0 16px;gap:12px;border-bottom:2px solid var(--accent);flex-shrink:0;z-index:100;}
+#topbar .logo{color:var(--accent);font-weight:700;font-size:16px;white-space:nowrap;}
+#topbar .logo span{color:var(--text3);font-weight:400;font-size:13px;margin-left:6px;}
+#topbar nav{display:flex;gap:4px;margin-left:auto;}
+#topbar nav a{padding:6px 14px;border-radius:4px;color:var(--text2);font-size:13px;transition:all .2s;}
+#topbar nav a:hover,#topbar nav a.active{background:var(--accent);color:#fff;text-decoration:none;}
+#main{display:flex;flex:1;overflow:hidden;}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+#sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+#sidebar .section-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;font-size:12px;text-transform:uppercase;color:var(--text3);letter-spacing:.5px;border-bottom:1px solid var(--border);}
+#sidebar .section-head button{background:none;border:none;color:var(--accent);font-size:16px;line-height:1;padding:2px 6px;border-radius:3px;}
+#sidebar .section-head button:hover{background:var(--bg4);}
+#file-tree{flex:1;overflow-y:auto;padding:4px 0;}
+.tree-item{display:flex;align-items:center;padding:4px 12px;cursor:pointer;gap:6px;font-size:13px;color:var(--text2);user-select:none;}
+.tree-item:hover{background:var(--bg4);}
+.tree-item.active{background:var(--accent-dim);color:#fff;}
+.tree-item .icon{width:18px;text-align:center;font-size:12px;flex-shrink:0;}
+.tree-item .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+.tree-item .size{font-size:11px;color:var(--text3);flex-shrink:0;}
+.tree-dir{font-weight:600;color:var(--text);}
+.tree-indent{width:16px;flex-shrink:0;}
+
+/* Filter bar in sidebar */
+#sidebar-filter{padding:8px 10px;border-bottom:1px solid var(--border);}
+#sidebar-filter input{width:100%;padding:6px 8px;font-size:12px;border-radius:4px;}
+#sidebar-filter .filter-tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;}
+.filter-tag{padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer;border:1px solid var(--border);color:var(--text3);transition:all .2s;}
+.filter-tag:hover,.filter-tag.active{border-color:var(--accent);color:var(--accent);background:rgba(76,175,80,0.1);}
+.filter-tag[data-lang="python"]{border-color:var(--py);}.filter-tag[data-lang="python"].active{color:var(--py);background:rgba(53,114,165,0.15);}
+.filter-tag[data-lang="powershell"]{border-color:var(--ps);}.filter-tag[data-lang="powershell"].active{color:#5b9bd5;background:rgba(1,36,86,0.2);}
+.filter-tag[data-lang="bash"]{border-color:var(--sh);}.filter-tag[data-lang="bash"].active{color:var(--sh);background:rgba(137,224,81,0.1);}
+
+/* ── Editor Area ─────────────────────────────────────────────────── */
+#editor-area{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#tab-bar{display:flex;align-items:center;background:var(--bg2);border-bottom:1px solid var(--border);min-height:36px;overflow-x:auto;flex-shrink:0;}
+.tab{display:flex;align-items:center;gap:6px;padding:6px 14px;font-size:13px;color:var(--text3);cursor:pointer;border-right:1px solid var(--border);white-space:nowrap;position:relative;}
+.tab:hover{background:var(--bg4);color:var(--text);}
+.tab.active{background:var(--bg);color:var(--text);border-bottom:2px solid var(--accent);}
+.tab .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.tab .close-tab{font-size:14px;color:var(--text3);margin-left:4px;padding:0 3px;border-radius:3px;}
+.tab .close-tab:hover{background:var(--danger);color:#fff;}
+#tab-bar .tab-actions{margin-left:auto;display:flex;gap:4px;padding:0 8px;}
+#tab-bar .tab-actions button{background:none;border:none;color:var(--text3);font-size:14px;padding:4px 6px;border-radius:3px;}
+#tab-bar .tab-actions button:hover{background:var(--bg4);color:var(--accent);}
+
+/* Editor toolbar */
+#editor-toolbar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;}
+#editor-toolbar .toolbar-group{display:flex;gap:4px;}
+.tb-btn{background:var(--bg4);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:4px;font-size:12px;display:flex;align-items:center;gap:5px;transition:all .15s;}
+.tb-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--bg3);}
+.tb-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.tb-btn.primary:hover{background:var(--accent2);}
+.tb-btn.danger{border-color:var(--danger);color:var(--danger);}
+.tb-btn.danger:hover{background:var(--danger);color:#fff;}
+#lang-indicator{margin-left:auto;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;letter-spacing:.5px;}
+.lang-python{background:rgba(53,114,165,.2);color:var(--py);}
+.lang-powershell{background:rgba(91,155,213,.15);color:#5b9bd5;}
+.lang-bash{background:rgba(137,224,81,.15);color:var(--sh);}
+.lang-terraform{background:rgba(123,66,188,.15);color:var(--tf);}
+.lang-json{background:rgba(255,152,0,.15);color:var(--warn);}
+.lang-csharp{background:rgba(23,134,0,.15);color:var(--cs);}
+.lang-unknown{background:var(--bg4);color:var(--text3);}
+
+/* Code editor */
+#code-wrap{flex:1;position:relative;overflow:hidden;}
+#line-numbers{position:absolute;top:0;left:0;width:48px;height:100%;overflow:hidden;background:var(--bg2);border-right:1px solid var(--border);padding:10px 0;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:13px;line-height:1.5;color:var(--text3);text-align:right;user-select:none;z-index:1;}
+#line-numbers div{padding-right:8px;}
+#code-editor{width:100%;height:100%;resize:none;border:none;background:var(--bg);color:var(--text);font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:13px;line-height:1.5;padding:10px 12px 10px 58px;tab-size:4;white-space:pre;overflow:auto;}
+#code-editor:focus{outline:none;}
+
+/* ── Bottom Panel (Output/Terminal) ──────────────────────────────── */
+#bottom-panel{height:220px;background:var(--bg2);border-top:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+#panel-tabs{display:flex;align-items:center;border-bottom:1px solid var(--border);padding:0 8px;min-height:32px;}
+.panel-tab{padding:5px 14px;font-size:12px;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;}
+.panel-tab:hover{color:var(--text);}
+.panel-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+#panel-tabs .panel-actions{margin-left:auto;display:flex;gap:4px;}
+#panel-tabs .panel-actions button{background:none;border:none;color:var(--text3);font-size:12px;padding:3px 8px;border-radius:3px;cursor:pointer;}
+#panel-tabs .panel-actions button:hover{background:var(--bg4);color:var(--text);}
+.panel-body{flex:1;overflow:auto;padding:8px 12px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:12px;line-height:1.5;}
+.panel-body pre{margin:0;white-space:pre-wrap;word-break:break-all;}
+.out-info{color:var(--info);}
+.out-error{color:var(--danger);}
+.out-warn{color:var(--warn);}
+.out-success{color:var(--accent);}
+.out-stdout{color:var(--text);}
+
+/* ── Resize Handle ───────────────────────────────────────────────── */
+#panel-resize{height:4px;background:var(--border);cursor:ns-resize;flex-shrink:0;}
+#panel-resize:hover{background:var(--accent);}
+
+/* ── Status Bar ──────────────────────────────────────────────────── */
+#statusbar{height:var(--statusbar-h);background:var(--accent-dim);display:flex;align-items:center;padding:0 12px;font-size:12px;color:#ccc;gap:16px;flex-shrink:0;}
+#statusbar .sep{width:1px;height:16px;background:rgba(255,255,255,.2);}
+
+/* ── Modal ───────────────────────────────────────────────────────── */
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:var(--bg3);border-radius:10px;border:1px solid var(--border);max-width:720px;width:90%;max-height:85vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+.modal-header h2{font-size:18px;color:var(--accent);}
+.modal-header .close-modal{background:none;border:none;color:var(--text3);font-size:22px;padding:4px 8px;border-radius:4px;}
+.modal-header .close-modal:hover{background:var(--danger);color:#fff;}
+.modal-body{padding:20px;overflow-y:auto;flex:1;}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+
+/* ── Wizard Steps ────────────────────────────────────────────────── */
+.wizard-stepper{display:flex;gap:4px;margin-bottom:20px;}
+.wizard-step-dot{flex:1;height:4px;border-radius:2px;background:var(--bg4);transition:background .3s;}
+.wizard-step-dot.done{background:var(--accent);}
+.wizard-step-dot.current{background:var(--accent2);}
+.wizard-step{display:none;}
+.wizard-step.active{display:block;}
+.form-group{margin-bottom:16px;}
+.form-group label{display:block;margin-bottom:6px;font-size:13px;color:var(--accent);font-weight:600;}
+.form-group .hint{font-size:11px;color:var(--text3);margin-top:3px;}
+.form-row{display:flex;gap:12px;}
+.form-row > *{flex:1;}
+
+/* Template cards */
+.template-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+.template-card{background:var(--bg);border:2px solid var(--border);border-radius:8px;padding:14px;cursor:pointer;transition:all .2s;position:relative;}
+.template-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+.template-card.selected{border-color:var(--accent);background:rgba(76,175,80,.08);}
+.template-card .tpl-icon{font-size:24px;margin-bottom:8px;}
+.template-card .tpl-name{font-weight:600;font-size:14px;margin-bottom:4px;}
+.template-card .tpl-desc{font-size:12px;color:var(--text3);}
+.template-card .tpl-lang{position:absolute;top:8px;right:8px;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;}
+.tpl-lang-python{background:rgba(53,114,165,.2);color:var(--py);}
+.tpl-lang-powershell{background:rgba(91,155,213,.15);color:#5b9bd5;}
+.tpl-lang-bash{background:rgba(137,224,81,.15);color:var(--sh);}
+
+/* Category tags for wizard */
+.cat-grid{display:flex;gap:8px;flex-wrap:wrap;}
+.cat-chip{padding:6px 14px;border-radius:20px;border:1px solid var(--border);color:var(--text3);font-size:13px;cursor:pointer;transition:all .2s;}
+.cat-chip:hover{border-color:var(--accent);color:var(--accent);}
+.cat-chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+/* ── Jobs Panel ──────────────────────────────────────────────────── */
+.job-item{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);}
+.job-status{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.job-running{background:var(--accent);animation:pulse 1s infinite;}
+.job-done{background:var(--text3);}
+.job-failed{background:var(--danger);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* ── Azure Manager Panel ─────────────────────────────────────────── */
+.az-section{margin-bottom:16px;}
+.az-section h4{color:var(--info);margin-bottom:8px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;}
+.az-list{background:var(--bg);border-radius:6px;padding:8px;max-height:180px;overflow-y:auto;border:1px solid var(--border);}
+.az-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:13px;}
+.az-row:hover{background:var(--bg4);}
+
+/* ── Utility ─────────────────────────────────────────────────────── */
+.flex-center{display:flex;align-items:center;justify-content:center;}
+.gap-8{gap:8px;}
+.hidden{display:none!important;}
+.badge{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.badge-success{background:rgba(76,175,80,.2);color:var(--accent);}
+.badge-danger{background:rgba(244,67,54,.2);color:var(--danger);}
+.badge-info{background:rgba(33,150,243,.2);color:var(--info);}
+.empty-state{text-align:center;padding:40px;color:var(--text3);}
+.empty-state .icon{font-size:48px;margin-bottom:12px;}
+.empty-state p{font-size:13px;margin-bottom:12px;}
+.toast{position:fixed;bottom:60px;right:20px;padding:10px 20px;border-radius:6px;font-size:13px;color:#fff;z-index:9999;animation:slideIn .3s;box-shadow:0 4px 12px rgba(0,0,0,.4);}
+.toast.success{background:var(--accent-dim);}
+.toast.error{background:var(--danger);}
+.toast.info{background:var(--info);}
+@keyframes slideIn{from{transform:translateX(60px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ── Top Bar ──────────────────────────────────────────────── -->
+  <div id="topbar">
+    <div class="logo">MasterChief <span>Web IDE</span></div>
+    <nav>
+      <a href="/" title="Dashboard">Dashboard</a>
+      <a href="/pipelines">Pipelines</a>
+      <a href="/cloud">Cloud</a>
+      <a href="/secrets">Secrets</a>
+      <a href="/web_tf_wizard" target="_blank">TF Wizard</a>
+      <a href="/about">About</a>
+    </nav>
+  </div>
+
+  <!-- ── Main Content ─────────────────────────────────────────── -->
+  <div id="main">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div class="section-head">
+        <span>Explorer</span>
+        <div style="display:flex;gap:2px;">
+          <button onclick="refreshTree()" title="Refresh">&#8635;</button>
+          <button onclick="openWizard()" title="New Script">+</button>
+          <button onclick="openAzureManager()" title="Azure Manager">&#9729;</button>
+        </div>
+      </div>
+      <div id="sidebar-filter">
+        <input type="text" id="file-search" placeholder="Search files..." oninput="filterFiles()">
+        <div class="filter-tags">
+          <span class="filter-tag active" data-lang="all" onclick="setLangFilter('all')">All</span>
+          <span class="filter-tag" data-lang="python" onclick="setLangFilter('python')">Python</span>
+          <span class="filter-tag" data-lang="powershell" onclick="setLangFilter('powershell')">PowerShell</span>
+          <span class="filter-tag" data-lang="bash" onclick="setLangFilter('bash')">Bash</span>
+        </div>
+      </div>
+      <div id="file-tree">
+        <div class="empty-state"><div class="icon">&#128193;</div><p>Loading files...</p></div>
+      </div>
+    </div>
+
+    <!-- Editor + Bottom Panel -->
+    <div id="editor-area">
+      <!-- Tab Bar -->
+      <div id="tab-bar">
+        <div class="tab-actions">
+          <button onclick="openWizard()" title="New Script Wizard">+ New</button>
+          <button onclick="createBlankFile()" title="New Empty File">&#128196;</button>
+        </div>
+      </div>
+
+      <!-- Editor Toolbar -->
+      <div id="editor-toolbar">
+        <div class="toolbar-group">
+          <button class="tb-btn primary" onclick="runScript()" title="Run (Ctrl+Enter)">&#9654; Run</button>
+          <button class="tb-btn" onclick="saveFile()" title="Save (Ctrl+S)">&#128190; Save</button>
+          <button class="tb-btn" onclick="runScriptAsync()" title="Run Async">&#9200; Async</button>
+          <button class="tb-btn" onclick="analyzeCode()" title="AI Code Analysis" style="background: linear-gradient(135deg, #9C27B0, #BA55D3); color: white; border-color: #9C27B0;">&#129504; AI Analyze</button>
+        </div>
+        <div class="toolbar-group">
+          <select id="shell-select" style="padding:5px 8px;font-size:12px;border-radius:4px;">
+            <option value="auto">Auto Detect</option>
+            <option value="powershell">PowerShell</option>
+            <option value="python">Python</option>
+            <option value="bash">Bash</option>
+          </select>
+        </div>
+        <div class="toolbar-group">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text3);cursor:pointer;">
+            <input type="checkbox" id="chk-verbose"> Verbose
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text3);cursor:pointer;">
+            <input type="checkbox" id="chk-remote"> Remote
+          </label>
+          <input type="text" id="remote-target" placeholder="remote host" style="width:140px;padding:4px 8px;font-size:12px;" class="hidden">
+        </div>
+        <span id="lang-indicator" class="lang-unknown">PLAIN</span>
+      </div>
+
+      <!-- Code Editor -->
+      <div id="code-wrap">
+        <div id="line-numbers"></div>
+        <textarea id="code-editor" spellcheck="false" placeholder="// Select a file or create a new script..."></textarea>
+      </div>
+
+      <!-- Resize Handle -->
+      <div id="panel-resize"></div>
+
+      <!-- Bottom Panel -->
+      <div id="bottom-panel">
+        <div id="panel-tabs">
+          <span class="panel-tab active" data-panel="output" onclick="switchPanel('output')">Output</span>
+          <span class="panel-tab" data-panel="jobs" onclick="switchPanel('jobs')">Jobs</span>
+          <span class="panel-tab" data-panel="problems" onclick="switchPanel('problems')">Problems</span>
+          <div class="panel-actions">
+            <button onclick="clearOutput()">Clear</button>
+            <button onclick="copyOutput()">Copy</button>
+            <button onclick="togglePanelMax()">&#9645;</button>
+          </div>
+        </div>
+        <div class="panel-body" id="output-panel"><pre id="output-pre"></pre></div>
+        <div class="panel-body hidden" id="jobs-panel"><div id="jobs-list" class="empty-state"><p>No running jobs</p></div></div>
+        <div class="panel-body hidden" id="problems-panel"><pre id="problems-pre" style="color:var(--text3);">No problems detected.</pre></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div id="statusbar">
+    <span id="sb-file">No file open</span>
+    <span class="sep"></span>
+    <span id="sb-cursor">Ln 1, Col 1</span>
+    <span class="sep"></span>
+    <span id="sb-lang">Plain Text</span>
+    <span class="sep"></span>
+    <span id="sb-size">0 B</span>
+    <span style="margin-left:auto;" id="sb-status">Ready</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SCRIPT CREATOR WIZARD MODAL
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="wizard-modal">
+  <div class="modal-box" style="max-width:780px;">
+    <div class="modal-header">
+      <h2>&#9997; Script Creator Wizard</h2>
+      <button class="close-modal" onclick="closeWizard()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <!-- Stepper -->
+      <div class="wizard-stepper" id="wiz-stepper">
+        <div class="wizard-step-dot current" data-step="1"></div>
+        <div class="wizard-step-dot" data-step="2"></div>
+        <div class="wizard-step-dot" data-step="3"></div>
+        <div class="wizard-step-dot" data-step="4"></div>
+      </div>
+
+      <!-- Step 1: Choose Language -->
+      <div class="wizard-step active" id="wiz-step-1">
+        <h3 style="margin-bottom:16px;color:var(--text);">Choose Language</h3>
+        <div class="template-grid">
+          <div class="template-card" data-wlang="powershell" onclick="selectWizLang(this)">
+            <div class="tpl-icon">&#9889;</div>
+            <div class="tpl-name">PowerShell</div>
+            <div class="tpl-desc">Windows automation, Azure management, system administration</div>
+            <span class="tpl-lang tpl-lang-powershell">.ps1</span>
+          </div>
+          <div class="template-card" data-wlang="python" onclick="selectWizLang(this)">
+            <div class="tpl-icon">&#128013;</div>
+            <div class="tpl-name">Python</div>
+            <div class="tpl-desc">Scripting, APIs, data processing, DevOps tooling</div>
+            <span class="tpl-lang tpl-lang-python">.py</span>
+          </div>
+          <div class="template-card" data-wlang="bash" onclick="selectWizLang(this)">
+            <div class="tpl-icon">&#128187;</div>
+            <div class="tpl-name">Bash</div>
+            <div class="tpl-desc">Linux automation, CI/CD scripts, shell utilities</div>
+            <span class="tpl-lang tpl-lang-bash">.sh</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Choose Category -->
+      <div class="wizard-step" id="wiz-step-2">
+        <h3 style="margin-bottom:16px;color:var(--text);">Choose Category</h3>
+        <div class="cat-grid" id="wiz-categories"></div>
+      </div>
+
+      <!-- Step 3: Choose Template -->
+      <div class="wizard-step" id="wiz-step-3">
+        <h3 style="margin-bottom:16px;color:var(--text);">Choose Template</h3>
+        <div class="template-grid" id="wiz-templates"></div>
+      </div>
+
+      <!-- Step 4: Configure & Create -->
+      <div class="wizard-step" id="wiz-step-4">
+        <h3 style="margin-bottom:16px;color:var(--text);">Configure Script</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Script Name</label>
+            <input type="text" id="wiz-filename" placeholder="my-script">
+            <div class="hint">Extension will be added automatically</div>
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <input type="text" id="wiz-description" placeholder="What does this script do?">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Parameters <span style="color:var(--text3);font-weight:400;">(optional, one per line: name=default)</span></label>
+          <textarea id="wiz-params" rows="3" placeholder="ServerName=localhost&#10;Port=8080&#10;Verbose=$true"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Preview</label>
+          <pre id="wiz-preview" style="background:var(--bg);padding:12px;border-radius:6px;border:1px solid var(--border);max-height:200px;overflow:auto;font-size:12px;color:var(--accent);"></pre>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="tb-btn" id="wiz-back" onclick="wizBack()" style="display:none;">&#8592; Back</button>
+      <button class="tb-btn" onclick="closeWizard()">Cancel</button>
+      <button class="tb-btn primary" id="wiz-next" onclick="wizNext()">Next &#8594;</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     AZURE MANAGER MODAL
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="azure-modal">
+  <div class="modal-box" style="max-width:860px;">
+    <div class="modal-header">
+      <h2>&#9729; Azure Resource Manager</h2>
+      <button class="close-modal" onclick="closeModal('azure-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:16px;">
+        <div style="width:45%;">
+          <div class="az-section">
+            <h4>Resource Groups <button class="tb-btn" onclick="azListGroups()" style="font-size:11px;padding:3px 8px;margin-left:8px;">Refresh</button></h4>
+            <div class="az-list" id="azGroups"><div class="empty-state"><p>Click Refresh to load</p></div></div>
+          </div>
+          <div class="az-section">
+            <h4>Resources</h4>
+            <div class="az-list" id="azResources"><div class="empty-state"><p>Select a resource group</p></div></div>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <div class="az-section">
+            <h4>Storage Manager</h4>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <select id="azStorageAccounts" style="flex:1;font-size:12px;"></select>
+              <button class="tb-btn" onclick="azListStorageContainers()" style="font-size:11px;">List</button>
+            </div>
+            <div class="az-list" id="azContainers" style="max-height:100px;margin-bottom:8px;"></div>
+            <div style="display:flex;gap:6px;">
+              <input id="newContainerName" placeholder="container-name" style="flex:1;font-size:12px;">
+              <button class="tb-btn" onclick="azCreateContainer()" style="font-size:11px;">Create</button>
+            </div>
+          </div>
+          <div class="az-section">
+            <h4>CI/ADO Hooks</h4>
+            <div class="az-list" id="adoHooksList" style="max-height:100px;margin-bottom:8px;"></div>
+            <div style="display:flex;gap:6px;">
+              <input id="hookName" placeholder="hook name" style="flex:1;font-size:12px;">
+              <input id="hookUrl" placeholder="callback URL" style="flex:1;font-size:12px;">
+              <button class="tb-btn" onclick="saveHook()" style="font-size:11px;">Save</button>
+            </div>
+          </div>
+          <div class="az-section">
+            <h4>Create Resource Group</h4>
+            <div style="display:flex;gap:6px;">
+              <input id="createRgName" placeholder="rg-name" style="flex:1;font-size:12px;">
+              <input id="createRgLocation" placeholder="location" style="width:120px;font-size:12px;">
+              <button class="tb-btn" onclick="azCreateResourceGroup()" style="font-size:11px;">Create</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MAIN JAVASCRIPT
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const state = {
+  tabs: [],          // {id, name, path, content, dirty, lang}
+  activeTab: null,
+  currentPath: '',
+  treeData: [],
+  langFilter: 'all',
+  searchFilter: '',
+  asyncJobs: [],
+  wizStep: 1,
+  wizLang: null,
+  wizCategory: null,
+  wizTemplate: null,
+};
+
+// ── Script Templates Database ──────────────────────────────────────
+const TEMPLATES = {
+  powershell: {
+    admin: [
+      { name: 'Service Manager', desc: 'Start/stop/restart Windows services', id:'ps-svc',
+        code: `<# .SYNOPSIS Service Manager Script .DESCRIPTION Start, stop, or restart Windows services #>
+param(
+    [Parameter(Mandatory)][string]$ServiceName,
+    [ValidateSet('Start','Stop','Restart')][string]$Action = 'Restart'
+)
+
+$ErrorActionPreference = 'Stop'
+
+Write-Host "[MasterChief] Service Manager" -ForegroundColor Green
+Write-Host "Service: $ServiceName | Action: $Action" -ForegroundColor Cyan
+
+try {
+    $svc = Get-Service -Name $ServiceName
+    Write-Host "Current Status: $($svc.Status)" -ForegroundColor Yellow
+
+    switch ($Action) {
+        'Start'   { Start-Service -Name $ServiceName; Write-Host "Service started." -ForegroundColor Green }
+        'Stop'    { Stop-Service -Name $ServiceName -Force; Write-Host "Service stopped." -ForegroundColor Green }
+        'Restart' { Restart-Service -Name $ServiceName -Force; Write-Host "Service restarted." -ForegroundColor Green }
+    }
+
+    $svc = Get-Service -Name $ServiceName
+    Write-Host "Final Status: $($svc.Status)" -ForegroundColor Cyan
+} catch {
+    Write-Error "Failed: $_"
+    exit 1
+}` },
+      { name: 'User Account Audit', desc: 'List local users and their group memberships', id:'ps-useradmin',
+        code: `<# .SYNOPSIS Local User Account Audit #>
+
+Write-Host "[MasterChief] User Account Audit" -ForegroundColor Green
+Write-Host ("=" * 50)
+
+$users = Get-LocalUser | Sort-Object Name
+foreach ($u in $users) {
+    $groups = (Get-LocalGroup | Where-Object {
+        (Get-LocalGroupMember $_.Name -ErrorAction SilentlyContinue).Name -match [regex]::Escape($u.Name)
+    }).Name -join ', '
+
+    $status = if ($u.Enabled) { "Enabled" } else { "Disabled" }
+    Write-Host ("\n  User: {0}" -f $u.Name) -ForegroundColor Cyan
+    Write-Host ("  Status: {0}" -f $status) -ForegroundColor ($u.Enabled ? "Green" : "Red")
+    Write-Host ("  Groups: {0}" -f ($groups ? $groups : "None"))
+    Write-Host ("  Last Logon: {0}" -f $u.LastLogon)
+}` },
+      { name: 'Disk Space Report', desc: 'Check disk usage across all drives', id:'ps-disk',
+        code: `<# .SYNOPSIS Disk Space Report #>
+param([int]$WarningThresholdPct = 80)
+
+Write-Host "[MasterChief] Disk Space Report" -ForegroundColor Green
+Write-Host ("=" * 60)
+
+Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Object {
+    $usedPct = [math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 1)
+    $freeGB  = [math]::Round($_.FreeSpace / 1GB, 2)
+    $totalGB = [math]::Round($_.Size / 1GB, 2)
+    $color   = if ($usedPct -ge $WarningThresholdPct) { "Red" } else { "Green" }
+
+    Write-Host ("\n  Drive {0}" -f $_.DeviceID) -ForegroundColor Cyan
+    Write-Host ("  Total: {0} GB | Free: {1} GB | Used: {2}%" -f $totalGB, $freeGB, $usedPct) -ForegroundColor $color
+    $bar = ('#' * [math]::Floor($usedPct / 2)) + ('-' * (50 - [math]::Floor($usedPct / 2)))
+    Write-Host ("  [{0}]" -f $bar)
+}` },
+    ],
+    devops: [
+      { name: 'Azure CLI Deploy', desc: 'Deploy resources using Azure CLI', id:'ps-azdeploy',
+        code: `<# .SYNOPSIS Azure Resource Deployment #>
+param(
+    [string]$ResourceGroup = "rg-masterchief",
+    [string]$Location = "eastus",
+    [string]$TemplateFile = "template.json"
+)
+
+Write-Host "[MasterChief] Azure Deployment" -ForegroundColor Green
+
+# Check az cli
+if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+    Write-Error "Azure CLI not found. Install from https://aka.ms/installazurecli"
+    exit 1
+}
+
+# Login check
+$account = az account show 2>$null | ConvertFrom-Json
+if (-not $account) { Write-Host "Logging in..." -ForegroundColor Yellow; az login }
+
+# Create RG if needed
+Write-Host "Ensuring resource group: $ResourceGroup in $Location" -ForegroundColor Cyan
+az group create --name $ResourceGroup --location $Location --output table
+
+# Deploy template
+if (Test-Path $TemplateFile) {
+    Write-Host "Deploying template: $TemplateFile" -ForegroundColor Cyan
+    az deployment group create --resource-group $ResourceGroup --template-file $TemplateFile --output table
+} else {
+    Write-Warning "Template file not found: $TemplateFile"
+}
+
+Write-Host "Deployment complete!" -ForegroundColor Green` },
+      { name: 'Docker Cleanup', desc: 'Clean up unused Docker images and containers', id:'ps-docker',
+        code: `<# .SYNOPSIS Docker Cleanup Utility #>
+param([switch]$DryRun)
+
+Write-Host "[MasterChief] Docker Cleanup" -ForegroundColor Green
+
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    Write-Error "Docker not found"; exit 1
+}
+
+$stopped = docker ps -a --filter "status=exited" -q
+$dangling = docker images --filter "dangling=true" -q
+
+Write-Host "Stopped containers: $($stopped.Count)" -ForegroundColor Yellow
+Write-Host "Dangling images:    $($dangling.Count)" -ForegroundColor Yellow
+
+if (-not $DryRun) {
+    if ($stopped) { docker rm $stopped; Write-Host "Removed stopped containers" -ForegroundColor Green }
+    if ($dangling) { docker rmi $dangling; Write-Host "Removed dangling images" -ForegroundColor Green }
+    docker volume prune -f | Out-Null
+    Write-Host "Volumes pruned" -ForegroundColor Green
+} else {
+    Write-Host "(Dry run - no changes made)" -ForegroundColor Cyan
+}` },
+      { name: 'Git Branch Cleanup', desc: 'Delete merged local branches', id:'ps-gitclean',
+        code: `<# .SYNOPSIS Git Branch Cleanup #>
+param([string]$MainBranch = "main", [switch]$DryRun)
+
+Write-Host "[MasterChief] Git Branch Cleanup" -ForegroundColor Green
+
+$merged = git branch --merged $MainBranch | ForEach-Object { $_.Trim() } |
+    Where-Object { $_ -ne $MainBranch -and $_ -notmatch '^\*' -and $_ -ne 'develop' }
+
+if (-not $merged) { Write-Host "No merged branches to clean up." -ForegroundColor Cyan; exit 0 }
+
+Write-Host "Merged branches to remove:" -ForegroundColor Yellow
+$merged | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+
+if (-not $DryRun) {
+    $merged | ForEach-Object { git branch -d $_; Write-Host "  Deleted: $_" -ForegroundColor Green }
+} else {
+    Write-Host "(Dry run - no branches deleted)" -ForegroundColor Cyan
+}` },
+    ],
+    iac: [
+      { name: 'Terraform Init & Plan', desc: 'Initialize and plan Terraform deployment', id:'ps-tfinit',
+        code: `<# .SYNOPSIS Terraform Init & Plan Runner #>
+param(
+    [string]$WorkDir = ".",
+    [string]$VarFile = "terraform.tfvars",
+    [string]$Environment = "dev"
+)
+
+Write-Host "[MasterChief] Terraform Runner" -ForegroundColor Green
+Write-Host "Environment: $Environment" -ForegroundColor Cyan
+
+Push-Location $WorkDir
+try {
+    Write-Host "> terraform init" -ForegroundColor Yellow
+    terraform init -upgrade
+
+    if ($LASTEXITCODE -ne 0) { Write-Error "Init failed"; exit 1 }
+
+    $planFile = "tfplan-$Environment.bin"
+    Write-Host "> terraform plan -out $planFile" -ForegroundColor Yellow
+
+    $planArgs = @("-out", $planFile)
+    if (Test-Path $VarFile) { $planArgs += @("-var-file", $VarFile) }
+    terraform plan @planArgs
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Plan saved to $planFile" -ForegroundColor Green
+        Write-Host "Run 'terraform apply $planFile' to deploy" -ForegroundColor Cyan
+    }
+} finally { Pop-Location }` },
+    ],
+  },
+  python: {
+    admin: [
+      { name: 'System Health Check', desc: 'Check CPU, memory, disk, and network stats', id:'py-health',
+        code: `#!/usr/bin/env python3
+"""MasterChief - System Health Check"""
+import platform, psutil, socket, datetime
+
+def main():
+    print("[MasterChief] System Health Check")
+    print("=" * 50)
+    print(f"  Host:     {socket.gethostname()}")
+    print(f"  OS:       {platform.system()} {platform.release()}")
+    print(f"  Python:   {platform.python_version()}")
+    print(f"  Time:     {datetime.datetime.now():%Y-%m-%d %H:%M:%S}")
+    print()
+    cpu = psutil.cpu_percent(interval=1)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage('/')
+    print(f"  CPU Usage:    {cpu}%")
+    print(f"  Memory:       {mem.percent}% ({mem.used // (1024**3)}/{mem.total // (1024**3)} GB)")
+    print(f"  Disk:         {disk.percent}% ({disk.used // (1024**3)}/{disk.total // (1024**3)} GB)")
+    print()
+    status = "HEALTHY" if cpu < 90 and mem.percent < 90 and disk.percent < 90 else "WARNING"
+    color = "\\033[92m" if status == "HEALTHY" else "\\033[93m"
+    print(f"  Status: {color}{status}\\033[0m")
+
+if __name__ == '__main__':
+    main()` },
+      { name: 'Log Analyzer', desc: 'Parse and summarize log files', id:'py-logparse',
+        code: `#!/usr/bin/env python3
+"""MasterChief - Log Analyzer"""
+import re, sys, os
+from collections import Counter, defaultdict
+from pathlib import Path
+
+def analyze_log(filepath):
+    print(f"[MasterChief] Log Analyzer: {filepath}")
+    print("=" * 50)
+    levels = Counter()
+    hourly = defaultdict(int)
+    errors = []
+    pattern = re.compile(r'(\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}):\\d{2}.*?(DEBUG|INFO|WARNING|ERROR|CRITICAL)')
+
+    with open(filepath, 'r', errors='ignore') as f:
+        for line in f:
+            m = pattern.search(line)
+            if m:
+                hour, level = m.groups()
+                levels[level] += 1
+                hourly[hour] += 1
+                if level in ('ERROR', 'CRITICAL'):
+                    errors.append(line.strip()[:120])
+
+    total = sum(levels.values())
+    print(f"  Total entries: {total}")
+    for lvl in ('DEBUG','INFO','WARNING','ERROR','CRITICAL'):
+        if levels[lvl]:
+            print(f"  {lvl:10s}: {levels[lvl]:>6d} ({levels[lvl]/total*100:.1f}%)")
+
+    if errors:
+        print(f"\\n  Recent errors ({len(errors)} total):")
+        for e in errors[-5:]:
+            print(f"    {e}")
+
+if __name__ == '__main__':
+    path = sys.argv[1] if len(sys.argv) > 1 else 'app.log'
+    if os.path.exists(path):
+        analyze_log(path)
+    else:
+        print(f"Log file not found: {path}")` },
+    ],
+    devops: [
+      { name: 'API Health Monitor', desc: 'Ping multiple API endpoints and report status', id:'py-apimon',
+        code: `#!/usr/bin/env python3
+"""MasterChief - API Health Monitor"""
+import urllib.request, json, time, sys
+
+ENDPOINTS = [
+    {"name": "MasterChief API", "url": "http://localhost:8888/api/stats"},
+    {"name": "Example", "url": "https://httpbin.org/get"},
+]
+
+def check_endpoint(ep):
+    try:
+        start = time.time()
+        req = urllib.request.Request(ep["url"], headers={"User-Agent": "MasterChief-Monitor/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            elapsed = (time.time() - start) * 1000
+            return {"name": ep["name"], "status": resp.status, "ms": round(elapsed), "ok": True}
+    except Exception as e:
+        return {"name": ep["name"], "status": 0, "ms": 0, "ok": False, "error": str(e)}
+
+def main():
+    print("[MasterChief] API Health Monitor")
+    print("=" * 60)
+    results = [check_endpoint(ep) for ep in ENDPOINTS]
+    for r in results:
+        icon = "OK" if r["ok"] else "FAIL"
+        color = "\\033[92m" if r["ok"] else "\\033[91m"
+        print(f"  {color}[{icon}]\\033[0m {r['name']:30s} {r['status']:>3d}  {r['ms']:>4d}ms")
+    healthy = sum(1 for r in results if r["ok"])
+    print(f"\\n  Summary: {healthy}/{len(results)} endpoints healthy")
+
+if __name__ == '__main__':
+    main()` },
+      { name: 'REST API Client', desc: 'Reusable REST client for any API', id:'py-restclient',
+        code: `#!/usr/bin/env python3
+"""MasterChief - REST API Client"""
+import urllib.request, json, sys
+
+class APIClient:
+    def __init__(self, base_url, headers=None):
+        self.base_url = base_url.rstrip('/')
+        self.headers = headers or {"Content-Type": "application/json"}
+
+    def request(self, method, path, data=None):
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        body = json.dumps(data).encode() if data else None
+        req = urllib.request.Request(url, data=body, headers=self.headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return {"ok": True, "status": resp.status, "data": json.loads(resp.read())}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def get(self, path): return self.request("GET", path)
+    def post(self, path, data): return self.request("POST", path, data)
+
+# Example usage:
+if __name__ == '__main__':
+    client = APIClient("http://localhost:8888")
+    result = client.get("/api/stats")
+    print(json.dumps(result, indent=2))` },
+    ],
+    iac: [
+      { name: 'Terraform State Reader', desc: 'Parse and display Terraform state', id:'py-tfstate',
+        code: `#!/usr/bin/env python3
+"""MasterChief - Terraform State Reader"""
+import json, sys, os
+
+def read_state(filepath='terraform.tfstate'):
+    print("[MasterChief] Terraform State Reader")
+    print("=" * 50)
+    if not os.path.exists(filepath):
+        print(f"State file not found: {filepath}"); return
+
+    with open(filepath) as f:
+        state = json.load(f)
+
+    print(f"  Version:   {state.get('version')}")
+    print(f"  Serial:    {state.get('serial')}")
+    print(f"  Lineage:   {state.get('lineage','N/A')}")
+
+    resources = state.get('resources', [])
+    print(f"  Resources: {len(resources)}\\n")
+
+    for res in resources:
+        rtype = res.get('type', '?')
+        name  = res.get('name', '?')
+        mode  = res.get('mode', 'managed')
+        instances = res.get('instances', [])
+        print(f"  [{mode}] {rtype}.{name} ({len(instances)} instance(s))")
+        for inst in instances:
+            attrs = inst.get('attributes', {})
+            aid = attrs.get('id', 'N/A')
+            print(f"           id = {aid}")
+
+if __name__ == '__main__':
+    fp = sys.argv[1] if len(sys.argv) > 1 else 'terraform.tfstate'
+    read_state(fp)` },
+    ],
+  },
+  bash: {
+    admin: [
+      { name: 'Server Setup', desc: 'Initial server setup with common packages', id:'sh-setup',
+        code: `#!/bin/bash
+# MasterChief - Server Setup Script
+set -euo pipefail
+
+echo "[MasterChief] Server Setup"
+echo "=========================================="
+
+# Detect package manager
+if command -v apt-get &>/dev/null; then
+    PKG="apt-get"
+    echo "  Package manager: apt"
+    sudo apt-get update -qq
+    sudo apt-get install -y curl wget git jq htop unzip
+elif command -v yum &>/dev/null; then
+    PKG="yum"
+    echo "  Package manager: yum"
+    sudo yum install -y curl wget git jq htop unzip
+else
+    echo "  Unsupported package manager"
+    exit 1
+fi
+
+echo ""
+echo "  Hostname:  $(hostname)"
+echo "  OS:        $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+echo "  Kernel:    $(uname -r)"
+echo "  Uptime:    $(uptime -p 2>/dev/null || uptime)"
+echo ""
+echo "[MasterChief] Setup complete!"` },
+      { name: 'Backup Script', desc: 'Create timestamped backups of directories', id:'sh-backup',
+        code: `#!/bin/bash
+# MasterChief - Backup Script
+set -euo pipefail
+
+SOURCE="\${1:-.}"
+BACKUP_DIR="\${2:-./backups}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+ARCHIVE="\${BACKUP_DIR}/backup_\${TIMESTAMP}.tar.gz"
+
+echo "[MasterChief] Backup Utility"
+echo "  Source: $SOURCE"
+echo "  Target: $ARCHIVE"
+
+mkdir -p "$BACKUP_DIR"
+tar -czf "$ARCHIVE" -C "$(dirname "$SOURCE")" "$(basename "$SOURCE")"
+SIZE=$(du -sh "$ARCHIVE" | cut -f1)
+echo "  Size:   $SIZE"
+echo "  Backup complete!"
+
+# Cleanup old backups (keep last 5)
+ls -t "$BACKUP_DIR"/backup_*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -v
+echo "  Old backups cleaned up."` },
+    ],
+    devops: [
+      { name: 'Docker Build & Push', desc: 'Build Docker image and push to registry', id:'sh-dockerbuild',
+        code: `#!/bin/bash
+# MasterChief - Docker Build & Push
+set -euo pipefail
+
+IMAGE_NAME="\${1:-masterchief-app}"
+TAG="\${2:-latest}"
+REGISTRY="\${3:-}"
+
+echo "[MasterChief] Docker Build & Push"
+echo "  Image: $IMAGE_NAME:$TAG"
+
+if [ ! -f "Dockerfile" ]; then
+    echo "ERROR: Dockerfile not found in current directory"
+    exit 1
+fi
+
+echo "  Building..."
+docker build -t "$IMAGE_NAME:$TAG" .
+
+if [ -n "$REGISTRY" ]; then
+    FULL_TAG="$REGISTRY/$IMAGE_NAME:$TAG"
+    echo "  Tagging: $FULL_TAG"
+    docker tag "$IMAGE_NAME:$TAG" "$FULL_TAG"
+    echo "  Pushing..."
+    docker push "$FULL_TAG"
+    echo "  Pushed to registry!"
+fi
+
+echo "  Build complete!"
+docker images "$IMAGE_NAME" --format "table {{.Repository}}\\t{{.Tag}}\\t{{.Size}}"` },
+      { name: 'CI/CD Pipeline Runner', desc: 'Run a series of CI/CD steps', id:'sh-cicd',
+        code: `#!/bin/bash
+# MasterChief - CI/CD Pipeline Runner
+set -euo pipefail
+
+echo "[MasterChief] CI/CD Pipeline"
+echo "=========================================="
+
+step() { echo -e "\\n\\033[1;32m[$1/$TOTAL] $2\\033[0m"; }
+TOTAL=5
+
+step 1 "Install dependencies"
+[ -f "requirements.txt" ] && pip install -r requirements.txt -q 2>/dev/null || echo "  No requirements.txt"
+[ -f "package.json" ] && npm ci --silent 2>/dev/null || echo "  No package.json"
+
+step 2 "Lint"
+[ -f "*.py" ] && python -m flake8 . --count --max-line-length=120 2>/dev/null || echo "  Lint skipped"
+
+step 3 "Test"
+[ -d "tests" ] && python -m pytest tests/ -q 2>/dev/null || echo "  No tests found"
+
+step 4 "Build"
+[ -f "Dockerfile" ] && docker build -t app:ci . -q 2>/dev/null || echo "  No Dockerfile"
+
+step 5 "Deploy check"
+echo "  All checks passed. Ready to deploy!"
+
+echo ""
+echo "=========================================="
+echo "[MasterChief] Pipeline complete!"` },
+    ],
+    iac: [
+      { name: 'Terraform Wrapper', desc: 'Simplified Terraform workflow wrapper', id:'sh-tfwrap',
+        code: `#!/bin/bash
+# MasterChief - Terraform Wrapper
+set -euo pipefail
+
+ACTION="\${1:-plan}"
+ENV="\${2:-dev}"
+TF_DIR="\${3:-.}"
+
+echo "[MasterChief] Terraform Wrapper"
+echo "  Action:      $ACTION"
+echo "  Environment: $ENV"
+echo "  Directory:   $TF_DIR"
+echo ""
+
+cd "$TF_DIR"
+
+case "$ACTION" in
+    init)
+        terraform init -upgrade
+        ;;
+    plan)
+        terraform init -upgrade -input=false
+        terraform plan -var-file="envs/$ENV.tfvars" -out="tfplan-$ENV"
+        ;;
+    apply)
+        if [ -f "tfplan-$ENV" ]; then
+            terraform apply "tfplan-$ENV"
+        else
+            echo "ERROR: No plan file found. Run plan first."
+            exit 1
+        fi
+        ;;
+    destroy)
+        terraform destroy -var-file="envs/$ENV.tfvars" -auto-approve
+        ;;
+    *)
+        echo "Usage: $0 {init|plan|apply|destroy} [environment] [directory]"
+        exit 1
+        ;;
+esac
+
+echo ""
+echo "[MasterChief] Terraform $ACTION complete!"` },
+    ],
+  },
+};
+
+const CATEGORIES = {
+  admin:  { label: 'Admin / SysAdmin', icon: '&#128736;', desc: 'System administration and management' },
+  devops: { label: 'DevOps / CI-CD', icon: '&#9881;', desc: 'Continuous integration, deployment, Docker' },
+  iac:    { label: 'IaC / Terraform', icon: '&#9729;', desc: 'Infrastructure as Code and provisioning' },
+};
+
+const LANG_EXT = { powershell: '.ps1', python: '.py', bash: '.sh' };
+const LANG_LABELS = { powershell: 'PowerShell', python: 'Python', bash: 'Bash' };
+
+// ── Helper: Detect language from filename ──────────────────────────
+function detectLang(name) {
+  if (!name) return 'unknown';
+  const n = name.toLowerCase();
+  if (n.endsWith('.ps1') || n.endsWith('.psm1') || n.endsWith('.psd1')) return 'powershell';
+  if (n.endsWith('.py') || n.endsWith('.pyw')) return 'python';
+  if (n.endsWith('.sh') || n.endsWith('.bash') || n.endsWith('.zsh')) return 'bash';
+  if (n.endsWith('.tf') || n.endsWith('.tfvars')) return 'terraform';
+  if (n.endsWith('.json') || n.endsWith('.jsonl')) return 'json';
+  if (n.endsWith('.cs')) return 'csharp';
+  if (n.endsWith('.js') || n.endsWith('.ts')) return 'json';
+  return 'unknown';
+}
+
+function langLabel(lang) { return LANG_LABELS[lang] || lang.charAt(0).toUpperCase() + lang.slice(1); }
+function formatSize(bytes) { if (bytes < 1024) return bytes + ' B'; if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB'; return (bytes/1048576).toFixed(1) + ' MB'; }
+
+// ── Toast notifications ────────────────────────────────────────────
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ── Output helpers ─────────────────────────────────────────────────
+function appendOutput(text, cls='out-stdout') {
+  const pre = document.getElementById('output-pre');
+  const span = document.createElement('span');
+  span.className = cls;
+  span.textContent = text;
+  pre.appendChild(span);
+  pre.parentElement.scrollTop = pre.parentElement.scrollHeight;
+}
+
+function clearOutput() { document.getElementById('output-pre').innerHTML = ''; }
+function copyOutput() {
+  const t = document.getElementById('output-pre').textContent;
+  navigator.clipboard.writeText(t).then(() => toast('Copied to clipboard')).catch(() => toast('Copy failed', 'error'));
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ── Line numbers ───────────────────────────────────────────────────
+function updateLineNumbers() {
+  const editor = document.getElementById('code-editor');
+  const lines = editor.value.split('\n').length;
+  const ln = document.getElementById('line-numbers');
+  let html = '';
+  for (let i = 1; i <= lines; i++) html += '<div>' + i + '</div>';
+  ln.innerHTML = html;
+}
+
+// ── Sync scroll between editor and line numbers ────────────────────
+function syncScroll() {
+  const editor = document.getElementById('code-editor');
+  document.getElementById('line-numbers').scrollTop = editor.scrollTop;
+}
+
+// ── Update cursor position in status bar ───────────────────────────
+function updateCursor() {
+  const editor = document.getElementById('code-editor');
+  const val = editor.value.substring(0, editor.selectionStart);
+  const line = val.split('\n').length;
+  const col = val.split('\n').pop().length + 1;
+  document.getElementById('sb-cursor').textContent = `Ln ${line}, Col ${col}`;
+}
+
+// ── Update language indicator ──────────────────────────────────────
+function updateLangIndicator(lang) {
+  const el = document.getElementById('lang-indicator');
+  el.className = 'lang-' + (lang || 'unknown');
+  el.textContent = langLabel(lang || 'unknown').toUpperCase();
+  document.getElementById('sb-lang').textContent = langLabel(lang || 'unknown');
+}
+
+// ── File Tree ──────────────────────────────────────────────────────
+async function refreshTree(path) {
+  const el = document.getElementById('file-tree');
+  el.innerHTML = '<div style="padding:12px;color:var(--text3);">Loading...</div>';
+  try {
+    const r = await fetch('/api/ide/tree?path=' + encodeURIComponent(path || ''));
+    const j = await r.json();
+    if (!j.ok) { el.innerHTML = '<div class="empty-state"><p>Failed to load: ' + (j.error||'') + '</p></div>'; return; }
+    state.treeData = j.nodes || [];
+    state.currentPath = j.path || '';
+    renderTree();
+  } catch(e) {
+    el.innerHTML = '<div class="empty-state"><p>Error: ' + e + '</p></div>';
+  }
+}
+
+function renderTree() {
+  const el = document.getElementById('file-tree');
+  let nodes = state.treeData;
+  const search = state.searchFilter.toLowerCase();
+  const langF = state.langFilter;
+
+  // filter
+  if (search || langF !== 'all') {
+    nodes = nodes.filter(n => {
+      if (n.type === 'dir') return !search || n.name.toLowerCase().includes(search);
+      const matchSearch = !search || n.name.toLowerCase().includes(search);
+      const matchLang = langF === 'all' || detectLang(n.name) === langF;
+      return matchSearch && matchLang;
+    });
+  }
+
+  if (nodes.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#128270;</div><p>No files found</p></div>';
+    return;
+  }
+
+  // sort: dirs first, then files
+  nodes.sort((a,b) => {
+    if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  el.innerHTML = '';
+
+  // back button if in subfolder
+  if (state.currentPath) {
+    const back = document.createElement('div');
+    back.className = 'tree-item tree-dir';
+    back.innerHTML = '<span class="icon">&#128281;</span><span class="name">..</span>';
+    back.onclick = () => {
+      const parts = state.currentPath.split(/[/\\]/).filter(Boolean);
+      parts.pop();
+      refreshTree(parts.join('/'));
+    };
+    el.appendChild(back);
+  }
+
+  nodes.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'tree-item' + (n.type === 'dir' ? ' tree-dir' : '');
+    const lang = n.type === 'file' ? detectLang(n.name) : '';
+    const icon = n.type === 'dir' ? '&#128193;' :
+      lang === 'python' ? '&#128013;' :
+      lang === 'powershell' ? '&#9889;' :
+      lang === 'bash' ? '&#128187;' :
+      lang === 'terraform' ? '&#9729;' :
+      lang === 'json' ? '&#128196;' : '&#128196;';
+    const sizeStr = n.type === 'file' ? formatSize(n.size || 0) : '';
+
+    div.innerHTML = `<span class="icon">${icon}</span><span class="name">${n.name}</span><span class="size">${sizeStr}</span>`;
+
+    if (n.type === 'dir') {
+      div.onclick = () => refreshTree(n.path);
+    } else {
+      div.onclick = () => openFile(n.path, n.name);
+      // highlight active
+      if (state.activeTab && state.tabs[state.activeTab] && state.tabs[state.activeTab].path === n.path) {
+        div.classList.add('active');
+      }
+    }
+    el.appendChild(div);
+  });
+}
+
+function filterFiles() {
+  state.searchFilter = document.getElementById('file-search').value;
+  renderTree();
+}
+
+function setLangFilter(lang) {
+  state.langFilter = lang;
+  document.querySelectorAll('.filter-tag').forEach(t => t.classList.toggle('active', t.dataset.lang === lang));
+  renderTree();
+}
+
+// ── Tab Management ─────────────────────────────────────────────────
+function openFile(path, name) {
+  // Check if already open
+  const idx = state.tabs.findIndex(t => t.path === path);
+  if (idx >= 0) {
+    switchTab(idx);
+    return;
+  }
+
+  // Load file content from server
+  loadFileContent(path, name);
+}
+
+async function loadFileContent(path, name) {
+  try {
+    const r = await fetch('/api/ide/load', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({filename: path}) });
+    const j = await r.json();
+    if (j.ok) {
+      const lang = detectLang(name);
+      const tab = { id: Date.now(), name, path, content: j.content, dirty: false, lang };
+      state.tabs.push(tab);
+      switchTab(state.tabs.length - 1);
+      appendOutput(`[info] Loaded ${name}\n`, 'out-info');
+    } else {
+      toast('Load failed: ' + (j.error || ''), 'error');
+    }
+  } catch(e) {
+    toast('Error loading file: ' + e, 'error');
+  }
+}
+
+function switchTab(idx) {
+  // Save current editor content to current tab
+  if (state.activeTab !== null && state.tabs[state.activeTab]) {
+    state.tabs[state.activeTab].content = document.getElementById('code-editor').value;
+  }
+  state.activeTab = idx;
+  const tab = state.tabs[idx];
+  document.getElementById('code-editor').value = tab.content;
+  updateLineNumbers();
+  updateLangIndicator(tab.lang);
+  document.getElementById('sb-file').textContent = tab.name;
+  document.getElementById('sb-size').textContent = formatSize(new Blob([tab.content]).size);
+  renderTabs();
+  renderTree(); // re-highlight active
+}
+
+function closeTab(idx, ev) {
+  if (ev) ev.stopPropagation();
+  const tab = state.tabs[idx];
+  if (tab.dirty && !confirm('Unsaved changes in ' + tab.name + '. Close anyway?')) return;
+  state.tabs.splice(idx, 1);
+  if (state.tabs.length === 0) {
+    state.activeTab = null;
+    document.getElementById('code-editor').value = '';
+    document.getElementById('sb-file').textContent = 'No file open';
+    updateLineNumbers();
+    updateLangIndicator('unknown');
+  } else {
+    const newIdx = Math.min(idx, state.tabs.length - 1);
+    switchTab(newIdx);
+  }
+  renderTabs();
+}
+
+function renderTabs() {
+  const bar = document.getElementById('tab-bar');
+  // Keep the tab-actions div
+  const actions = bar.querySelector('.tab-actions');
+  bar.innerHTML = '';
+  state.tabs.forEach((tab, idx) => {
+    const div = document.createElement('div');
+    div.className = 'tab' + (idx === state.activeTab ? ' active' : '');
+    const langColors = { python: 'var(--py)', powershell: '#5b9bd5', bash: 'var(--sh)', terraform: 'var(--tf)' };
+    const dotColor = langColors[tab.lang] || 'var(--text3)';
+    div.innerHTML = `<span class="dot" style="background:${dotColor}"></span>${tab.name}${tab.dirty ? ' *' : ''}<span class="close-tab" onclick="closeTab(${idx}, event)">&times;</span>`;
+    div.onclick = () => switchTab(idx);
+    bar.appendChild(div);
+  });
+  bar.appendChild(actions);
+}
+
+// ── Save File ──────────────────────────────────────────────────────
+async function saveFile() {
+  if (state.activeTab === null) { toast('No file open', 'error'); return; }
+  const tab = state.tabs[state.activeTab];
+  tab.content = document.getElementById('code-editor').value;
+  document.getElementById('sb-status').textContent = 'Saving...';
+  try {
+    const r = await fetch('/api/ide/save', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({filename: tab.path || tab.name, content: tab.content}) });
+    const j = await r.json();
+    if (j.ok) {
+      tab.dirty = false;
+      renderTabs();
+      toast('Saved ' + tab.name);
+      appendOutput(`[info] Saved ${tab.name}\n`, 'out-info');
+      refreshTree(state.currentPath);
+    } else {
+      toast('Save failed: ' + (j.error || ''), 'error');
+    }
+  } catch(e) {
+    toast('Save error: ' + e, 'error');
+  }
+  document.getElementById('sb-status').textContent = 'Ready';
+}
+
+// ── Run Script ─────────────────────────────────────────────────────
+async function runScript() {
+  if (state.activeTab === null) { toast('No file open', 'error'); return; }
+  const tab = state.tabs[state.activeTab];
+  tab.content = document.getElementById('code-editor').value;
+  const shell = document.getElementById('shell-select').value;
+  const verbose = document.getElementById('chk-verbose').checked;
+  const remote = document.getElementById('chk-remote').checked;
+  const target = document.getElementById('remote-target').value;
+
+  const payload = { shell, verbose, remote, remote_target: target, content: tab.content };
+  if (tab.path) payload.filename = tab.path;
+
+  appendOutput('\n--- Executing ' + tab.name + ' ---\n', 'out-info');
+  document.getElementById('sb-status').textContent = 'Running...';
+  switchPanel('output');
+
+  try {
+    const r = await fetch('/api/ide/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const j = await r.json();
+    if (j.ok) {
+      if (j.stdout) appendOutput(j.stdout, 'out-stdout');
+      if (j.stderr) appendOutput(j.stderr, 'out-error');
+      const exitCls = j.returncode === 0 ? 'out-success' : 'out-error';
+      appendOutput(`\n--- EXIT ${j.returncode} ---\n`, exitCls);
+    } else {
+      appendOutput('[error] ' + (j.error || JSON.stringify(j)) + '\n', 'out-error');
+    }
+  } catch(e) {
+    appendOutput('[error] Run failed: ' + e + '\n', 'out-error');
+  }
+  document.getElementById('sb-status').textContent = 'Ready';
+}
+
+// ── AI Code Analysis ───────────────────────────────────────────────
+async function analyzeCode() {
+  if (state.activeTab === null) { toast('No file open', 'error'); return; }
+  const tab = state.tabs[state.activeTab];
+  const code = document.getElementById('code-editor').value;
+  
+  if (!code.trim()) { toast('No code to analyze', 'error'); return; }
+  
+  // Create analysis prompt
+  const analysisPrompt = `Please analyze this ${tab.lang || 'code'} file for:
+1. Syntax errors and potential bugs
+2. Code quality issues and improvements
+3. Best practices and suggestions
+4. Performance optimizations if applicable
+5. Security concerns if any
+
+File: ${tab.name}
+Language: ${tab.lang || 'unknown'}
+
+Code:
+\`\`\`${tab.lang || ''}
+${code}
+\`\`\`
+
+Please provide a detailed analysis with specific recommendations.`;
+
+  document.getElementById('sb-status').textContent = 'Analyzing with AI...';
+  appendOutput('\n--- AI Code Analysis ---\n', 'out-info');
+  switchPanel('output');
+
+  try {
+    const r = await fetch('/api/echo/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        message: analysisPrompt,
+        session_id: 'code_analysis_' + Date.now(),
+        auto_continue: true,
+        save_to_file: false
+      })
+    });
+    
+    const j = await r.json();
+    if (j.response) {
+      appendOutput('AI Analysis Results:\n', 'out-success');
+      appendOutput(j.response + '\n', 'out-stdout');
+      appendOutput('--- Analysis Complete ---\n', 'out-info');
+      toast('Code analysis complete');
+    } else {
+      appendOutput('[error] Analysis failed: ' + (j.error || 'Unknown error') + '\n', 'out-error');
+      toast('Analysis failed', 'error');
+    }
+  } catch(e) {
+    appendOutput('[error] Analysis request failed: ' + e + '\n', 'out-error');
+    toast('Analysis error: ' + e, 'error');
+  }
+  document.getElementById('sb-status').textContent = 'Ready';
+}
+
+// ── Run Async ──────────────────────────────────────────────────────
+async function runScriptAsync() {
+  if (state.activeTab === null) { toast('No file open', 'error'); return; }
+  const tab = state.tabs[state.activeTab];
+  tab.content = document.getElementById('code-editor').value;
+
+  try {
+    const r = await fetch('/api/ide/exec_async', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({content: tab.content, filename: tab.path}) });
+    const j = await r.json();
+    if (j.ok) {
+      const job = { id: j.exec_id, name: tab.name, status: 'running', started: new Date() };
+      state.asyncJobs.push(job);
+      renderJobs();
+      toast('Job started: ' + tab.name);
+      appendOutput(`[async] Started job ${j.exec_id} for ${tab.name}\n`, 'out-info');
+      pollJob(j.exec_id);
+    } else {
+      toast('Async start failed: ' + (j.error || ''), 'error');
+    }
+  } catch(e) {
+    toast('Error: ' + e, 'error');
+  }
+}
+
+async function pollJob(execId) {
+  const check = async () => {
+    try {
+      const r = await fetch('/api/ide/exec_status?exec_id=' + execId);
+      const j = await r.json();
+      if (!j.ok) return;
+      const job = state.asyncJobs.find(jb => jb.id === execId);
+      if (!job) return;
+      if (j.status === 'done' || j.status === 'error') {
+        job.status = j.status === 'done' ? 'done' : 'failed';
+        renderJobs();
+        if (j.stdout) appendOutput(`[job ${execId.slice(0,8)}] ${j.stdout}\n`, 'out-stdout');
+        if (j.stderr) appendOutput(`[job ${execId.slice(0,8)}] ${j.stderr}\n`, 'out-error');
+        appendOutput(`[async] Job ${execId.slice(0,8)} finished (exit: ${j.returncode})\n`, j.returncode === 0 ? 'out-success' : 'out-error');
+        return;
+      }
+      setTimeout(check, 2000);
+    } catch(e) { setTimeout(check, 3000); }
+  };
+  setTimeout(check, 1000);
+}
+
+function renderJobs() {
+  const el = document.getElementById('jobs-list');
+  if (state.asyncJobs.length === 0) {
+    el.innerHTML = '<div class="empty-state"><p>No jobs</p></div>';
+    return;
+  }
+  el.innerHTML = '';
+  state.asyncJobs.slice().reverse().forEach(job => {
+    const cls = job.status === 'running' ? 'job-running' : job.status === 'done' ? 'job-done' : 'job-failed';
+    const div = document.createElement('div');
+    div.className = 'job-item';
+    div.innerHTML = `<span class="job-status ${cls}"></span><span>${job.name}</span><span class="badge badge-${job.status==='running'?'info':job.status==='done'?'success':'danger'}">${job.status}</span><span style="margin-left:auto;font-size:11px;color:var(--text3);">${job.id.slice(0,8)}</span>`;
+    el.appendChild(div);
+  });
+}
+
+// ── Panel Management ───────────────────────────────────────────────
+function switchPanel(name) {
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+  document.getElementById('output-panel').classList.toggle('hidden', name !== 'output');
+  document.getElementById('jobs-panel').classList.toggle('hidden', name !== 'jobs');
+  document.getElementById('problems-panel').classList.toggle('hidden', name !== 'problems');
+}
+
+let panelMaxed = false;
+function togglePanelMax() {
+  const panel = document.getElementById('bottom-panel');
+  panelMaxed = !panelMaxed;
+  panel.style.height = panelMaxed ? '60vh' : '220px';
+}
+
+// ── Panel Resize ───────────────────────────────────────────────────
+(function initResize() {
+  const handle = document.getElementById('panel-resize');
+  const panel = document.getElementById('bottom-panel');
+  let startY, startH;
+  handle.addEventListener('mousedown', e => {
+    startY = e.clientY;
+    startH = panel.offsetHeight;
+    const onMove = e2 => { panel.style.height = Math.max(80, startH + startY - e2.clientY) + 'px'; };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+// ── Remote target toggle ───────────────────────────────────────────
+document.getElementById('chk-remote').addEventListener('change', function() {
+  document.getElementById('remote-target').classList.toggle('hidden', !this.checked);
+});
+
+// ── Editor events ──────────────────────────────────────────────────
+const editor = document.getElementById('code-editor');
+editor.addEventListener('input', () => {
+  updateLineNumbers();
+  if (state.activeTab !== null && state.tabs[state.activeTab]) {
+    state.tabs[state.activeTab].dirty = true;
+    renderTabs();
+    document.getElementById('sb-size').textContent = formatSize(new Blob([editor.value]).size);
+  }
+});
+editor.addEventListener('scroll', syncScroll);
+editor.addEventListener('click', updateCursor);
+editor.addEventListener('keyup', updateCursor);
+
+// Tab key handling
+editor.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    editor.value = editor.value.substring(0, start) + '    ' + editor.value.substring(end);
+    editor.selectionStart = editor.selectionEnd = start + 4;
+    updateLineNumbers();
+  }
+});
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runScript(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n') { e.preventDefault(); openWizard(); }
+});
+
+// ── Create blank file ──────────────────────────────────────────────
+function createBlankFile() {
+  const name = prompt('Filename (e.g., script.ps1):');
+  if (!name) return;
+  const lang = detectLang(name);
+  // Create path relative to current directory
+  const path = state.currentPath ? `${state.currentPath}/${name}` : name;
+  const tab = { id: Date.now(), name, path, content: '', dirty: true, lang };
+  state.tabs.push(tab);
+  switchTab(state.tabs.length - 1);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SCRIPT CREATOR WIZARD
+// ══════════════════════════════════════════════════════════════════════
+function openWizard() {
+  state.wizStep = 1;
+  state.wizLang = null;
+  state.wizCategory = null;
+  state.wizTemplate = null;
+  updateWizardUI();
+  openModal('wizard-modal');
+}
+
+function closeWizard() { closeModal('wizard-modal'); }
+
+function selectWizLang(el) {
+  document.querySelectorAll('#wiz-step-1 .template-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  state.wizLang = el.dataset.wlang;
+}
+
+function updateWizardUI() {
+  // update stepper
+  document.querySelectorAll('.wizard-step-dot').forEach(dot => {
+    const s = parseInt(dot.dataset.step);
+    dot.classList.toggle('done', s < state.wizStep);
+    dot.classList.toggle('current', s === state.wizStep);
+  });
+  // show/hide steps
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById('wiz-step-' + i).classList.toggle('active', i === state.wizStep);
+  }
+  // buttons
+  document.getElementById('wiz-back').style.display = state.wizStep > 1 ? '' : 'none';
+  document.getElementById('wiz-next').textContent = state.wizStep === 4 ? 'Create Script' : 'Next \u2192';
+}
+
+function wizNext() {
+  if (state.wizStep === 1) {
+    if (!state.wizLang) { toast('Please select a language', 'error'); return; }
+    state.wizStep = 2;
+    renderWizCategories();
+  } else if (state.wizStep === 2) {
+    if (!state.wizCategory) { toast('Please select a category', 'error'); return; }
+    state.wizStep = 3;
+    renderWizTemplates();
+  } else if (state.wizStep === 3) {
+    if (!state.wizTemplate) { toast('Please select a template', 'error'); return; }
+    state.wizStep = 4;
+    renderWizPreview();
+  } else if (state.wizStep === 4) {
+    createFromWizard();
+    return;
+  }
+  updateWizardUI();
+}
+
+function wizBack() {
+  if (state.wizStep > 1) state.wizStep--;
+  updateWizardUI();
+}
+
+function renderWizCategories() {
+  const el = document.getElementById('wiz-categories');
+  const langTemplates = TEMPLATES[state.wizLang] || {};
+  el.innerHTML = '';
+  Object.keys(CATEGORIES).forEach(key => {
+    if (!langTemplates[key] || langTemplates[key].length === 0) return;
+    const cat = CATEGORIES[key];
+    const chip = document.createElement('div');
+    chip.className = 'cat-chip' + (state.wizCategory === key ? ' active' : '');
+    chip.innerHTML = `${cat.icon} ${cat.label}`;
+    chip.onclick = () => {
+      state.wizCategory = key;
+      document.querySelectorAll('#wiz-categories .cat-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+    };
+    el.appendChild(chip);
+  });
+}
+
+function renderWizTemplates() {
+  const el = document.getElementById('wiz-templates');
+  const templates = (TEMPLATES[state.wizLang] || {})[state.wizCategory] || [];
+  el.innerHTML = '';
+  templates.forEach(tpl => {
+    const card = document.createElement('div');
+    card.className = 'template-card' + (state.wizTemplate && state.wizTemplate.id === tpl.id ? ' selected' : '');
+    card.innerHTML = `<div class="tpl-name">${tpl.name}</div><div class="tpl-desc">${tpl.desc}</div>`;
+    card.onclick = () => {
+      state.wizTemplate = tpl;
+      document.querySelectorAll('#wiz-templates .template-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+    };
+    el.appendChild(card);
+  });
+}
+
+function renderWizPreview() {
+  const tpl = state.wizTemplate;
+  if (!tpl) return;
+  const fname = tpl.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  document.getElementById('wiz-filename').value = fname;
+  document.getElementById('wiz-description').value = tpl.desc;
+
+  // Build preview with params
+  let code = tpl.code;
+  const paramsText = document.getElementById('wiz-params').value.trim();
+  // Show code
+  document.getElementById('wiz-preview').textContent = code;
+}
+
+// update preview when params change
+document.getElementById('wiz-params').addEventListener('input', () => {
+  if (state.wizStep === 4) renderWizPreview();
+});
+document.getElementById('wiz-filename').addEventListener('input', () => {
+  if (state.wizStep === 4) renderWizPreview();
+});
+
+function createFromWizard() {
+  const tpl = state.wizTemplate;
+  if (!tpl) return;
+
+  let fname = document.getElementById('wiz-filename').value.trim() || 'new-script';
+  const ext = LANG_EXT[state.wizLang] || '.txt';
+  if (!fname.includes('.')) fname += ext;
+
+  const desc = document.getElementById('wiz-description').value.trim();
+  const paramsText = document.getElementById('wiz-params').value.trim();
+
+  // Build final code
+  let code = tpl.code;
+
+  // Inject custom params if user added them and template uses param block
+  if (paramsText && state.wizLang === 'powershell') {
+    const paramLines = paramsText.split('\n').filter(Boolean).map(l => {
+      const [name, def] = l.split('=');
+      return `    [string]$${name.trim()} = "${(def||'').trim()}"`;
+    });
+    if (!code.includes('param(')) {
+      code = `param(\n${paramLines.join(',\n')}\n)\n\n${code}`;
+    }
+  } else if (paramsText && state.wizLang === 'python') {
+    const argLines = paramsText.split('\n').filter(Boolean).map(l => {
+      const [name, def] = l.split('=');
+      return `    parser.add_argument('--${name.trim()}', default='${(def||'').trim()}')`;
+    });
+    if (!code.includes('argparse')) {
+      code = `import argparse\n\ndef parse_args():\n    parser = argparse.ArgumentParser(description='${desc}')\n${argLines.join('\n')}\n    return parser.parse_args()\n\n${code}`;
+    }
+  } else if (paramsText && state.wizLang === 'bash') {
+    const argLines = paramsText.split('\n').filter(Boolean).map(l => {
+      const [name, def] = l.split('=');
+      return `${name.trim().toUpperCase()}="\${${name.trim().toUpperCase()}:-${(def||'').trim()}}"`;
+    });
+    if (code.startsWith('#!/bin/bash')) {
+      code = code.replace('#!/bin/bash', `#!/bin/bash\n# Parameters\n${argLines.join('\n')}`);
+    }
+  }
+
+  // Create tab
+  const lang = detectLang(fname);
+  const tab = { id: Date.now(), name: fname, path: fname, content: code, dirty: true, lang };
+  state.tabs.push(tab);
+  switchTab(state.tabs.length - 1);
+  closeWizard();
+  toast('Created ' + fname + ' from template');
+  appendOutput(`[wizard] Created ${fname} (${LANG_LABELS[state.wizLang]} / ${CATEGORIES[state.wizCategory].label})\n`, 'out-success');
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// AZURE MANAGER (preserved from original)
+// ══════════════════════════════════════════════════════════════════════
+function openAzureManager() { openModal('azure-modal'); azListGroups(); }
+
+async function azListGroups() {
+  const el = document.getElementById('azGroups');
+  el.innerHTML = '<div style="padding:8px;color:var(--text3);">Loading...</div>';
+  try {
+    const r = await fetch('/api/azure/groups');
+    const j = await r.json();
+    if (!j.ok) { el.innerHTML = '<div class="empty-state"><p>Failed: ' + (j.error||'') + '</p></div>'; return; }
+    el.innerHTML = '';
+    (j.groups||[]).forEach(g => {
+      const row = document.createElement('div');
+      row.className = 'az-row';
+      row.innerHTML = `<span>${g.name}</span><span style="margin-left:auto;font-size:11px;color:var(--text3);">${g.location || g.properties?.location || ''}</span>`;
+      row.onclick = () => azListResources(g.name);
+      el.appendChild(row);
+    });
+  } catch(e) { el.innerHTML = '<div class="empty-state"><p>Error: ' + e + '</p></div>'; }
+  azListStorageAccounts();
+  loadHooks();
+}
+
+async function azListResources(rg) {
+  const el = document.getElementById('azResources');
+  el.innerHTML = '<div style="padding:8px;color:var(--text3);">Loading...</div>';
+  try {
+    const r = await fetch('/api/azure/resources?rg=' + encodeURIComponent(rg));
+    const j = await r.json();
+    if (!j.ok) { el.innerHTML = '<div class="empty-state"><p>Failed</p></div>'; return; }
+    el.innerHTML = '';
+    (j.resources||[]).forEach(res => {
+      const row = document.createElement('div');
+      row.className = 'az-row';
+      row.style.flexDirection = 'column';
+      row.style.alignItems = 'flex-start';
+      row.innerHTML = `<strong style="font-size:13px;">${res.name}</strong><span style="font-size:11px;color:var(--text3);">${res.type} | ${res.location || ''}</span>`;
+      row.onclick = () => {
+        // Load ARM JSON into editor
+        const content = JSON.stringify(res, null, 2);
+        const name = 'resource-' + res.name + '.json';
+        const tab = { id: Date.now(), name, path: name, content, dirty: false, lang: 'json' };
+        state.tabs.push(tab);
+        switchTab(state.tabs.length - 1);
+        closeModal('azure-modal');
+      };
+      el.appendChild(row);
+    });
+  } catch(e) { el.innerHTML = '<div class="empty-state"><p>Error: ' + e + '</p></div>'; }
+}
+
+async function azListStorageAccounts() {
+  const sel = document.getElementById('azStorageAccounts');
+  sel.innerHTML = '';
+  try {
+    const r = await fetch('/api/azure/storage/accounts');
+    const j = await r.json();
+    if (!j.ok) { sel.innerHTML = '<option>Failed</option>'; return; }
+    (j.accounts||[]).forEach(a => { const opt = document.createElement('option'); opt.value = a.name; opt.text = a.name + ' (' + (a.location||'') + ')'; sel.appendChild(opt); });
+  } catch(e) { sel.innerHTML = '<option>Error</option>'; }
+}
+
+async function azListStorageContainers() {
+  const acc = document.getElementById('azStorageAccounts').value;
+  const el = document.getElementById('azContainers');
+  el.innerHTML = 'Loading...';
+  try {
+    const r = await fetch('/api/azure/storage/containers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({account:acc,action:'list'}) });
+    const j = await r.json();
+    if (!j.ok) { el.textContent = 'Failed'; return; }
+    el.innerHTML = '';
+    (j.containers||[]).forEach(c => { const d = document.createElement('div'); d.className='az-row'; d.textContent = c.name; el.appendChild(d); });
+  } catch(e) { el.textContent = 'Error: ' + e; }
+}
+
+async function azCreateContainer() {
+  const acc = document.getElementById('azStorageAccounts').value;
+  const cname = document.getElementById('newContainerName').value;
+  if (!cname) { toast('Container name required', 'error'); return; }
+  try {
+    const r = await fetch('/api/azure/storage/containers', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({account:acc,action:'create',container:cname}) });
+    const j = await r.json();
+    if (j.ok) { toast('Container created'); azListStorageContainers(); } else toast('Failed: ' + (j.error||''), 'error');
+  } catch(e) { toast('Error: ' + e, 'error'); }
+}
+
+async function azCreateResourceGroup() {
+  const name = document.getElementById('createRgName').value;
+  const loc = document.getElementById('createRgLocation').value || 'eastus';
+  if (!name) { toast('RG name required', 'error'); return; }
+  if (!confirm('Create resource group ' + name + ' in ' + loc + '?')) return;
+  try {
+    const r = await fetch('/api/azure/create_rg', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name,location:loc}) });
+    const j = await r.json();
+    if (j.ok) { toast('Resource group created'); azListGroups(); } else toast('Failed: ' + (j.error||''), 'error');
+  } catch(e) { toast('Error: ' + e, 'error'); }
+}
+
+async function loadHooks() {
+  const el = document.getElementById('adoHooksList');
+  el.innerHTML = 'Loading...';
+  try {
+    const r = await fetch('/api/ado/hooks');
+    const j = await r.json();
+    if (!j.ok) { el.textContent = 'Failed'; return; }
+    el.innerHTML = '';
+    const hooks = j.hooks || {};
+    Object.keys(hooks).forEach(id => {
+      const h = hooks[id];
+      const row = document.createElement('div');
+      row.className = 'az-row';
+      row.style.justifyContent = 'space-between';
+      row.innerHTML = `<span>${h.name||'hook'} <small style="color:var(--text3)">${h.url||''}</small></span>`;
+      const del = document.createElement('button');
+      del.className = 'tb-btn danger';
+      del.style.fontSize = '10px';
+      del.style.padding = '2px 6px';
+      del.textContent = 'Del';
+      del.onclick = async (ev) => {
+        ev.stopPropagation();
+        if (!confirm('Delete hook?')) return;
+        const rr = await fetch('/api/ado/hooks', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id}) });
+        const jj = await rr.json();
+        if (jj.ok) loadHooks(); else toast('Delete failed', 'error');
+      };
+      row.appendChild(del);
+      el.appendChild(row);
+    });
+  } catch(e) { el.textContent = 'Error: ' + e; }
+}
+
+async function saveHook() {
+  const name = document.getElementById('hookName').value;
+  const url = document.getElementById('hookUrl').value;
+  if (!name || !url) { toast('Name and URL required', 'error'); return; }
+  try {
+    const r = await fetch('/api/ado/hooks', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name,url}) });
+    const j = await r.json();
+    if (j.ok) { toast('Hook saved'); loadHooks(); } else toast('Failed: ' + (j.error||''), 'error');
+  } catch(e) { toast('Error: ' + e, 'error'); }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// INITIALIZATION
+// ══════════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  refreshTree('');
+  updateLineNumbers();
+  appendOutput('[MasterChief] Web IDE loaded. Press Ctrl+N for Script Wizard, Ctrl+S to save, Ctrl+Enter to run.\n', 'out-success');
+});
+</script>
+</body>
+</html>
