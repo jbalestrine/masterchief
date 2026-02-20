@@ -1,1 +1,0 @@
-{"name":"test-feature","display_name":"Test Feature","description":"A test feature","dependencies":[],"handler_code":"def register_routes(app):\n    @app.route('/api/test')\n    def test_endpoint():\n        return {'message': 'Test feature working'}"

@@ -1,3 +1,0 @@
-y joke
-```
-function tellMeAJokyJoke()

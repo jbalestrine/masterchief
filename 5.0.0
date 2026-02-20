@@ -1,6 +1,0 @@
-Defaulting to user installation because normal site-packages is not writeable
-Collecting redis
-  Using cached redis-7.1.1-py3-none-any.whl.metadata (12 kB)
-Downloading redis-7.1.1-py3-none-any.whl (356 kB)
-Installing collected packages: redis
-Successfully installed redis-7.1.1

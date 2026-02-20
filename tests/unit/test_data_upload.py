@@ -4,7 +4,7 @@ import shutil
 import pytest
 from pathlib import Path
 from io import BytesIO
-from mc_platform.data.api import data_bp, init_directories, allowed_file, get_file_hash
+from platform.data.api import data_bp, init_directories, allowed_file, get_file_hash
 
 
 @pytest.fixture

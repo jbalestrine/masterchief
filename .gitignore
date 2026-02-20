@@ -163,9 +163,3 @@ temp/
 # Uploaded data files
 data/uploads/
 data/training/
-venv/
-data/
-backups/
-venv/
-data/
-data/backups/

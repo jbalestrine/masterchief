@@ -9,10 +9,10 @@ This example demonstrates:
 """
 import asyncio
 import logging
-from mc_platform.app import create_app, run_app
+from platform.app import create_app, run_app
 from core.event_bus import Event, get_event_bus
-from mc_platform.event_bus import EventType, EventPublisher
-from mc_platform.logs import LogCollector, LogEntry
+from platform.event_bus import EventType, EventPublisher
+from platform.logs import LogCollector, LogEntry
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

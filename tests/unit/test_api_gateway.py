@@ -1,8 +1,8 @@
 """Tests for API Gateway."""
 import pytest
 from flask import Flask
-from mc_platform.gateway.router import gateway_bp, create_gateway
-from mc_platform.gateway.health import health_bp
+from platform.gateway.router import gateway_bp, create_gateway
+from platform.gateway.health import health_bp
 
 
 @pytest.fixture

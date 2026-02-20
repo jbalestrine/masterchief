@@ -1,8 +1,8 @@
 """Tests for state management."""
 import pytest
 from unittest.mock import Mock, MagicMock
-from mc_platform.state import StateStore, StateModel, DeploymentState, PluginState
-from mc_platform.state.models import StateStatus
+from platform.state import StateStore, StateModel, DeploymentState, PluginState
+from platform.state.models import StateStatus
 
 
 @pytest.mark.asyncio

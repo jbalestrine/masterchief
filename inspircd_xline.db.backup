@@ -1,3 +1,0 @@
-VERSION 1
-LINE Z 0::1 m_connectban@a17d3a4a09f1.example.com 1769771474 21600 :Your IP range has been attempting to connect too many times in too short a duration. Wait a while, and you will be able to connect.
-LINE Z 172.17.0.1 m_connectban@a17d3a4a09f1.example.com 1769774874 21600 :Your IP range has been attempting to connect too many times in too short a duration. Wait a while, and you will be able to connect.
