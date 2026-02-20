@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -27,19 +27,12 @@ th{background:#252525;color:#4CAF50;font-weight:bold;}
 tr:hover{background:#333;}
 .btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;transition:all 0.3s;}
 .btn:hover{background:#45a049;transform:translateY(-2px);}
-.btn-sm{padding:5px 10px;font-size:0.85em;margin:2px;}
 .btn-danger{background:#f44336;}
 .btn-danger:hover{background:#da190b;}
 .btn-warning{background:#ff9800;}
 .btn-warning:hover{background:#e68900;}
 .btn-info{background:#2196F3;}
 .btn-info:hover{background:#0b7dda;}
-.btn-success{background:#4CAF50;}
-.btn-success:hover{background:#388E3C;}
-.btn-secondary{background:#607D8B;color:#fff;}
-.btn-secondary:hover{background:#455A64;}
-.btn-primary{background:#1976D2;color:#fff;}
-.btn-primary:hover{background:#1565C0;}
 .form-group{margin-bottom:20px;}
 label{display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;}
 input,textarea,select{width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;}
@@ -65,7 +58,7 @@ code{color:#4CAF50;}
 <body>
 <div class="container">
 <header>
-<h1>⚡ MasterChief</h1>
+<h1>ΓÜí MasterChief</h1>
 <p class="subtitle">DevOps Automation Platform</p>
 </header>
 <!-- Global floating toolbar for quick access -->
@@ -79,8 +72,8 @@ code{color:#4CAF50;}
 <div id="featureResult" style="position:fixed;top:18px;left:18px;z-index:2001;max-width:40%;display:none;"></div>
 <nav>
 <a href="/" class="">Dashboard</a>
-<a href="/echo-chat" class="active">🌙 Echo Chat</a>
-<a href="/irc-chat" class="" style="margin-left:6px;">💬 IRC Chat</a>
+<a href="/echo-chat" class="active">≡ƒîÖ Echo Chat</a>
+<a href="/irc-chat" class="" style="margin-left:6px;">≡ƒÆ¼ IRC Chat</a>
 <a href="/jamroom" class="">Jamroom Sites</a>
 <a href="/shoutcast" class="">Shoutcast/Icecast</a>
 <a href="/scripts" class="">Scripts</a>
@@ -134,13 +127,13 @@ code{color:#4CAF50;}
 </style>
 <div class="echo-container">
 <div class="echo-sidebar">
-<div class="echo-art">    ✨
-   ╱ ╲
-  ╱ ◯ ╲  Echo 🌙
- ╱  ‿  ╲
+<div class="echo-art">    Γ£¿
+   Γò▒ Γò▓
+  Γò▒ Γù» Γò▓  Echo ≡ƒîÖ
+ Γò▒  ΓÇ┐  Γò▓
  ~ here ~</div>
 <div class="echo-stats">
-<h4>✨ Training Stats</h4>
+<h4>Γ£¿ Training Stats</h4>
 <div class="stat-item"><span>Patterns Learned:</span><span id="patterns-count">0</span></div>
 <div class="stat-item"><span>Total Examples:</span><span id="total-examples">0</span></div>
 <div class="stat-item"><span>Session Messages:</span><span id="session-messages">0</span></div>
@@ -153,7 +146,7 @@ code{color:#4CAF50;}
 </div>
 </div>
 <div style="margin-top:15px;">
-<h4>💬 Chat History</h4>
+<h4>≡ƒÆ¼ Chat History</h4>
 <div id="session-list" style="max-height:220px;overflow:auto;margin-top:8px;"></div>
 <div style="display:flex;gap:8px;margin-top:8px;">
 <button onclick="createSession()" class="btn btn-sm btn-success">New Session</button>
@@ -161,7 +154,7 @@ code{color:#4CAF50;}
 </div>
 </div>
 <div style="margin-top:15px;">
-<h4>📚 Resources</h4>
+<h4>≡ƒôÜ Resources</h4>
 <div id="resources-sidebar" style="max-height:220px;overflow:auto;margin-top:8px;">
 	<div style="margin-bottom:6px;">Category: <select id="resourceCategory" style="width:160px;margin-left:6px;" onchange="populateResourceList()"><option value="all">All</option><option value="reference">Reference</option><option value="template">Template</option><option value="examples">Examples</option></select></div>
 	<div id="resource-list" style="margin-top:6px;"></div>
@@ -172,7 +165,7 @@ code{color:#4CAF50;}
 <button onclick="searchMemory()" class="btn btn-info" style="width:100%;margin-top:10px;">Search Memory</button>
 </div>
 <div class="echo-main">
-<div class="chat-header">🌙 Echo Starlite - Chat
+<div class="chat-header">≡ƒîÖ Echo Starlite - Chat
 	<span id="chatSessionIdLabel" style="margin-left:12px;font-weight:600;color:#9bd"></span>
 	<button id="chatSessionChange" class="btn btn-sm" style="margin-left:8px;padding:4px 8px;" onclick="promptSetSessionId()">Change Session</button>
 	<span id="chatPersonaHolder" style="margin-left:12px;">
@@ -185,17 +178,17 @@ code{color:#4CAF50;}
 </div>
 <div class="chat-messages" id="chatMessages">
 <div class="chat-message echo">
-<div class="chat-icon">🌙</div>
+<div class="chat-icon">≡ƒîÖ</div>
 <div>
-<div class="chat-bubble">Hello... I am Echo 🌙<br>I'm here to help with DevOps tasks and learn from our conversations... 💜</div>
+<div class="chat-bubble">Hello... I am Echo ≡ƒîÖ<br>I'm here to help with DevOps tasks and learn from our conversations... ≡ƒÆ£</div>
 </div>
 </div>
 </div>
 <div class="typing-indicator" id="typingIndicator">Echo is typing...</div>
 <div class="chat-input-area">
 <form class="chat-input-form" onsubmit="sendMessage(event)">
-<textarea id="chatInput" class="chat-input" placeholder="Type your message... ✨ (Shift+Enter for newline)" autocomplete="off" rows="2" required></textarea>
-<button type="submit" class="send-btn">Send 💜</button>
+<textarea id="chatInput" class="chat-input" placeholder="Type your message... Γ£¿ (Shift+Enter for newline)" autocomplete="off" rows="2" required></textarea>
+<button type="submit" class="send-btn">Send ≡ƒÆ£</button>
 </form>
 </div>
 </div>
@@ -272,7 +265,7 @@ function fetchPersonas(){
 			const opt=document.createElement('option'); opt.value=''; opt.text='(no personas found)'; sel.appendChild(opt); return;
 		}
 		items.forEach(it=>{
-			const opt=document.createElement('option'); opt.value = it.id; opt.text = (it.meta.filename || it.id) + ' — ' + it.id; sel.appendChild(opt);
+			const opt=document.createElement('option'); opt.value = it.id; opt.text = (it.meta.filename || it.id) + ' ΓÇö ' + it.id; sel.appendChild(opt);
 		});
 	}).catch(e=>{console.error('fetchPersonas error',e)});
 }
@@ -285,12 +278,11 @@ function fetchModels(){
 			j.models.forEach(m=>{
 				const opt=document.createElement('option'); opt.value=m; opt.text=m.replace(/\\\\/g,'/'); sel.appendChild(opt);
 			});
-				if(j.current){
+			if(j.current){
 				try{ sel.value = j.current }catch(e){}
 			} else {
 				const opt=document.createElement('option'); opt.value=''; opt.text='(no models found)'; sel.appendChild(opt);
 			}
-		}
 	}).catch(e=>{console.error('fetchModels error',e); const sel=document.getElementById('ggufSelect'); sel.innerHTML=''; const opt=document.createElement('option'); opt.text='(error)'; sel.appendChild(opt);});
 }
 
@@ -363,14 +355,14 @@ document.getElementById('session-messages').textContent=messageCount;
 }).catch(err=>{
 hideTyping();
 console.error('Error:',err);
-addEchoMessage('Sorry... something went wrong... 💜',null);
+addEchoMessage('Sorry... something went wrong... ≡ƒÆ£',null);
 });
 }
 function addUserMessage(text){
 const container=document.getElementById('chatMessages');
 const msgDiv=document.createElement('div');
 msgDiv.className='chat-message user';
-msgDiv.innerHTML='<div class="chat-icon">👤</div><div><div class="chat-bubble">'+escapeHtml(text)+'</div></div>';
+msgDiv.innerHTML='<div class="chat-icon">≡ƒæñ</div><div><div class="chat-bubble">'+escapeHtml(text)+'</div></div>';
 container.appendChild(msgDiv);
 container.scrollTop=container.scrollHeight;
 messageCount++;
@@ -380,11 +372,11 @@ const container=document.getElementById('chatMessages');
 const msgDiv=document.createElement('div');
 msgDiv.className='chat-message echo';
 msgDiv.dataset.messageId=messageId;
-let html='<div class="chat-icon">🌙</div><div><div class="chat-bubble">'+escapeHtml(text)+'<div class="training-buttons">';
-html+='<button class="training-btn excellent" onclick="rateResponse(this,&quot;excellent&quot;)">👍 Excellent</button>';
-html+='<button class="training-btn good" onclick="rateResponse(this,&quot;good&quot;)">✨ Good</button>';
-html+='<button class="training-btn fair" onclick="rateResponse(this,&quot;acceptable&quot;)">👌 Fair</button>';
-html+='<button class="training-btn poor" onclick="rateResponse(this,&quot;poor&quot;)">👎 Poor</button>';
+let html='<div class="chat-icon">≡ƒîÖ</div><div><div class="chat-bubble">'+escapeHtml(text)+'<div class="training-buttons">';
+html+='<button class="training-btn excellent" onclick="rateResponse(this,&quot;excellent&quot;)">≡ƒæì Excellent</button>';
+html+='<button class="training-btn good" onclick="rateResponse(this,&quot;good&quot;)">Γ£¿ Good</button>';
+html+='<button class="training-btn fair" onclick="rateResponse(this,&quot;acceptable&quot;)">≡ƒæî Fair</button>';
+html+='<button class="training-btn poor" onclick="rateResponse(this,&quot;poor&quot;)">≡ƒæÄ Poor</button>';
 html+='</div></div></div>';
 msgDiv.innerHTML=html;
 container.appendChild(msgDiv);
@@ -462,7 +454,7 @@ function fetchSessions(){
 			actions.style.gap='6px';
 			const fav=document.createElement('button');
 			fav.className='btn btn-sm';
-			fav.textContent = s.favorite? '★' : '☆';
+			fav.textContent = s.favorite? 'Γÿà' : 'Γÿå';
 			fav.onclick = (e)=>{ e.stopPropagation(); toggleFavorite(s.session_id); };
 			const del=document.createElement('button');
 			del.className='btn btn-sm btn-danger';
@@ -529,7 +521,7 @@ function loadSession(sid){
 			if(m.role==='user'){
 				addUserMessage(m.content);
 			} else {
-				addEchoMessage(m.content,m.message_id||null);
+				addEchoMessage(m.content,m.get('message_id')||m.message_id||null);
 			}
 		});
 		sessionId = sid;
@@ -556,7 +548,7 @@ function createSession(){
 }
 function clearChat(){
 if(!confirm('Clear chat history?'))return;
-document.getElementById('chatMessages').innerHTML='<div class="chat-message echo"><div class="chat-icon">🌙</div><div><div class="chat-bubble">Hello... I am Echo 🌙<br>I\'m here to help with DevOps tasks and learn from our conversations... 💜</div></div></div>';
+document.getElementById('chatMessages').innerHTML='<div class="chat-message echo"><div class="chat-icon">≡ƒîÖ</div><div><div class="chat-bubble">Hello... I am Echo ≡ƒîÖ<br>I\'m here to help with DevOps tasks and learn from our conversations... ≡ƒÆ£</div></div></div>';
 sessionId='web_'+Date.now();
 messageCount=1;
 document.getElementById('session-messages').textContent='0';
@@ -599,7 +591,6 @@ try{
 fetchModel();
 setInterval(fetchModel, 5000);
 updateStats();
-fetchSessions();
 </script>
 </body>
 </html>
@@ -939,9 +930,9 @@ async function showIRCModal(){
 							// tab wrapper with label and close button
 							const tabWrap = document.createElement('div'); tabWrap.style.display='inline-flex'; tabWrap.style.alignItems='center'; tabWrap.style.marginRight='6px';
 							const btn = document.createElement('button'); btn.className='btn btn-sm'; btn.textContent = name; btn.dataset.chan = name; btn.style.padding='6px 10px'; btn.style.borderRadius='6px'; btn.style.background='#333'; btn.style.color='#ddd'; btn.onclick = ()=>{ switchChannel(name); };
-							const close = document.createElement('button'); close.textContent='✕'; close.title='Close channel'; close.className='btn btn-sm'; close.style.marginLeft='4px'; close.style.padding='4px 6px'; close.style.background='transparent'; close.style.color='#c88'; close.onclick = (e)=>{ e.stopPropagation(); closeChannel(name); };
+							const close = document.createElement('button'); close.textContent='Γ£ò'; close.title='Close channel'; close.className='btn btn-sm'; close.style.marginLeft='4px'; close.style.padding='4px 6px'; close.style.background='transparent'; close.style.color='#c88'; close.onclick = (e)=>{ e.stopPropagation(); closeChannel(name); };
 							// small bridge badge (green when bridged)
-							const bBadge = document.createElement('span'); bBadge.className = 'irc-bridge-badge'; bBadge.textContent = ' ●'; bBadge.style.marginLeft = '6px'; bBadge.style.color = (window.ircBridges && window.ircBridges[name]) ? '#7CFC00' : 'transparent'; btn.appendChild(bBadge);
+							const bBadge = document.createElement('span'); bBadge.className = 'irc-bridge-badge'; bBadge.textContent = ' ΓùÅ'; bBadge.style.marginLeft = '6px'; bBadge.style.color = (window.ircBridges && window.ircBridges[name]) ? '#7CFC00' : 'transparent'; btn.appendChild(bBadge);
 							tabWrap.appendChild(btn); tabWrap.appendChild(close); tabs.appendChild(tabWrap);
 							const container = document.createElement('div'); container.id = 'irc_chan_'+name.replace(/[^a-zA-Z0-9_\-]/g,'_'); container.style.display='none'; container.style.height='100%'; container.style.overflow='auto'; container.style.padding='6px'; window._irc.channels[name] = { tab: btn, el: container, wrap: tabWrap, badge: bBadge };
 							// fetch server-side history for this channel and populate

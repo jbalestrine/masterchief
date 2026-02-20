@@ -4401,7 +4401,7 @@ function loadSession(sid){
 
             } else {
 
-                addEchoMessage(m.content,m.message_id||null);
+                addEchoMessage(m.content,m.get('message_id')||m.message_id||null);
 
             }
 
@@ -11826,7 +11826,8 @@ def masterchief_code_ui():
 
 @app.route('/echo-chat')
 def echo_chat():
-    return send_file('echo_chat_page.html')
+    echo_art = Echo.get_compact_greeting()
+    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', ECHO_CHAT_TEMPLATE.replace('{% extends "base.html" %}', '').replace('{% block content %}', '').replace('{% endblock %}', '')), echo_art=echo_art, request=request, get_flashed_messages=get_flashed_messages)
 
 @app.route('/api/echo/chat',methods=['POST'])
 
