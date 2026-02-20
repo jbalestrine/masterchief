@@ -1,0 +1,313 @@
+# Visualization Module for Enterprise Hub-and-Spoke Architecture
+# This module generates documentation, diagrams, and reports
+
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+}
+
+# Storage account for documentation and diagrams
+resource "azurerm_storage_account" "docs" {
+  count = var.create_docs_storage ? 1 : 0
+
+  name                     = var.docs_storage_account_name
+  resource_group_name      = var.resource_group_name
+  location                 = var.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  account_kind             = "StorageV2"
+
+  static_website {
+    index_document = "index.html"
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_storage_container" "docs" {
+  count = var.create_docs_storage ? 1 : 0
+
+  name                  = "docs"
+  storage_account_name  = azurerm_storage_account.docs[0].name
+  container_access_type = "blob"
+}
+
+resource "azurerm_storage_container" "diagrams" {
+  count = var.create_docs_storage ? 1 : 0
+
+  name                  = "diagrams"
+  storage_account_name  = azurerm_storage_account.docs[0].name
+  container_access_type = "blob"
+}
+
+resource "azurerm_storage_container" "reports" {
+  count = var.create_docs_storage ? 1 : 0
+
+  name                  = "reports"
+  storage_account_name  = azurerm_storage_account.docs[0].name
+  container_access_type = "blob"
+}
+
+# Generate architecture diagram (Mermaid format)
+resource "local_file" "architecture_diagram" {
+  count = var.generate_diagrams ? 1 : 0
+
+  filename = "${path.module}/architecture-diagram.md"
+  content  = templatefile("${path.module}/templates/architecture-diagram.md.tmpl", {
+    enterprise_name     = var.enterprise_name
+    hub_location        = var.hub_location
+    spoke_locations     = var.spoke_locations
+    enable_firewall     = var.enable_firewall
+    enable_bastion      = var.enable_bastion
+    enable_aks          = var.enable_aks
+    enable_app_gateway  = var.enable_app_gateway
+    enable_key_vault    = var.enable_key_vault
+    enable_acr          = var.enable_acr
+    enable_storage      = var.enable_storage
+    enable_monitoring   = var.enable_monitoring
+  })
+}
+
+# Generate network topology diagram
+resource "local_file" "network_diagram" {
+  count = var.generate_diagrams ? 1 : 0
+
+  filename = "${path.module}/network-diagram.md"
+  content  = templatefile("${path.module}/templates/network-diagram.md.tmpl", {
+    enterprise_name     = var.enterprise_name
+    hub_vnet_address    = var.hub_vnet_address
+    hub_subnets         = var.hub_subnets
+    spoke_vnets         = var.spoke_vnets
+    enable_firewall     = var.enable_firewall
+    enable_bastion      = var.enable_bastion
+    enable_expressroute = var.enable_expressroute
+    enable_vpn          = var.enable_vpn
+  })
+}
+
+# Generate security overview diagram
+resource "local_file" "security_diagram" {
+  count = var.generate_diagrams ? 1 : 0
+
+  filename = "${path.module}/security-diagram.md"
+  content  = templatefile("${path.module}/templates/security-diagram.md.tmpl", {
+    enterprise_name     = var.enterprise_name
+    enable_firewall     = var.enable_firewall
+    enable_nsg          = var.enable_nsg
+    enable_waf          = var.enable_waf
+    enable_key_vault    = var.enable_key_vault
+    enable_monitoring   = var.enable_monitoring
+    security_groups     = var.security_groups
+  })
+}
+
+# Generate deployment guide
+resource "local_file" "deployment_guide" {
+  count = var.generate_docs ? 1 : 0
+
+  filename = "${path.module}/deployment-guide.md"
+  content  = templatefile("${path.module}/templates/deployment-guide.md.tmpl", {
+    enterprise_name     = var.enterprise_name
+    subscription_id     = var.subscription_id
+    tenant_id           = var.tenant_id
+    hub_location        = var.hub_location
+    spoke_locations     = var.spoke_locations
+    enable_aks          = var.enable_aks
+    enable_app_gateway  = var.enable_app_gateway
+    enable_key_vault    = var.enable_key_vault
+    enable_acr          = var.enable_acr
+    enable_storage      = var.enable_storage
+    enable_monitoring   = var.enable_monitoring
+    tags                = var.tags
+  })
+}
+
+# Generate security guide
+resource "local_file" "security_guide" {
+  count = var.generate_docs ? 1 : 0
+
+  filename = "${path.module}/security-guide.md"
+  content  = templatefile("${path.module}/templates/security-guide.md.tmpl", {
+    enterprise_name     = var.enterprise_name
+    enable_firewall     = var.enable_firewall
+    enable_nsg          = var.enable_nsg
+    enable_waf          = var.enable_waf
+    enable_key_vault    = var.enable_key_vault
+    enable_monitoring   = var.enable_monitoring
+    security_groups     = var.security_groups
+    compliance_requirements = var.compliance_requirements
+  })
+}
+
+# Generate cost estimation report
+resource "local_file" "cost_estimation" {
+  count = var.generate_reports ? 1 : 0
+
+  filename = "${path.module}/cost-estimation.md"
+  content  = templatefile("${path.module}/templates/cost-estimation.md.tmpl", {
+    enterprise_name     = var.enterprise_name
+    hub_location        = var.hub_location
+    spoke_locations     = var.spoke_locations
+    enable_aks          = var.enable_aks
+    aks_node_count      = var.aks_node_count
+    aks_node_size       = var.aks_node_size
+    enable_app_gateway  = var.enable_app_gateway
+    enable_firewall     = var.enable_firewall
+    enable_bastion      = var.enable_bastion
+    enable_storage      = var.enable_storage
+    storage_redundancy  = var.storage_redundancy
+    enable_monitoring   = var.enable_monitoring
+    currency            = var.currency
+  })
+}
+
+# Generate operations guide
+resource "local_file" "operations_guide" {
+  count = var.generate_docs ? 1 : 0
+
+  filename = "${path.module}/operations-guide.md"
+  content  = templatefile("${path.module}/templates/operations-guide.md.tmpl", {
+    enterprise_name     = var.enterprise_name
+    enable_monitoring   = var.enable_monitoring
+    enable_aks          = var.enable_aks
+    enable_app_gateway  = var.enable_app_gateway
+    enable_firewall     = var.enable_firewall
+    monitoring_workspace = var.monitoring_workspace
+    alert_rules         = var.alert_rules
+    backup_policies     = var.backup_policies
+  })
+}
+
+# Generate compliance report
+resource "local_file" "compliance_report" {
+  count = var.generate_reports ? 1 : 0
+
+  filename = "${path.module}/compliance-report.md"
+  content  = templatefile("${path.module}/templates/compliance-report.md.tmpl", {
+    enterprise_name         = var.enterprise_name
+    compliance_requirements = var.compliance_requirements
+    enable_monitoring       = var.enable_monitoring
+    enable_key_vault        = var.enable_key_vault
+    enable_firewall         = var.enable_firewall
+    enable_nsg              = var.enable_nsg
+    enable_waf              = var.enable_waf
+    audit_retention         = var.audit_retention
+  })
+}
+
+# Upload documentation to storage account
+resource "azurerm_storage_blob" "architecture_diagram" {
+  count = var.generate_diagrams && var.create_docs_storage ? 1 : 0
+
+  name                   = "diagrams/architecture-diagram.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.diagrams[0].name
+  type                   = "Block"
+  source                 = local_file.architecture_diagram[0].filename
+  content_type           = "text/markdown"
+}
+
+resource "azurerm_storage_blob" "network_diagram" {
+  count = var.generate_diagrams && var.create_docs_storage ? 1 : 0
+
+  name                   = "diagrams/network-diagram.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.diagrams[0].name
+  type                   = "Block"
+  source                 = local_file.network_diagram[0].filename
+  content_type           = "text/markdown"
+}
+
+resource "azurerm_storage_blob" "security_diagram" {
+  count = var.generate_diagrams && var.create_docs_storage ? 1 : 0
+
+  name                   = "diagrams/security-diagram.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.diagrams[0].name
+  type                   = "Block"
+  source                 = local_file.security_diagram[0].filename
+  content_type           = "text/markdown"
+}
+
+resource "azurerm_storage_blob" "deployment_guide" {
+  count = var.generate_docs && var.create_docs_storage ? 1 : 0
+
+  name                   = "docs/deployment-guide.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.docs[0].name
+  type                   = "Block"
+  source                 = local_file.deployment_guide[0].filename
+  content_type           = "text/markdown"
+}
+
+resource "azurerm_storage_blob" "security_guide" {
+  count = var.generate_docs && var.create_docs_storage ? 1 : 0
+
+  name                   = "docs/security-guide.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.docs[0].name
+  type                   = "Block"
+  source                 = local_file.security_guide[0].filename
+  content_type           = "text/markdown"
+}
+
+resource "azurerm_storage_blob" "operations_guide" {
+  count = var.generate_docs && var.create_docs_storage ? 1 : 0
+
+  name                   = "docs/operations-guide.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.docs[0].name
+  type                   = "Block"
+  source                 = local_file.operations_guide[0].filename
+  content_type           = "text/markdown"
+}
+
+resource "azurerm_storage_blob" "cost_estimation" {
+  count = var.generate_reports && var.create_docs_storage ? 1 : 0
+
+  name                   = "reports/cost-estimation.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.reports[0].name
+  type                   = "Block"
+  source                 = local_file.cost_estimation[0].filename
+  content_type           = "text/markdown"
+}
+
+resource "azurerm_storage_blob" "compliance_report" {
+  count = var.generate_reports && var.create_docs_storage ? 1 : 0
+
+  name                   = "reports/compliance-report.md"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = azurerm_storage_container.reports[0].name
+  type                   = "Block"
+  source                 = local_file.compliance_report[0].filename
+  content_type           = "text/markdown"
+}
+
+# Generate index page for static website
+resource "local_file" "index_html" {
+  count = var.create_docs_storage ? 1 : 0
+
+  filename = "${path.module}/index.html"
+  content  = templatefile("${path.module}/templates/index.html.tmpl", {
+    enterprise_name = var.enterprise_name
+    generate_diagrams = var.generate_diagrams
+    generate_docs     = var.generate_docs
+    generate_reports  = var.generate_reports
+  })
+}
+
+resource "azurerm_storage_blob" "index_html" {
+  count = var.create_docs_storage ? 1 : 0
+
+  name                   = "index.html"
+  storage_account_name   = azurerm_storage_account.docs[0].name
+  storage_container_name = "$web"
+  type                   = "Block"
+  source                 = local_file.index_html[0].filename
+  content_type           = "text/html"
+}

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CAF Generator Test</title>
+</head>
+<body>
+    <h1>Testing CAF Generator API</h1>
+    <div id="results"></div>
+
+    <script>
+        async function testCAFGenerator() {
+            const results = document.getElementById('results');
+            let output = '<h2>Test Results:</h2>';
+
+            try {
+                // Test 1: Check if functions are defined
+                output += '<h3>1. Function Definitions:</h3>';
+                output += 'generateCAF defined: ' + (typeof generateCAF !== 'undefined') + '<br>';
+                output += 'switchFileTab defined: ' + (typeof switchFileTab !== 'undefined') + '<br>';
+                output += 'generateVariablesTemplate defined: ' + (typeof generateVariablesTemplate !== 'undefined') + '<br>';
+
+                // Test 2: Test generateVariablesTemplate function
+                output += '<h3>2. Variables Template Generation:</h3>';
+                const testModule = 'management-groups';
+                const testEnv = 'dev';
+                const testLocation = 'East US';
+                const testPrefix = 'test';
+
+                const varTemplate = generateVariablesTemplate(testModule, testEnv, testLocation, testPrefix);
+                output += '<pre>' + varTemplate + '</pre>';
+
+                // Test 3: Check if form elements exist (simulate form data)
+                output += '<h3>3. Form Elements Check:</h3>';
+                const formElements = ['prefix', 'environment', 'location', 'module'];
+                formElements.forEach(id => {
+                    const element = document.getElementById(id);
+                    output += `Element ${id}: ${element ? 'Found' : 'Not Found'}<br>`;
+                });
+
+                // Test 4: Simulate generateCAF call (if form elements exist)
+                output += '<h3>4. CAF Generation Test:</h3>';
+                try {
+                    // Create mock form elements
+                    formElements.forEach(id => {
+                        if (!document.getElementById(id)) {
+                            const input = document.createElement('input');
+                            input.id = id;
+                            input.value = id === 'prefix' ? testPrefix :
+                                         id === 'environment' ? testEnv :
+                                         id === 'location' ? testLocation :
+                                         id === 'module' ? testModule : '';
+                            document.body.appendChild(input);
+                        }
+                    });
+
+                    // Try to call generateCAF
+                    generateCAF();
+                    output += 'generateCAF() executed successfully<br>';
+                } catch (e) {
+                    output += 'Error calling generateCAF(): ' + e.message + '<br>';
+                }
+
+            } catch (e) {
+                output += '<h3>Error:</h3>' + e.message;
+            }
+
+            results.innerHTML = output;
+        }
+
+        // Load the web_ide content to get the JavaScript functions
+        fetch('/web_ide')
+            .then(response => response.text())
+            .then(html => {
+                // Extract and execute the JavaScript from the HTML
+                const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+                let match;
+                while ((match = scriptRegex.exec(html)) !== null) {
+                    try {
+                        eval(match[1]);
+                    } catch (e) {
+                        console.log('Script execution error:', e);
+                    }
+                }
+                // Now test the functions
+                testCAFGenerator();
+            })
+            .catch(error => {
+                document.getElementById('results').innerHTML = 'Failed to load web_ide: ' + error;
+            });
+    </script>
+</body>
+</html>

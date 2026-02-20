@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(awk:*)",
+      "Bash(git stash push:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfixClaude: restore missing manager classes, API routes, fix JS/CSS in web_ide\n\n- Restored 5 missing manager classes \\(RBAC, Notification, Pipeline, Cloud, Marketplace\\)\n- Added ~80 missing API routes for all manager pages\n- Fixed missing } in showFeatureResult\\(\\) JS\n- Removed dead nav links \\(jamroom, shoutcast, demos, ADO\\)\n- Added /api/features/enabled and /feature/run routes\n- Added missing CSS for web_ide content panel, modals, btn.info, btn.warning\n- Added closeCAFModal\\(\\) and toggleSidebar\\(\\) JS functions\n- Fixed modal close button class typo\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git checkout:*)"
+    ]
+  }
+}

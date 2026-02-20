@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 """MasterChief Flask Web Application - All-in-One File"""
 
@@ -58,6 +58,8 @@ from pathlib import Path
 import psutil
 
 import subprocess
+
+import textwrap
 
 import zipfile
 
@@ -839,9 +841,11 @@ def api_azure_groups():
 
 def api_azure_resources():
 
-    """List Azure resources (optionally filter by resource group via ?rg=name)."""
+    """List Azure resources (optionally filter by resource group via ?rg=name or subscription via ?subscription=id)."""
 
     rg = request.args.get('rg')
+
+    subscription = request.args.get('subscription')
 
     if not _az_cli_available():
 
@@ -851,11 +855,15 @@ def api_azure_resources():
 
         cmd = ['az', 'resource', 'list', '--output', 'json']
 
+        if subscription:
+
+            cmd.extend(['--subscription', subscription])
+
         if rg:
 
             cmd.extend(['--resource-group', rg])
 
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=40)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
         if proc.returncode != 0:
 
@@ -2366,6 +2374,10 @@ code{color:#4CAF50;}
 
 <a href="/echo-train" class="{{ 'active' if '/echo-train' in request.path else '' }}">Training</a>
 
+<a href="/teams" class="{{ 'active' if request.path=='/teams' else '' }}">📅 Teams</a>
+
+<a href="/okta" class="{{ 'active' if request.path=='/okta' else '' }}">🔒 Okta</a>
+
 </nav>
 
 {% with messages=get_flashed_messages(with_categories=true) %}
@@ -2506,7 +2518,7 @@ function refreshIndex(){
 
                 
 
-            # --- Manager Portal (external, module-level definitions) --------------------
+            // --- Manager Portal (external, module-level definitions) --------------------
 
                 if(j2.ok) location.reload(); else alert('Refresh failed: '+(j2.error||'unknown'));
 
@@ -5323,10 +5335,2099 @@ def dashboard():
 
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}',DASHBOARD_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')),stats=stats,request=request,get_flashed_messages=get_flashed_messages)
 
+TEAMS_TEMPLATE = """
+<style>
+.teams-layout { display: grid; grid-template-columns: 320px 1fr; gap: 20px; margin-top: 16px; }
+@media(max-width:860px){ .teams-layout{ grid-template-columns:1fr; } }
+.teams-panel { background:#1e1e2e; border:1px solid #2a2a3a; border-radius:10px; padding:18px; }
+.teams-panel h3 { margin:0 0 14px; font-size:1rem; color:#7ec8e3; border-bottom:1px solid #2a2a3a; padding-bottom:8px; }
+.tm-field { margin-bottom:10px; }
+.tm-field label { display:block; font-size:.78rem; color:#888; margin-bottom:3px; }
+.tm-input { width:100%; background:#111; border:1px solid #333; color:#eee; padding:6px 9px; border-radius:5px; font-size:.83rem; box-sizing:border-box; }
+.tm-input:focus { outline:none; border-color:#7ec8e3; }
+.tm-btn { background:#7ec8e3; color:#111; border:none; padding:7px 16px; border-radius:5px; font-size:.85rem; font-weight:600; cursor:pointer; margin-top:4px; }
+.tm-btn:hover { background:#a0d8ef; }
+.tm-btn-danger { background:#c0392b; color:#fff; }
+.tm-btn-danger:hover { background:#e74c3c; }
+.tm-btn-sm { padding:3px 10px; font-size:.76rem; }
+.tm-status { font-size:.78rem; margin-top:6px; min-height:1.2em; }
+.cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.cal-nav { background:#252535; border:1px solid #333; color:#eee; padding:4px 12px; border-radius:5px; cursor:pointer; font-size:.85rem; }
+.cal-nav:hover { background:#303045; }
+.cal-title { font-size:1.05rem; font-weight:600; color:#eee; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.cal-day-label { text-align:center; font-size:.72rem; color:#666; padding:4px 0; font-weight:600; }
+.cal-cell { min-height:72px; background:#161620; border:1px solid #222; border-radius:4px; padding:4px; position:relative; cursor:pointer; transition:background .15s; }
+.cal-cell:hover { background:#1e1e30; }
+.cal-cell.today { border-color:#7ec8e3; background:#1a1a2e; }
+.cal-cell.other-month { opacity:.35; }
+.cal-num { font-size:.72rem; color:#666; margin-bottom:2px; }
+.cal-cell.today .cal-num { color:#7ec8e3; font-weight:700; }
+.cal-event { font-size:.68rem; background:#2a4a6a; color:#7ec8e3; border-radius:3px; padding:1px 4px; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+.cal-event.ev-teams { background:#1b3a6b; color:#7aadff; }
+.cal-event.ev-busy { background:#4a1a2a; color:#ff7a9a; }
+.cal-event.ev-tentative { background:#3a3a1a; color:#e0c050; }
+.detail-panel { background:#1a1a2e; border:1px solid #2a3a5a; border-radius:8px; padding:14px; margin-top:12px; }
+.detail-panel h4 { margin:0 0 8px; color:#7ec8e3; font-size:.92rem; }
+.detail-row { display:flex; gap:8px; margin-bottom:5px; font-size:.8rem; }
+.detail-row .dk { color:#666; min-width:80px; }
+.detail-row .dv { color:#ccc; flex:1; word-break:break-word; }
+.tag-online { background:#1a4a2a; color:#4caf50; padding:1px 7px; border-radius:10px; font-size:.72rem; }
+.tag-offline { background:#2a2a2a; color:#888; padding:1px 7px; border-radius:10px; font-size:.72rem; }
+.teams-connected { display:flex; align-items:center; gap:8px; font-size:.8rem; color:#4caf50; margin-bottom:8px; }
+.teams-dot { width:8px; height:8px; background:#4caf50; border-radius:50%; }
+.chat-item { padding:8px 10px; border-radius:6px; cursor:pointer; border:1px solid #2a2a3a; background:#161620; }
+.chat-item:hover { background:#1e1e30; }
+.chat-item.selected { border-color:#7ec8e3; background:#1a1a2e; }
+.chat-item-name { font-size:.82rem; color:#ddd; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.chat-item-preview { font-size:.72rem; color:#555; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+.msg-bubble { max-width:75%; padding:7px 12px; border-radius:10px; font-size:.82rem; line-height:1.45; }
+.msg-row { display:flex; }
+.msg-row.me { justify-content:flex-end; }
+.msg-row.them { justify-content:flex-start; }
+.msg-row.me .msg-bubble { background:#1b3a6b; color:#a8d4ff; border-bottom-right-radius:2px; }
+.msg-row.them .msg-bubble { background:#1e1e2e; color:#ddd; border:1px solid #2a2a3a; border-bottom-left-radius:2px; }
+.msg-sender { font-size:.68rem; color:#666; margin-bottom:2px; }
+.msg-time { font-size:.65rem; color:#444; margin-top:3px; text-align:right; }
+</style>
+
+<h2>📅 Microsoft Teams</h2>
+<p style="color:#888;font-size:.88rem;">Connect to Microsoft Graph to load your calendar, view events, and chat.</p>
+
+<!-- ── Page tabs ───────────────────────── -->
+<div style="display:flex;gap:0;margin-bottom:18px;border-radius:8px;overflow:hidden;border:1px solid #2a2a3a;width:fit-content;">
+  <button id="tc-main-cal" onclick="tcMainTab('cal')" style="padding:8px 22px;font-size:.88rem;font-weight:600;border:none;cursor:pointer;background:#252535;color:#7ec8e3;">📅 Calendar</button>
+  <button id="tc-main-chat" onclick="tcMainTab('chat')" style="padding:8px 22px;font-size:.88rem;font-weight:600;border:none;cursor:pointer;background:#161620;color:#666;">💬 Chat</button>
+</div>
+
+<!-- Calendar pane -->
+<div id="tc-pane-cal">
+<div class="teams-layout">
+
+  <!-- Left: connection panel -->
+  <div>
+    <div class="teams-panel">
+      <h3>🔑 Connection Settings</h3>
+      <div id="teams-connected-banner" style="display:none;" class="teams-connected">
+        <span class="teams-dot"></span> Connected
+        <span id="teams-connected-who" style="color:#aaa;"></span>
+        <button class="tm-btn tm-btn-danger tm-btn-sm" onclick="teamsDisconnect()" style="margin-top:0;">Disconnect</button>
+      </div>
+
+      <!-- ── Teams-only login card ── -->
+      <div id="tm-login-card" style="background:#0d0d1e;border:1px solid #2a2a4a;border-radius:10px;padding:18px;margin-bottom:10px;">
+
+        <!-- Okta SSO banner — auto-shown when Okta session is active -->
+        <div id="tm-sso-banner" style="display:none;background:#0a1a14;border:1px solid #2e7d52;border-radius:8px;padding:14px;margin-bottom:12px;text-align:center;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:1.1rem;">&#128274;</span>
+            <span style="font-size:.88rem;color:#4caf50;font-weight:700;">Okta SSO Connected</span>
+          </div>
+          <div id="tm-sso-who" style="font-size:.8rem;color:#aaa;margin-bottom:10px;word-break:break-all;"></div>
+          <button class="tm-btn" onclick="tmOktaSSO()" style="width:100%;padding:10px;font-size:.92rem;background:#1b5e20;border-color:#2e7d52;letter-spacing:.3px;">
+            &#128274;&nbsp; Login to Teams via Okta SSO
+          </button>
+          <div style="margin-top:8px;">
+            <button onclick="document.getElementById('tm-manual-section').style.display='';this.parentNode.style.display='none';"
+              style="background:none;border:none;color:#555;font-size:.72rem;cursor:pointer;padding:2px;">or use a different account ↓</button>
+          </div>
+        </div>
+
+        <!-- Manual sign-in section -->
+        <div id="tm-manual-section">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="7" fill="#5059C9"/>
+            <path d="M20.5 10h-4a.5.5 0 0 0-.5.5v1h4.5A2.5 2.5 0 0 1 23 14v5.5a.5.5 0 0 0 .5.5h.5A1.5 1.5 0 0 0 25.5 18.5v-6A2.5 2.5 0 0 0 23 10h-2.5z" fill="#fff" opacity=".7"/>
+            <rect x="8" y="12" width="13" height="12" rx="2" fill="#fff"/>
+            <path d="M14.5 15.5v5M12 17.5h5" stroke="#5059C9" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <div>
+            <div style="font-size:.95rem;font-weight:700;color:#e0e0ff;">Microsoft Teams</div>
+            <div style="font-size:.72rem;color:#555;">Sign in with your work or school account</div>
+          </div>
+        </div>
+
+        <!-- Email hint -->
+        <div class="tm-field">
+          <label style="color:#7ec8e3;">Work email <span style="color:#556;font-size:.71rem;">(optional)</span></label>
+          <input id="tm-quick-email" class="tm-input" type="email" placeholder="you@company.com (optional)" autocomplete="username"
+            style="font-size:.9rem;padding:9px 12px;"
+            onkeydown="if(event.key==='Enter')tmQuickLogin()">
+        </div>
+
+        <!-- Tenant hint (optional) -->
+        <div class="tm-field">
+          <label style="color:#7ec8e3;">Tenant ID <span style="color:#555;font-size:.71rem;">(optional — leave blank to auto-detect)</span></label>
+          <input id="tm-quick-tenant" class="tm-input" placeholder="common" autocomplete="off"
+            style="font-size:.87rem;padding:7px 12px;">
+        </div>
+
+        <button class="tm-btn" onclick="tmQuickLogin()" style="width:100%;margin-top:4px;padding:10px;font-size:.92rem;letter-spacing:.3px;">
+          &#128274;&nbsp; Sign in with Microsoft
+        </button>
+        </div><!-- /tm-manual-section -->
+
+        <div class="tm-status" id="tm-quick-status" style="margin-top:8px;text-align:center;"></div>
+
+        <!-- Device-code box (shown after button click) -->
+        <div id="tm-quick-device-box" style="display:none;margin-top:12px;background:#0a0a1a;border:1px solid #5059C9;border-radius:8px;padding:14px;text-align:center;">
+          <div style="font-size:.75rem;color:#aaa;margin-bottom:6px;">1. Open in any browser:</div>
+          <a id="tm-quick-url" href="https://microsoft.com/devicelogin" target="_blank" rel="noopener" style="color:#7ec8e3;font-size:.85rem;font-weight:600;">microsoft.com/devicelogin ↗</a>
+          <div style="font-size:.75rem;color:#aaa;margin:10px 0 4px;">2. Enter this one-time code:</div>
+          <div id="tm-quick-code" style="font-size:2rem;font-weight:900;color:#7ec8e3;letter-spacing:8px;padding:6px 0;font-family:monospace;background:#111;border-radius:6px;margin:6px 0;"></div>
+          <div id="tm-quick-expires" style="font-size:.7rem;color:#555;margin-bottom:10px;"></div>
+          <button class="tm-btn tm-btn-sm" onclick="tmQuickPoll(false)">&#8635;&nbsp;I've signed in — check now</button>
+          <div id="tm-quick-poll-status" style="font-size:.75rem;margin-top:6px;min-height:1em;"></div>
+        </div>
+      </div>
+
+      <!-- Advanced toggle -->
+      <div style="text-align:center;margin-bottom:8px;">
+        <button onclick="tmToggleAdvanced()" style="background:none;border:none;color:#444;font-size:.75rem;cursor:pointer;padding:2px 6px;" id="tm-adv-toggle">⚙ Advanced auth options</button>
+      </div>
+
+      <div id="tm-advanced-panel" style="display:none;">
+        <!-- Auth mode tabs -->
+        <div style="display:flex;gap:0;margin-bottom:12px;border-radius:6px;overflow:hidden;border:1px solid #333;">
+          <button id="tm-tab-upw" onclick="tmSetMode('upw')" style="flex:1;padding:6px;font-size:.8rem;font-weight:600;border:none;cursor:pointer;background:#252535;color:#7ec8e3;">&#128100; User &amp; Password</button>
+          <button id="tm-tab-mfa" onclick="tmSetMode('mfa')" style="flex:1;padding:6px;font-size:.8rem;font-weight:600;border:none;cursor:pointer;background:#161620;color:#666;">&#128274; MFA Login</button>
+          <button id="tm-tab-app" onclick="tmSetMode('app')" style="flex:1;padding:6px;font-size:.8rem;font-weight:600;border:none;cursor:pointer;background:#161620;color:#666;">&#9881; App Creds</button>
+          <button id="tm-tab-ps" onclick="tmSetMode('ps')" style="flex:1;padding:6px;font-size:.8rem;font-weight:600;border:none;cursor:pointer;background:#161620;color:#666;">&#128187; PowerShell</button>
+        </div>
+
+        <!-- Shared: Tenant ID -->
+        <div class="tm-field">
+          <label>Tenant ID <span style="color:#555;font-size:.72rem;">(or use <em>common</em>)</span></label>
+          <input id="tm-tenant" class="tm-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or common">
+        </div>
+
+        <!-- Username/Password mode fields -->
+        <div id="tm-mode-upw">
+          <div class="tm-field">
+            <label>Username (email)</label>
+            <input id="tm-username" class="tm-input" placeholder="you@company.com" autocomplete="username">
+          </div>
+          <div class="tm-field">
+            <label>Password</label>
+            <input id="tm-password" class="tm-input" type="password" placeholder="Your Microsoft account password" autocomplete="current-password">
+            <small style="color:#555;font-size:.71rem;">Does not work if MFA is required on your account.</small>
+          </div>
+        </div>
+
+        <!-- App Credentials mode fields -->
+        <div id="tm-mode-app" style="display:none;">
+          <div class="tm-field">
+            <label>Client ID</label>
+            <input id="tm-client-id" class="tm-input" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          </div>
+          <div class="tm-field">
+            <label>Client Secret</label>
+            <input id="tm-client-secret" class="tm-input" type="password" placeholder="Your app client secret">
+          </div>
+          <div class="tm-field">
+            <label>User UPN to read calendar for</label>
+            <input id="tm-upn" class="tm-input" placeholder="user@yourtenant.com">
+            <small style="color:#555;font-size:.71rem;">Requires Calendars.Read application permission granted by admin.</small>
+          </div>
+        </div>
+
+        <!-- MFA / Device Code mode -->
+        <div id="tm-mode-mfa" style="display:none;">
+          <p style="font-size:.78rem;color:#aaa;margin:0 0 10px;">Uses Microsoft&#8217;s device login &mdash; works with MFA, no password stored in this app.</p>
+          <button class="tm-btn" onclick="teamsDeviceStart()" id="tm-device-start-btn">&#128274; Start Device Login</button>
+          <div id="tm-device-code-box" style="display:none;margin-top:12px;background:#0d0d1a;border:1px solid #00b4d8;border-radius:8px;padding:14px;text-align:center;">
+            <div style="font-size:.78rem;color:#aaa;margin-bottom:6px;">1. Open this link in any browser:</div>
+            <a id="tm-device-url" href="https://microsoft.com/devicelogin" target="_blank" rel="noopener" style="color:#7ec8e3;font-size:.85rem;">https://microsoft.com/devicelogin &#8599;</a>
+            <div style="font-size:.78rem;color:#aaa;margin:10px 0 4px;">2. Enter this code:</div>
+            <div id="tm-device-code" style="font-size:1.8rem;font-weight:900;color:#00b4d8;letter-spacing:6px;padding:6px 0;font-family:monospace;"></div>
+            <div style="font-size:.72rem;color:#555;margin-top:2px;" id="tm-device-expires"></div>
+            <button class="tm-btn tm-btn-sm" onclick="teamsDevicePoll(false)" style="margin-top:10px;">&#8635; I&#8217;ve signed in &mdash; check now</button>
+            <div class="tm-status" id="tm-device-poll-status" style="margin-top:6px;"></div>
+          </div>
+          <div class="tm-status" id="tm-device-start-status" style="margin-top:6px;"></div>
+        </div>
+
+        <!-- PowerShell / MicrosoftTeams module mode -->
+        <div id="tm-mode-ps" style="display:none;">
+          <p style="font-size:.78rem;color:#aaa;margin:0 0 8px;">Uses the <strong>MicrosoftTeams</strong> PowerShell module already installed on this machine. If you&#8217;re already signed in via PowerShell (<code>Connect-MicrosoftTeams</code>) the session is reused.</p>
+          <button class="tm-btn tm-btn-sm" onclick="teamsPSStatus()" style="margin-bottom:8px;">&#128269; Check Module &amp; Session</button>
+          <div class="tm-status" id="tm-ps-status" style="margin-bottom:8px;"></div>
+          <button class="tm-btn" id="tm-ps-connect-btn" onclick="teamsPSConnect()">&#128187; Connect-MicrosoftTeams</button>
+          <div class="tm-status" id="tm-ps-conn-status" style="margin-top:6px;"></div>
+          <div id="tm-ps-teams-box" style="display:none;margin-top:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <span style="font-size:.78rem;font-weight:600;color:#7ec8e3;">Teams</span>
+              <button class="tm-btn tm-btn-sm" onclick="teamsPSLoadTeams()">&#8635; Load Teams</button>
+            </div>
+            <div id="tm-ps-teams-list" style="max-height:200px;overflow-y:auto;font-size:.75rem;"></div>
+          </div>
+        </div>
+
+        <button class="tm-btn" id="tm-connect-btn" onclick="teamsConnect()">&#128279; Connect</button>
+        <div class="tm-status" id="tm-conn-status"></div>
+      </div>
+    </div>
+
+    <div class="teams-panel" style="margin-top:14px;">
+      <h3>📆 Date Range</h3>
+      <div class="tm-field">
+        <label>Start</label>
+        <input id="tm-range-start" class="tm-input" type="date">
+      </div>
+      <div class="tm-field">
+        <label>End</label>
+        <input id="tm-range-end" class="tm-input" type="date">
+      </div>
+      <button class="tm-btn" onclick="teamsLoadRange()">📥 Load Events</button>
+      <div class="tm-status" id="tm-load-status"></div>
+    </div>
+
+    <div class="teams-panel" style="margin-top:14px;">
+      <h3>🔍 Filter</h3>
+      <div class="tm-field">
+        <label>Search subject / body</label>
+        <input id="tm-filter-text" class="tm-input" placeholder="meeting, standup…" oninput="teamsApplyFilter()">
+      </div>
+      <div class="tm-field">
+        <label>Show</label>
+        <select id="tm-filter-type" class="tm-input" onchange="teamsApplyFilter()">
+          <option value="all">All events</option>
+          <option value="online">Online / Teams meetings only</option>
+          <option value="busy">Busy</option>
+          <option value="tentative">Tentative</option>
+          <option value="free">Free</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: calendar -->
+  <div>
+    <div class="teams-panel">
+      <div class="cal-header">
+        <button class="cal-nav" onclick="calMove(-1)">&#8249;</button>
+        <span class="cal-title" id="cal-month-title">—</span>
+        <button class="cal-nav" onclick="calMove(1)">&#8250;</button>
+      </div>
+      <div class="cal-grid" id="cal-day-labels">
+        <div class="cal-day-label">Sun</div><div class="cal-day-label">Mon</div>
+        <div class="cal-day-label">Tue</div><div class="cal-day-label">Wed</div>
+        <div class="cal-day-label">Thu</div><div class="cal-day-label">Fri</div>
+        <div class="cal-day-label">Sat</div>
+      </div>
+      <div class="cal-grid" id="cal-cells" style="margin-top:4px;"></div>
+      <div id="cal-empty" style="text-align:center;color:#555;padding:30px 0;font-size:.85rem;">Connect and load events to populate the calendar.</div>
+    </div>
+
+    <div id="tm-event-detail" class="detail-panel" style="display:none;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h4 id="tm-ev-title">—</h4>
+        <button onclick="document.getElementById('tm-event-detail').style.display='none'" style="background:none;border:none;color:#666;font-size:1.1rem;cursor:pointer;">✕</button>
+      </div>
+      <div class="detail-row"><span class="dk">When</span><span class="dv" id="tm-ev-when">—</span></div>
+      <div class="detail-row"><span class="dk">Where</span><span class="dv" id="tm-ev-where">—</span></div>
+      <div class="detail-row"><span class="dk">Organizer</span><span class="dv" id="tm-ev-org">—</span></div>
+      <div class="detail-row"><span class="dk">Status</span><span class="dv" id="tm-ev-status">—</span></div>
+      <div class="detail-row"><span class="dk">Type</span><span class="dv" id="tm-ev-type">—</span></div>
+      <div class="detail-row" id="tm-ev-link-row" style="display:none;"><span class="dk">Join URL</span><span class="dv"><a id="tm-ev-link" href="#" target="_blank" style="color:#7ec8e3;">Open Teams meeting ↗</a></span></div>
+      <div class="detail-row"><span class="dk">Body</span><span class="dv" id="tm-ev-body" style="max-height:100px;overflow:auto;">—</span></div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /tc-pane-cal -->
+
+<!-- Chat pane -->
+<div id="tc-pane-chat" style="display:none;">
+
+  <!-- Chat pane top bar -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+    <div id="chat-conn-badge" style="display:none;" class="teams-connected" style="margin:0;">
+      <span class="teams-dot"></span>
+      <span id="chat-conn-who" style="font-size:.8rem;"></span>
+    </div>
+    <div id="chat-noconn-msg" style="display:none;font-size:.82rem;color:#f90;">
+      &#9888; Not connected &mdash; <a href="javascript:void(0)" onclick="tcMainTab('cal')" style="color:#7ec8e3;">go to Calendar tab to connect</a> first.
+    </div>
+    <!-- Inline auth box shown when PS connected but Graph token missing -->
+    <div id="chat-needs-graph-msg" style="display:none;background:#0d0d1e;border:1px solid #5059C9;border-radius:8px;padding:12px 16px;font-size:.82rem;">
+      &#128274; <strong style="color:#7ec8e3;">One more step needed</strong> &mdash; authorize chat access with Microsoft.
+      <div style="margin-top:8px;display:flex;gap:6px;align-items:center;">
+        <input id="chat-inline-tenant" class="tm-input" placeholder="your-domain.com or tenant ID" autocomplete="off" style="font-size:.78rem;padding:5px 8px;flex:1;max-width:240px;">
+        <button class="tm-btn tm-btn-sm" onclick="chatInlineAuth()">&#128274; Authorize</button>
+      </div>
+      <div id="chat-inline-auth-box" style="display:none;margin-top:10px;text-align:center;background:#0a0a1a;border:1px solid #5059C9;border-radius:6px;padding:12px;">
+        <div style="font-size:.75rem;color:#aaa;margin-bottom:6px;">Open: <a href="https://microsoft.com/devicelogin" target="_blank" rel="noopener" style="color:#7ec8e3;font-weight:600;">microsoft.com/devicelogin ↗</a></div>
+        <div id="chat-inline-code" style="font-size:1.8rem;font-weight:900;color:#7ec8e3;letter-spacing:8px;font-family:monospace;padding:6px 0;background:#111;border-radius:5px;margin:6px 0;"></div>
+        <button class="tm-btn tm-btn-sm" onclick="chatInlinePoll(false)" style="margin-top:4px;">&#8635; I've signed in &mdash; check now</button>
+        <div id="chat-inline-poll-st" style="font-size:.75rem;margin-top:5px;"></div>
+      </div>
+      <div id="chat-inline-start-st" style="font-size:.75rem;margin-top:5px;"></div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+      <a href="https://teams.microsoft.com/v2/" target="_blank" rel="noopener" class="tm-btn tm-btn-sm" style="text-decoration:none;">&#128279; Open Teams &#8599;</a>
+      <button class="tm-btn tm-btn-sm" onclick="chatLoad()">&#8635; Refresh</button>
+    </div>
+  </div>
+
+  <div class="teams-layout" style="grid-template-columns:280px 1fr;">
+
+    <!-- Chat list -->
+    <div>
+      <div class="teams-panel" style="height:100%;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <h3 style="margin:0;padding:0;border:none;">&#128172; Recent Chats</h3>
+        </div>
+        <div class="tm-status" id="chat-list-status"></div>
+        <div id="chat-list" style="display:flex;flex-direction:column;gap:4px;max-height:520px;overflow-y:auto;margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <!-- Message view -->
+    <div>
+      <div class="teams-panel" style="display:flex;flex-direction:column;gap:10px;">
+        <div id="chat-header" style="display:flex;align-items:center;justify-content:space-between;">
+          <h3 style="margin:0;padding:0;border:none;" id="chat-title">Select a chat ←</h3>
+          <button class="tm-btn tm-btn-sm" onclick="chatRefreshMsgs()" id="chat-refresh-btn" style="display:none;">&#8635; Refresh</button>
+        </div>
+        <div id="chat-msgs" style="flex:1;min-height:320px;max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:4px 0;"></div>
+        <div id="chat-compose" style="display:none;margin-top:4px;">
+          <div style="display:flex;gap:8px;">
+            <input id="chat-input" class="tm-input" placeholder="Type a message…" style="flex:1;" onkeydown="if(event.key==='Enter'&amp;&amp;!event.shiftKey){event.preventDefault();chatSend();}">
+            <button class="tm-btn" onclick="chatSend()">Send &#10148;</button>
+            <a id="chat-open-teams-link" href="https://teams.microsoft.com/v2/" target="_blank" rel="noopener" class="tm-btn" style="text-decoration:none;background:#444;color:#eee;" title="Open this chat in Teams">&#8599;</a>
+          </div>
+          <div class="tm-status" id="chat-send-status"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /tc-pane-chat -->
+
+<script>
+// ── Teams Calendar state ────────────────────────────────────────────────────
+let _teamsToken = null;
+let _teamsUpn   = null;
+let _teamsEvents = [];  // raw from API
+let _teamsFiltered = []; // after filter
+let _calYear = new Date().getFullYear();
+let _calMonth = new Date().getMonth();
+let _tmMode = 'upw';
+var _deviceCode = null;
+var _deviceInterval = null;
+var _devicePollTenant = 'common';
+
+// Init date range defaults
+(function(){
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const s = new Date(y, m, 1);
+  const e = new Date(y, m+1, 0);
+  document.getElementById('tm-range-start').value = s.toISOString().slice(0,10);
+  document.getElementById('tm-range-end').value   = e.toISOString().slice(0,10);
+  calRender();
+  // Restore saved creds
+  const saved = JSON.parse(localStorage.getItem('tm_creds')||'{}');
+  if(saved.tenant)    document.getElementById('tm-tenant').value = saved.tenant;
+  if(saved.username)  document.getElementById('tm-username').value = saved.username;
+  if(saved.client_id) document.getElementById('tm-client-id').value = saved.client_id;
+  if(saved.upn)       document.getElementById('tm-upn').value = saved.upn;
+  if(saved.mode)      tmSetMode(saved.mode);
+  // Restore quick-login email/tenant
+  if(saved.quick_email)  { var qe=document.getElementById('tm-quick-email');  if(qe) qe.value=saved.quick_email; }
+  if(saved.quick_tenant) { var qt=document.getElementById('tm-quick-tenant'); if(qt) qt.value=saved.quick_tenant; }
+  // Check for Okta SSO (persisted from Okta page)
+  setTimeout(tmCheckOktaSSO, 100);
+})();
+
+// ── Quick / dedicated Teams login ─────────────────────────────────────────
+var _tmQuickDeviceCode = null;
+var _tmQuickPollInterval = null;
+
+function tmToggleAdvanced(){
+  var panel = document.getElementById('tm-advanced-panel');
+  var btn   = document.getElementById('tm-adv-toggle');
+  var show  = panel.style.display === 'none';
+  panel.style.display = show ? '' : 'none';
+  btn.textContent = show ? '⚙ Hide advanced options' : '⚙ Advanced auth options';
+  btn.style.color = show ? '#7ec8e3' : '#444';
+}
+
+function tmQuickLogin(){
+  var email  = (document.getElementById('tm-quick-email').value||'').trim();
+  var tenant = (document.getElementById('tm-quick-tenant').value||'').trim() || 'common';
+  var st     = document.getElementById('tm-quick-status');
+  var box    = document.getElementById('tm-quick-device-box');
+  st.textContent='Starting sign-in…';
+  box.style.display='none';
+  if(_tmQuickPollInterval){ clearInterval(_tmQuickPollInterval); _tmQuickPollInterval=null; }
+  // Persist email hint
+  try{
+    var s=JSON.parse(localStorage.getItem('tm_creds')||'{}');
+    s.quick_email=email; s.quick_tenant=tenant;
+    localStorage.setItem('tm_creds',JSON.stringify(s));
+  }catch(e){}
+  fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:tenant})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.user_code){
+      _tmQuickDeviceCode = j.device_code;
+      _devicePollTenant  = tenant;
+      _teamsUpn          = email;
+      document.getElementById('tm-quick-code').textContent = j.user_code;
+      var urlEl = document.getElementById('tm-quick-url');
+      urlEl.href = j.verification_uri||'https://microsoft.com/devicelogin';
+      document.getElementById('tm-quick-expires').textContent = j.expires_in ? 'Code expires in '+Math.round(j.expires_in/60)+' min' : '';
+      box.style.display='';
+      st.innerHTML='<span style="color:#7ec8e3;">Code ready ↑</span>';
+      _tmQuickPollInterval = setInterval(function(){ tmQuickPoll(true); }, 5000);
+    } else {
+      st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function tmShowManualSection(btn){
+  var ms = document.getElementById('tm-manual-section');
+  if(ms) ms.style.display='';
+  if(btn && btn.parentNode) btn.parentNode.style.display='none';
+}
+
+function tmCheckOktaSSO(){
+  var ssoBanner = document.getElementById('tm-sso-banner');
+  var manualSec = document.getElementById('tm-manual-section');
+  if(!ssoBanner || !manualSec) return;
+  if(_teamsToken){ ssoBanner.style.display='none'; manualSec.style.display='none'; return; }
+  // Read Okta identity from localStorage (persisted by Okta page)
+  var sso = null;
+  try{ sso = JSON.parse(localStorage.getItem('okta_sso')||'null'); }catch(e){}
+  if(sso && sso.session_id && sso.login){
+    document.getElementById('tm-sso-who').textContent = sso.login;
+    ssoBanner.style.display = '';
+    manualSec.style.display = 'none';
+  } else {
+    ssoBanner.style.display = 'none';
+    manualSec.style.display = '';
+  }
+}
+
+function tmOktaSSO(){
+  var st = document.getElementById('tm-quick-status');
+  // Read Okta identity from localStorage
+  var sso = null;
+  try{ sso = JSON.parse(localStorage.getItem('okta_sso')||'null'); }catch(e){}
+  if(!sso || !sso.session_id){
+    if(st) st.innerHTML='<span style="color:#f90;">&#9888; Sign into Okta first (<a href="/okta" style="color:#7ec8e3;">go to Okta page</a>), then come back here.</span>';
+    return;
+  }
+  // Pre-fill email from Okta
+  document.getElementById('tm-quick-email').value = sso.login || '';
+  // Derive Microsoft tenant hint from Okta domain: acme.okta.com → acme.com
+  if(sso.domain){
+    var t = sso.domain.replace(/[.]okta[.]com$/i,'').replace(/[.]oktapreview[.]com$/i,'');
+    if(t && t.indexOf('.') === -1) t = t + '.com';
+    document.getElementById('tm-quick-tenant').value = t || 'common';
+  }
+  // Reveal manual section so the device-code box can appear below it
+  document.getElementById('tm-manual-section').style.display = '';
+  // Launch device-code flow — Microsoft will redirect through Okta as IdP
+  tmQuickLogin();
+}
+
+function tmQuickPoll(auto){
+  var st = document.getElementById('tm-quick-poll-status');
+  if(!_tmQuickDeviceCode){ if(st) st.textContent='\u26A0 Start sign-in first.'; return; }
+  if(!auto && st) st.textContent='Checking\u2026';
+  fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:_devicePollTenant, device_code:_tmQuickDeviceCode})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.token){
+      if(_tmQuickPollInterval){ clearInterval(_tmQuickPollInterval); _tmQuickPollInterval=null; }
+      _teamsToken = j.token;
+      if(j.upn) _teamsUpn = j.upn;
+      var who = _teamsUpn || '';
+      // Update banner and login card
+      document.getElementById('tm-login-card').innerHTML=
+        '<div style="text-align:center;padding:12px 0;">'
+        +'<div style="font-size:1.5rem;margin-bottom:6px;">&#9989;</div>'
+        +'<div style="color:#4caf50;font-weight:700;font-size:.95rem;">Signed in to Microsoft Teams</div>'
+        +'<div style="color:#888;font-size:.8rem;margin-top:4px;">'+escHtml(who)+'</div>'
+        +'<button class="tm-btn tm-btn-danger tm-btn-sm" onclick="teamsDisconnect()" style="margin-top:10px;">Sign out</button>'
+        +'</div>';
+      document.getElementById('teams-connected-banner').style.display='flex';
+      document.getElementById('teams-connected-who').textContent=' '+escHtml(who);
+      document.getElementById('tm-quick-status').textContent='';
+      // Save UPN
+      try{
+        var s=JSON.parse(localStorage.getItem('tm_creds')||'{}');
+        s.quick_email=who; s.mode='mfa'; s.quick_tenant=_devicePollTenant;
+        localStorage.setItem('tm_creds',JSON.stringify(s));
+      }catch(e){}
+      // Load chats if on chat tab
+      if(_tcMainMode==='chat') chatLoad();
+    } else if(j.pending){
+      if(!auto && st) st.textContent='Still waiting for sign-in\u2026';
+    } else if(j.expired){
+      if(_tmQuickPollInterval){ clearInterval(_tmQuickPollInterval); _tmQuickPollInterval=null; }
+      if(st) st.innerHTML='<span style="color:#f90;">&#9888; Code expired. Click Sign in again.</span>';
+      document.getElementById('tm-quick-device-box').style.display='none';
+    } else {
+      if(_tmQuickPollInterval){ clearInterval(_tmQuickPollInterval); _tmQuickPollInterval=null; }
+      if(st) st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ if(!auto && st) st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function tmSetMode(mode){
+  _tmMode = mode;
+  document.getElementById('tm-mode-upw').style.display  = mode==='upw' ? '' : 'none';
+  document.getElementById('tm-mode-app').style.display  = mode==='app' ? '' : 'none';
+  document.getElementById('tm-mode-mfa').style.display  = mode==='mfa' ? '' : 'none';
+  document.getElementById('tm-mode-ps').style.display   = mode==='ps'  ? '' : 'none';
+  ['upw','mfa','app','ps'].forEach(function(m){
+    var btn = document.getElementById('tm-tab-'+m);
+    if(btn){ btn.style.background = m===mode ? '#252535' : '#161620'; btn.style.color = m===mode ? '#7ec8e3' : '#666'; }
+  });
+  var cb = document.getElementById('tm-connect-btn');
+  if(cb) cb.style.display = (mode==='mfa'||mode==='ps') ? 'none' : '';
+}
+
+function teamsConnect(){
+  const tenant = document.getElementById('tm-tenant').value.trim();
+  const st     = document.getElementById('tm-conn-status');
+  if(!tenant){ st.textContent='\u26A0 Enter a Tenant ID (or "common").'; return; }
+  st.textContent='Connecting…';
+  let payload;
+  if(_tmMode==='upw'){
+    const username = document.getElementById('tm-username').value.trim();
+    const password = document.getElementById('tm-password').value;
+    if(!username||!password){ st.textContent='\u26A0 Enter your username and password.'; return; }
+    payload = {grant_type:'password', tenant_id:tenant, username, password};
+    _teamsUpn = username;
+  } else {
+    const clientId     = document.getElementById('tm-client-id').value.trim();
+    const clientSecret = document.getElementById('tm-client-secret').value.trim();
+    const upn          = document.getElementById('tm-upn').value.trim();
+    if(!clientId||!clientSecret){ st.textContent='\u26A0 Fill in Client ID and Secret.'; return; }
+    payload = {grant_type:'client_credentials', tenant_id:tenant, client_id:clientId, client_secret:clientSecret, upn};
+    _teamsUpn = upn||null;
+  }
+  fetch('/api/teams/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  .then(r=>r.json()).then(j=>{
+    if(j.token){
+      _teamsToken = j.token;
+      const who = _teamsUpn ? ' ('+_teamsUpn+')' : '';
+      st.innerHTML='<span style="color:#4caf50;">\u2705 Connected'+who+'</span>';
+      document.getElementById('teams-connected-banner').style.display='flex';
+      document.getElementById('teams-connected-who').textContent = who;
+      const save = {mode:_tmMode, tenant};
+      if(_tmMode==='upw') save.username = document.getElementById('tm-username').value.trim();
+      else { save.client_id=document.getElementById('tm-client-id').value.trim(); save.upn=document.getElementById('tm-upn').value.trim(); }
+      localStorage.setItem('tm_creds', JSON.stringify(save));
+    } else {
+      st.innerHTML='<span style="color:#f55;">\u274C '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(e=>{ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function teamsDisconnect(){
+  var prevUpn = _teamsUpn;
+  _teamsToken = null;
+  _teamsUpn   = null;
+  _teamsEvents = [];
+  _teamsFiltered = [];
+  if(_deviceInterval){ clearInterval(_deviceInterval); _deviceInterval=null; }
+  if(_tmQuickPollInterval){ clearInterval(_tmQuickPollInterval); _tmQuickPollInterval=null; }
+  calRender();
+  document.getElementById('teams-connected-banner').style.display='none';
+  document.getElementById('tm-conn-status').textContent='Disconnected.';
+  document.getElementById('tm-password').value='';
+  document.getElementById('tm-client-secret').value='';
+  var b=document.getElementById('tm-device-code-box'); if(b) b.style.display='none';
+  // Restore quick-login card (in case it was replaced with success state)
+  var card = document.getElementById('tm-login-card');
+  if(card && !card.querySelector('#tm-quick-email')){
+    var email = prevUpn || '';
+    card.innerHTML=''
+      +'<div id="tm-sso-banner" style="display:none;background:#0a1a14;border:1px solid #2e7d52;border-radius:8px;padding:14px;margin-bottom:12px;text-align:center;">'
+      +'<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px;"><span style="font-size:1.1rem;">&#128274;</span><span style="font-size:.88rem;color:#4caf50;font-weight:700;">Okta SSO Connected</span></div>'
+      +'<div id="tm-sso-who" style="font-size:.8rem;color:#aaa;margin-bottom:10px;word-break:break-all;"></div>'
+      +'<button class="tm-btn" onclick="tmOktaSSO()" style="width:100%;padding:10px;font-size:.92rem;background:#1b5e20;border-color:#2e7d52;">&#128274;&nbsp; Login to Teams via Okta SSO</button>'
+      +'<div style="margin-top:8px;"><button onclick="tmShowManualSection(this)" style="background:none;border:none;color:#555;font-size:.72rem;cursor:pointer;padding:2px;">or use a different account ↓</button></div>'
+      +'</div>'
+      +'<div id="tm-manual-section">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">'
+      +'<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" rx="7" fill="#5059C9"/><path d="M20.5 10h-4a.5.5 0 0 0-.5.5v1h4.5A2.5 2.5 0 0 1 23 14v5.5a.5.5 0 0 0 .5.5h.5A1.5 1.5 0 0 0 25.5 18.5v-6A2.5 2.5 0 0 0 23 10h-2.5z" fill="#fff" opacity=".7"/><rect x="8" y="12" width="13" height="12" rx="2" fill="#fff"/><path d="M14.5 15.5v5M12 17.5h5" stroke="#5059C9" stroke-width="1.5" stroke-linecap="round"/></svg>'
+      +'<div><div style="font-size:.95rem;font-weight:700;color:#e0e0ff;">Microsoft Teams</div>'
+      +'<div style="font-size:.72rem;color:#555;">Sign in with your work or school account</div></div></div>'
+      +'<div class="tm-field"><label style="color:#7ec8e3;">Work email</label>'
+      +'<input id="tm-quick-email" class="tm-input" type="email" placeholder="you@company.com" autocomplete="username" style="font-size:.9rem;padding:9px 12px;" value="'+escHtml(email)+'" onkeydown="if(event.key===\\'Enter\\')tmQuickLogin()"></div>'
+      +'<div class="tm-field"><label style="color:#7ec8e3;">Tenant ID <span style="color:#555;font-size:.71rem;">(optional)</span></label>'
+      +'<input id="tm-quick-tenant" class="tm-input" placeholder="common" autocomplete="off" style="font-size:.87rem;padding:7px 12px;"></div>'
+      +'<button class="tm-btn" onclick="tmQuickLogin()" style="width:100%;margin-top:4px;padding:10px;font-size:.92rem;">&#128274;&nbsp; Sign in with Microsoft</button>'
+      +'</div>'
+      +'<div class="tm-status" id="tm-quick-status" style="margin-top:8px;text-align:center;"></div>'
+      +'<div id="tm-quick-device-box" style="display:none;margin-top:12px;background:#0a0a1a;border:1px solid #5059C9;border-radius:8px;padding:14px;text-align:center;">'
+      +'<div style="font-size:.75rem;color:#aaa;margin-bottom:6px;">1. Open in any browser:</div>'
+      +'<a id="tm-quick-url" href="https://microsoft.com/devicelogin" target="_blank" rel="noopener" style="color:#7ec8e3;font-size:.85rem;font-weight:600;">microsoft.com/devicelogin ↗</a>'
+      +'<div style="font-size:.75rem;color:#aaa;margin:10px 0 4px;">2. Enter this one-time code:</div>'
+      +'<div id="tm-quick-code" style="font-size:2rem;font-weight:900;color:#7ec8e3;letter-spacing:8px;padding:6px 0;font-family:monospace;background:#111;border-radius:6px;margin:6px 0;"></div>'
+      +'<div id="tm-quick-expires" style="font-size:.7rem;color:#555;margin-bottom:10px;"></div>'
+      +'<button class="tm-btn tm-btn-sm" onclick="tmQuickPoll(false)">&#8635;&nbsp;I&#39;ve signed in &#8212; check now</button>'
+      +'<div id="tm-quick-poll-status" style="font-size:.75rem;margin-top:6px;min-height:1em;"></div>'
+      +'</div>';
+    setTimeout(tmCheckOktaSSO, 50);
+  }
+}
+
+function teamsDeviceStart(){
+  var tenant = (document.getElementById('tm-tenant').value.trim()||'common');
+  if(tenant.toLowerCase()==='common') tenant='common';
+  _devicePollTenant = tenant;
+  var st  = document.getElementById('tm-device-start-status');
+  var box = document.getElementById('tm-device-code-box');
+  st.textContent='Starting device login…';
+  box.style.display='none';
+  if(_deviceInterval){ clearInterval(_deviceInterval); _deviceInterval=null; }
+  fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:tenant})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.user_code){
+      _deviceCode = j.device_code;
+      document.getElementById('tm-device-code').textContent = j.user_code;
+      var urlEl = document.getElementById('tm-device-url');
+      urlEl.href = j.verification_uri||'https://microsoft.com/devicelogin';
+      urlEl.textContent = (j.verification_uri||'https://microsoft.com/devicelogin')+' ↗';
+      var exp = j.expires_in ? 'Expires in '+Math.round(j.expires_in/60)+' min' : '';
+      document.getElementById('tm-device-expires').textContent = exp;
+      box.style.display='';
+      st.textContent='';
+      _deviceInterval = setInterval(function(){ teamsDevicePoll(true); }, 5000);
+    } else {
+      st.innerHTML='<span style="color:#f55;">❌ '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function teamsDevicePoll(auto){
+  var st = document.getElementById('tm-device-poll-status');
+  if(!_deviceCode){ st.textContent='⚠ Start device login first.'; return; }
+  if(!auto) st.textContent='Checking…';
+  fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:_devicePollTenant, device_code:_deviceCode})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.token){
+      if(_deviceInterval){ clearInterval(_deviceInterval); _deviceInterval=null; }
+      _teamsToken = j.token;
+      _teamsUpn   = j.upn||'';
+      var who = _teamsUpn ? ' ('+_teamsUpn+')' : '';
+      document.getElementById('tm-conn-status').innerHTML='<span style="color:#4caf50;">✅ Connected via MFA'+who+'</span>';
+      document.getElementById('teams-connected-banner').style.display='flex';
+      document.getElementById('teams-connected-who').textContent=who;
+      document.getElementById('tm-device-code-box').style.display='none';
+      st.textContent='';
+      var save={mode:'mfa',tenant:_devicePollTenant};
+      if(_teamsUpn) save.username=_teamsUpn;
+      localStorage.setItem('tm_creds',JSON.stringify(save));
+    } else if(j.pending){
+      if(!auto) st.textContent='Still waiting for sign-in…';
+    } else if(j.expired){
+      if(_deviceInterval){ clearInterval(_deviceInterval); _deviceInterval=null; }
+      st.innerHTML='<span style="color:#f90;">⚠ Code expired. Click Start again.</span>';
+    } else {
+      if(_deviceInterval){ clearInterval(_deviceInterval); _deviceInterval=null; }
+      st.innerHTML='<span style="color:#f55;">❌ '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ if(!auto) st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function teamsPSStatus(){
+  var st = document.getElementById('tm-ps-status');
+  st.textContent = 'Checking…';
+  fetch('/api/teams/ps_status',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.module_found){
+      var who = j.account || j.tenant_name || '';
+      var tid  = j.tenant_id || 'common';
+      var msg = '\u2705 Module v'+j.version+' found. ';
+      if(j.connected){
+        msg += '&#128279; Connected: <strong>'+who+'</strong>';
+        var box=document.getElementById('tm-ps-teams-box'); if(box) box.style.display='';
+        document.getElementById('teams-connected-banner').style.display='flex';
+        document.getElementById('teams-connected-who').textContent=' (PS: '+who+')';
+        if(!_teamsToken) teamsPSAcquireGraphToken(tid, who);
+      } else {
+        msg += '&#10060; No cached session &mdash; click Connect.';
+      }
+      st.innerHTML='<span style="color:#4caf50;">'+msg+'</span>';
+    } else {
+      st.innerHTML='<span style="color:#f90;">&#9888; MicrosoftTeams module not found. Run: <code>Install-Module MicrosoftTeams</code></span>';
+    }
+  }).catch(function(e){ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function teamsPSConnect(){
+  var st  = document.getElementById('tm-ps-conn-status');
+  var btn = document.getElementById('tm-ps-connect-btn');
+  st.textContent = 'Opening browser for sign-in… (may take 30–60 s)';
+  btn.disabled = true;
+  fetch('/api/teams/ps_connect',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+  .then(function(r){ return r.json(); }).then(function(j){
+    btn.disabled = false;
+    if(j.connected){
+      var who = j.account || j.tenant_name || '';
+      var tid  = j.tenant_id || 'common';
+      st.innerHTML='<span style="color:#4caf50;">\u2705 Connected: <strong>'+who+'</strong></span>';
+      document.getElementById('teams-connected-banner').style.display='flex';
+      document.getElementById('teams-connected-who').textContent=' (PS: '+who+')';
+      var box=document.getElementById('tm-ps-teams-box'); if(box) box.style.display='';
+      // Auto-acquire a Graph token for Chat — show inline device-code prompt
+      teamsPSAcquireGraphToken(tid, who);
+    } else {
+      st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ btn.disabled=false; st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function teamsPSAcquireGraphToken(tenantId, upn){
+  // Ensure the MFA/device-code box is ready even though we're in PS tab
+  _devicePollTenant = tenantId || 'common';
+  _teamsUpn = upn || _teamsUpn;
+  // Show an inline prompt inside the PS box
+  var conn = document.getElementById('tm-ps-conn-status');
+  var chatBox = document.getElementById('tm-ps-chat-auth-box');
+  if(!chatBox){
+    chatBox = document.createElement('div');
+    chatBox.id = 'tm-ps-chat-auth-box';
+    chatBox.style.cssText = 'margin-top:12px;background:#0d0d1a;border:1px solid #7ec8e3;border-radius:8px;padding:14px;';
+    conn.parentNode.insertBefore(chatBox, conn.nextSibling);
+  }
+  chatBox.innerHTML = '<div style="font-size:.78rem;color:#aaa;margin-bottom:8px;">&#128172; <strong style="color:#7ec8e3;">One more step for Chat access</strong><br>Microsoft requires a separate Graph token to read your chats. Click below — a code will appear that you enter at microsoft.com/devicelogin.</div>'
+    +'<button class="tm-btn tm-btn-sm" id="tm-ps-chat-auth-btn" onclick="teamsPSStartGraphDevice()">&#128274; Authorize Chat Access</button>'
+    +'<div id="tm-ps-chat-code-box" style="display:none;margin-top:10px;text-align:center;">'
+    +'<div style="font-size:.75rem;color:#aaa;">Open: <a href="https://microsoft.com/devicelogin" target="_blank" rel="noopener" style="color:#7ec8e3;">microsoft.com/devicelogin ↗</a></div>'
+    +'<div id="tm-ps-chat-user-code" style="font-size:1.6rem;font-weight:900;color:#00b4d8;letter-spacing:6px;font-family:monospace;padding:6px 0;"></div>'
+    +'<button class="tm-btn tm-btn-sm" onclick="teamsPSPollGraphDevice(false)" style="margin-top:6px;">&#8635; I&#39;ve signed in &#8212; check now</button>'
+    +'<div id="tm-ps-chat-poll-status" style="font-size:.75rem;margin-top:4px;"></div>'
+    +'</div>';
+}
+
+var _psGraphDeviceCode = null;
+var _psGraphPollInterval = null;
+
+function teamsPSStartGraphDevice(){
+  var btn = document.getElementById('tm-ps-chat-auth-btn');
+  var box = document.getElementById('tm-ps-chat-code-box');
+  if(btn) btn.disabled = true;
+  if(_psGraphPollInterval){ clearInterval(_psGraphPollInterval); _psGraphPollInterval=null; }
+  fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:_devicePollTenant})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.user_code){
+      _psGraphDeviceCode = j.device_code;
+      document.getElementById('tm-ps-chat-user-code').textContent = j.user_code;
+      if(box) box.style.display='';
+      if(btn) btn.style.display='none';
+      _psGraphPollInterval = setInterval(function(){ teamsPSPollGraphDevice(true); }, 5000);
+    } else {
+      var st = document.getElementById('tm-ps-chat-poll-status');
+      if(st) st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||'Failed to start device login')+'</span>';
+      if(btn){ btn.disabled=false; }
+    }
+  }).catch(function(e){
+    if(btn) btn.disabled=false;
+    var st=document.getElementById('tm-ps-chat-poll-status');
+    if(st) st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>';
+  });
+}
+
+function teamsPSPollGraphDevice(auto){
+  var st = document.getElementById('tm-ps-chat-poll-status');
+  if(!_psGraphDeviceCode){ if(st) st.textContent='\u26A0 Start device login first.'; return; }
+  if(!auto && st) st.textContent='Checking\u2026';
+  fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:_devicePollTenant, device_code:_psGraphDeviceCode})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.token){
+      if(_psGraphPollInterval){ clearInterval(_psGraphPollInterval); _psGraphPollInterval=null; }
+      _teamsToken = j.token;
+      if(j.upn) _teamsUpn = j.upn;
+      // Hide the auth box and show success
+      var box = document.getElementById('tm-ps-chat-auth-box');
+      if(box) box.innerHTML='<span style="color:#4caf50;font-size:.82rem;">\u2705 Chat access granted. Switch to the Chat tab to view your messages.</span>';
+      // Update the top banner
+      document.getElementById('teams-connected-banner').style.display='flex';
+      var who = _teamsUpn ? ' ('+_teamsUpn+')' : '';
+      document.getElementById('teams-connected-who').textContent=who;
+      // If chat tab is already open, reload it
+      if(_tcMainMode==='chat') chatLoad();
+    } else if(j.pending){
+      if(!auto && st) st.textContent='Still waiting for sign-in\u2026';
+    } else if(j.expired){
+      if(_psGraphPollInterval){ clearInterval(_psGraphPollInterval); _psGraphPollInterval=null; }
+      if(st) st.innerHTML='<span style="color:#f90;">\u26A0 Code expired. Click Authorize again.</span>';
+      var btn=document.getElementById('tm-ps-chat-auth-btn');
+      if(btn){ btn.style.display=''; btn.disabled=false; }
+    } else {
+      if(_psGraphPollInterval){ clearInterval(_psGraphPollInterval); _psGraphPollInterval=null; }
+      if(st) st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ if(!auto && st) st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function teamsPSLoadTeams(){
+  var list = document.getElementById('tm-ps-teams-list');
+  list.textContent = 'Loading\u2026';
+  fetch('/api/teams/ps_teams',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.teams && j.teams.length){
+      list.innerHTML = j.teams.map(function(t){
+        return '<div style="padding:4px 6px;border-bottom:1px solid #222;color:#ccc;">'
+          +'<strong style="color:#7ec8e3;">'+_esc(t.DisplayName||t.display_name||'')+'</strong>'
+          +(t.Description||t.description ? '<br><span style="color:#666;font-size:.7rem;">'+_esc(t.Description||t.description||'')+'</span>' : '')
+          +'</div>';
+      }).join('');
+    } else {
+      list.innerHTML='<span style="color:#888;">'+(j.error||'No teams found.')+'</span>';
+    }
+  }).catch(function(e){ list.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function _esc(s){ var d=document.createElement('div');d.textContent=s;return d.innerHTML; }
+
+function teamsLoadRange(){
+  const st = document.getElementById('tm-load-status');
+  if(!_teamsToken){ st.innerHTML='<span style="color:#f55;">\u26A0 Connect first.</span>'; return; }
+  const start = document.getElementById('tm-range-start').value;
+  const end   = document.getElementById('tm-range-end').value;
+  const upn   = _teamsUpn || (_tmMode==='app' ? document.getElementById('tm-upn').value.trim() : '');
+  if(!start||!end){ st.textContent='\u26A0 Set start and end date.'; return; }
+  st.textContent='Loading events…';
+  fetch('/api/teams/calendar',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:_teamsToken,start_date:start,end_date:end,upn,use_me:_tmMode==='upw'})})
+  .then(r=>r.json()).then(j=>{
+    if(j.events){
+      _teamsEvents = j.events;
+      teamsApplyFilter();
+      st.innerHTML='<span style="color:#4caf50;">\u2705 Loaded '+j.events.length+' events.</span>';
+      document.getElementById('cal-empty').style.display='none';
+      calRender();
+    } else {
+      st.innerHTML='<span style="color:#f55;">\u274C '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(e=>{ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function teamsApplyFilter(){
+  const txt  = (document.getElementById('tm-filter-text').value||'').toLowerCase();
+  const type = document.getElementById('tm-filter-type').value;
+  _teamsFiltered = _teamsEvents.filter(ev=>{
+    if(txt && !(ev.subject||'').toLowerCase().includes(txt) && !(ev.bodyPreview||'').toLowerCase().includes(txt)) return false;
+    if(type==='online' && !ev.isOnlineMeeting) return false;
+    if(type==='busy'   && ev.showAs!=='busy') return false;
+    if(type==='tentative' && ev.showAs!=='tentative') return false;
+    if(type==='free'   && ev.showAs!=='free') return false;
+    return true;
+  });
+  calRender();
+}
+
+// ── Calendar rendering ───────────────────────────────────────────────────────
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function calMove(dir){
+  _calMonth += dir;
+  if(_calMonth < 0){ _calMonth=11; _calYear--; }
+  if(_calMonth > 11){ _calMonth=0; _calYear++; }
+  calRender();
+}
+
+function calRender(){
+  document.getElementById('cal-month-title').textContent = MONTHS[_calMonth]+' '+_calYear;
+  const today = new Date();
+  const firstDay = new Date(_calYear, _calMonth, 1).getDay();
+  const daysInMonth = new Date(_calYear, _calMonth+1, 0).getDate();
+  const prevDays = new Date(_calYear, _calMonth, 0).getDate();
+  const cells = document.getElementById('cal-cells');
+  cells.innerHTML='';
+
+  // Build a day→events map for fast lookup
+  const dayMap = {};
+  (_teamsFiltered.length ? _teamsFiltered : []).forEach(ev=>{
+    const d = new Date(ev.start.dateTime||ev.start.date);
+    if(d.getFullYear()===_calYear && d.getMonth()===_calMonth){
+      const key = d.getDate();
+      if(!dayMap[key]) dayMap[key]=[];
+      dayMap[key].push(ev);
+    }
+  });
+
+  // Leading cells from previous month
+  for(let i=0;i<firstDay;i++){
+    const c=document.createElement('div');
+    c.className='cal-cell other-month';
+    c.innerHTML=`<div class="cal-num">${prevDays-firstDay+1+i}</div>`;
+    cells.appendChild(c);
+  }
+  // Current month cells
+  for(let d=1;d<=daysInMonth;d++){
+    const c=document.createElement('div');
+    const isToday = d===today.getDate()&&_calMonth===today.getMonth()&&_calYear===today.getFullYear();
+    c.className='cal-cell'+(isToday?' today':'');
+    let inner=`<div class="cal-num">${d}</div>`;
+    const evs=dayMap[d]||[];
+    evs.slice(0,3).forEach(ev=>{
+      const cls=ev.isOnlineMeeting?'ev-teams':ev.showAs==='tentative'?'ev-tentative':ev.showAs==='busy'?'ev-busy':'';
+      const time=ev.start.dateTime?new Date(ev.start.dateTime).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+      inner+=`<div class="cal-event ${cls}" title="${(ev.subject||'').replace(/"/g,'&quot;')}" onclick="calShowEvent(${JSON.stringify(JSON.stringify(ev))})"> ${time?time+' ':''}${ev.subject||'(no title)'}</div>`;
+    });
+    if(evs.length>3) inner+=`<div style="font-size:.65rem;color:#666;">${evs.length-3} more…</div>`;
+    c.innerHTML=inner;
+    cells.appendChild(c);
+  }
+  // Trailing cells
+  const total=firstDay+daysInMonth;
+  const trailing=(total%7===0)?0:7-(total%7);
+  for(let i=1;i<=trailing;i++){
+    const c=document.createElement('div');
+    c.className='cal-cell other-month';
+    c.innerHTML=`<div class="cal-num">${i}</div>`;
+    cells.appendChild(c);
+  }
+}
+
+function calShowEvent(jsonStr){
+  const ev = JSON.parse(jsonStr);
+  const panel = document.getElementById('tm-event-detail');
+  panel.style.display='';
+  document.getElementById('tm-ev-title').textContent = ev.subject||'(no title)';
+  const fmt=(dt)=>{ if(!dt) return '—'; try{ return new Date(dt).toLocaleString(); }catch(e){ return dt; } };
+  document.getElementById('tm-ev-when').textContent = fmt(ev.start&&ev.start.dateTime)+' – '+fmt(ev.end&&ev.end.dateTime);
+  document.getElementById('tm-ev-where').textContent = (ev.location&&ev.location.displayName)||'—';
+  document.getElementById('tm-ev-org').textContent = (ev.organizer&&ev.organizer.emailAddress&&ev.organizer.emailAddress.name)||'—';
+  document.getElementById('tm-ev-status').textContent = ev.showAs||'—';
+  document.getElementById('tm-ev-type').innerHTML = ev.isOnlineMeeting
+    ? '<span class="tag-online">Teams Meeting</span>'
+    : '<span class="tag-offline">In-person / Other</span>';
+  const linkRow = document.getElementById('tm-ev-link-row');
+  if(ev.onlineMeetingUrl||ev.teams_join_url){
+    linkRow.style.display='';
+    document.getElementById('tm-ev-link').href = ev.onlineMeetingUrl||ev.teams_join_url;
+  } else { linkRow.style.display='none'; }
+  document.getElementById('tm-ev-body').textContent = ev.bodyPreview||'(no preview)';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+// ── Chat state ───────────────────────────────────────────────────────────────
+let _chatList = [];
+let _chatSelectedId = null;
+let _tcMainMode = 'cal';
+
+function tcMainTab(tab){
+  _tcMainMode = tab;
+  document.getElementById('tc-pane-cal').style.display  = tab==='cal'  ? '' : 'none';
+  document.getElementById('tc-pane-chat').style.display = tab==='chat' ? '' : 'none';
+  document.getElementById('tc-main-cal').style.background  = tab==='cal'  ? '#252535' : '#161620';
+  document.getElementById('tc-main-cal').style.color       = tab==='cal'  ? '#7ec8e3' : '#666';
+  document.getElementById('tc-main-chat').style.background = tab==='chat' ? '#252535' : '#161620';
+  document.getElementById('tc-main-chat').style.color      = tab==='chat' ? '#7ec8e3' : '#666';
+  if(tab==='chat'){
+    var badge   = document.getElementById('chat-conn-badge');
+    var noconn  = document.getElementById('chat-noconn-msg');
+    var needsGraph = document.getElementById('chat-needs-graph-msg');
+    var who     = document.getElementById('chat-conn-who');
+    if(_teamsToken){
+      badge.style.display      = 'flex';
+      noconn.style.display     = 'none';
+      needsGraph.style.display = 'none';
+      who.textContent          = _teamsUpn || 'Connected';
+      chatLoad(); // always refresh on tab switch
+    } else if(document.getElementById('teams-connected-banner').style.display !== 'none'){
+      // PS / banner connected but no Graph token yet
+      badge.style.display      = 'none';
+      noconn.style.display     = 'none';
+      needsGraph.style.display = '';
+      // Auto-fill tenant input from email or Okta domain
+      var ti = document.getElementById('chat-inline-tenant');
+      if(ti && !ti.value){
+        var prefill = _devicePollTenant||'';
+        if(!prefill||prefill==='common'||prefill==='organizations'){
+          var em=((document.getElementById('tm-quick-email')||{}).value||'');
+          if(em.indexOf('@')>0) prefill=em.split('@')[1];
+        }
+        if(!prefill||prefill==='common'){
+          try{var sso=JSON.parse(localStorage.getItem('okta_sso')||'null');if(sso&&sso.domain)prefill=sso.domain.replace(/\\.okta\\.com$/,'');}catch(e){}
+        }
+        if(prefill&&prefill!=='common'&&prefill!=='organizations') ti.value=prefill;
+      }
+    } else {
+      badge.style.display      = 'none';
+      noconn.style.display     = '';
+      needsGraph.style.display = 'none';
+    }
+  }
+}
+
+// ── Inline chat auth (when Graph token missing but PS session exists) ────────
+var _chatInlineDeviceCode = null;
+var _chatInlinePollInterval = null;
+
+function chatInlineAuth(){
+  var st  = document.getElementById('chat-inline-start-st');
+  var box = document.getElementById('chat-inline-auth-box');
+  if(st) st.textContent = 'Starting…';
+  if(_chatInlinePollInterval){ clearInterval(_chatInlinePollInterval); _chatInlinePollInterval=null; }
+  // Determine best tenant: explicit input > _devicePollTenant > email domain > Okta domain
+  var tenantInput = ((document.getElementById('chat-inline-tenant')||{}).value||'').trim();
+  var tenant = tenantInput || _devicePollTenant || '';
+  if(!tenant || tenant==='common' || tenant==='organizations'){
+    var em = ((document.getElementById('tm-quick-email')||{}).value||'');
+    if(em.indexOf('@')>0) tenant = em.split('@')[1].trim();
+  }
+  if(!tenant || tenant==='common' || tenant==='organizations'){
+    try{ var sso=JSON.parse(localStorage.getItem('okta_sso')||'null'); if(sso&&sso.domain) tenant=sso.domain.replace(/\\.okta\\.com$/,''); }catch(e){}
+  }
+  if(!tenant) tenant = 'common';
+  _devicePollTenant = tenant;  // store so chatInlinePoll uses the same tenant
+  fetch('/api/teams/device_start',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:tenant})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.user_code){
+      _chatInlineDeviceCode = j.device_code;
+      document.getElementById('chat-inline-code').textContent = j.user_code;
+      if(box) box.style.display='';
+      if(st)  st.textContent='';
+      _chatInlinePollInterval = setInterval(function(){ chatInlinePoll(true); }, 5000);
+    } else {
+      if(st) st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||'Failed')+'</span>';
+    }
+  }).catch(function(e){ if(st) st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function chatInlinePoll(auto){
+  var st = document.getElementById('chat-inline-poll-st');
+  if(!_chatInlineDeviceCode){ if(st) st.textContent='Start auth first.'; return; }
+  if(!auto && st) st.textContent='Checking…';
+  var tenant = _devicePollTenant || 'common';
+  fetch('/api/teams/device_poll',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tenant_id:tenant, device_code:_chatInlineDeviceCode})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.token){
+      if(_chatInlinePollInterval){ clearInterval(_chatInlinePollInterval); _chatInlinePollInterval=null; }
+      _teamsToken = j.token;
+      if(j.upn){ _teamsUpn = j.upn; document.getElementById('chat-conn-who').textContent = j.upn; }
+      document.getElementById('chat-needs-graph-msg').style.display = 'none';
+      document.getElementById('chat-conn-badge').style.display = 'flex';
+      document.getElementById('chat-noconn-msg').style.display = 'none';
+      document.getElementById('teams-connected-banner').style.display = 'flex';
+      if(j.upn) document.getElementById('teams-connected-who').textContent = ' '+escHtml(j.upn);
+      chatLoad();
+    } else if(j.pending){
+      if(!auto && st) st.textContent='Still waiting…';
+    } else if(j.expired){
+      if(_chatInlinePollInterval){ clearInterval(_chatInlinePollInterval); _chatInlinePollInterval=null; }
+      if(st) st.innerHTML='<span style="color:#f90;">&#9888; Expired. Click Authorize again.</span>';
+      document.getElementById('chat-inline-auth-box').style.display='none';
+    } else {
+      if(_chatInlinePollInterval){ clearInterval(_chatInlinePollInterval); _chatInlinePollInterval=null; }
+      if(st) st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ if(!auto && st) st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function chatLoad(){
+  var st = document.getElementById('chat-list-status');
+  if(!_teamsToken){ st.innerHTML='<span style="color:#f55;">\u26A0 Connect first (use the connection panel on the left).</span>'; return; }
+  st.textContent='Loading chats\u2026';
+  fetch('/api/teams/chats',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:_teamsToken})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.chats){
+      _chatList = j.chats;
+      var el = document.getElementById('chat-list');
+      el.innerHTML='';
+      if(_chatList.length===0){ st.textContent='No chats found.'; return; }
+      st.textContent='';
+      _chatList.forEach(function(c){
+        var name = c.topic || (c.members||[]).map(function(m){ return m.displayName||''; }).filter(Boolean).join(', ') || c.id;
+        var preview = (c.lastMessagePreview&&c.lastMessagePreview.body&&c.lastMessagePreview.body.content)||'';
+        var div = document.createElement('div');
+        div.className='chat-item';
+        div.dataset.id = c.id;
+        div.innerHTML='<div class="chat-item-name">'+escHtml(name)+'</div>'
+          +'<div class="chat-item-preview">'+escHtml(preview.replace(/<[^>]+>/g,'').slice(0,60))+'</div>';
+        (function(id,n){ div.onclick=function(){ chatSelect(id,n); }; })(c.id,name);
+        el.appendChild(div);
+      });
+    } else {
+      st.innerHTML='<span style="color:#f55;">\u274C '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ document.getElementById('chat-list-status').innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function chatSelect(id, name){
+  _chatSelectedId = id;
+  document.querySelectorAll('.chat-item').forEach(function(el){
+    el.classList.toggle('selected', el.dataset.id===id);
+  });
+  document.getElementById('chat-title').textContent = name;
+  document.getElementById('chat-refresh-btn').style.display='';
+  document.getElementById('chat-compose').style.display='';
+  // Update the "open in Teams" button to deep-link to this specific chat
+  var teamsLink = document.getElementById('chat-open-teams-link');
+  if(teamsLink) teamsLink.href = 'https://teams.microsoft.com/l/chat/'+encodeURIComponent(id)+'/0';
+  chatRefreshMsgs();
+}
+
+function chatRefreshMsgs(){
+  if(!_chatSelectedId) return;
+  var el = document.getElementById('chat-msgs');
+  el.innerHTML='<div style="color:#555;font-size:.8rem;padding:10px;">Loading messages\u2026</div>';
+  fetch('/api/teams/chat/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:_teamsToken, chat_id:_chatSelectedId, me_upn:_teamsUpn})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    el.innerHTML='';
+    if(!j.messages){ el.innerHTML='<span style="color:#f55;">\u274C '+(j.error||'Error')+'</span>'; return; }
+    var msgs = j.messages.slice().reverse();
+    if(msgs.length===0){ el.innerHTML='<div style="color:#555;font-size:.8rem;padding:10px;">No messages yet.</div>'; return; }
+    msgs.forEach(function(m){
+      var upn = (m.from&&m.from.user&&m.from.user.userPrincipalName)||'';
+      var isMe = _teamsUpn && upn.toLowerCase()===_teamsUpn.toLowerCase();
+      var sender = (m.from&&m.from.user&&m.from.user.displayName)||(m.from&&m.from.application&&m.from.application.displayName)||'';
+      var body = ((m.body&&m.body.content)||'').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').trim();
+      var t = m.createdDateTime ? new Date(m.createdDateTime).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+      var row = document.createElement('div');
+      row.className='msg-row '+(isMe?'me':'them');
+      var inner = document.createElement('div');
+      inner.innerHTML=((!isMe&&sender)?'<div class="msg-sender">'+escHtml(sender)+'</div>':'')
+        +'<div class="msg-bubble">'+(body?escHtml(body):'<em style="color:#555;">(attachment)</em>')
+        +'<div class="msg-time">'+t+'</div></div>';
+      row.appendChild(inner);
+      el.appendChild(row);
+    });
+    el.scrollTop = el.scrollHeight;
+  }).catch(function(e){ el.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function chatSend(){
+  var input = document.getElementById('chat-input');
+  var st    = document.getElementById('chat-send-status');
+  var msg   = input.value.trim();
+  if(!msg||!_chatSelectedId) return;
+  st.textContent='Sending\u2026';
+  fetch('/api/teams/chat/send',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({token:_teamsToken, chat_id:_chatSelectedId, message:msg})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.ok){ input.value=''; st.textContent=''; setTimeout(chatRefreshMsgs,600); }
+    else { st.innerHTML='<span style="color:#f55;">\u274C '+(j.error||JSON.stringify(j))+'</span>'; }
+  }).catch(function(e){ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+</script>
+"""
+
 @app.route('/modules')
 @requires_permission('dashboard')
 def modules_page():
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', MODULES_TEMPLATE.replace('{% extends "base.html" %}','').replace('{% block content %}','').replace('{% endblock %}','')), enabled_modules=ENABLED_MODULES, managers=managers, request=request, get_flashed_messages=get_flashed_messages)
+
+@app.route('/teams')
+@requires_permission('dashboard')
+def teams_page():
+    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', TEAMS_TEMPLATE), request=request, get_flashed_messages=get_flashed_messages)
+
+@app.route('/api/teams/connect', methods=['POST'])
+def api_teams_connect():
+    """Acquire an Azure AD token for Microsoft Graph.
+    Supports two grant types:
+      - 'password'            : ROPC (username + password, delegated, no MFA)
+      - 'client_credentials'  : App-only (client_id + client_secret)
+    """
+    try:
+        import urllib.request as _ur, urllib.parse as _up
+        data = request.get_json() or {}
+        tenant_id   = data.get('tenant_id', '').strip()
+        client_id   = data.get('client_id', '').strip()
+        grant_type  = data.get('grant_type', 'client_credentials')
+        # Fall back to Azure CLI public client when none provided (works for ROPC with delegated perms)
+        if not client_id:
+            if grant_type == 'password':
+                client_id = '04b07795-8542-4c45-a359-a4867a4e20c5'  # Azure CLI public client
+            else:
+                return jsonify({'error': 'client_id required'}), 400
+        # ROPC (password) grant is not allowed on /common or /consumers — must use
+        # a specific tenant GUID or /organizations.
+        if grant_type == 'password':
+            if not tenant_id or tenant_id.lower() in ('common', 'consumers'):
+                tenant_id = 'organizations'
+        else:
+            if not tenant_id:
+                tenant_id = 'common'
+        token_url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
+        if grant_type == 'password':
+            username = data.get('username', '').strip()
+            password = data.get('password', '')
+            if not username or not password:
+                return jsonify({'error': 'username and password required for password grant'}), 400
+            form = {
+                'grant_type': 'password',
+                'client_id': client_id,
+                'username': username,
+                'password': password,
+                # Delegated scopes needed for calendar read
+                'scope': 'https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/Chat.Read https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/User.Read offline_access openid',
+            }
+        else:  # client_credentials
+            client_secret = data.get('client_secret', '').strip()
+            if not client_secret:
+                return jsonify({'error': 'client_secret required for client_credentials grant'}), 400
+            form = {
+                'grant_type': 'client_credentials',
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'scope': 'https://graph.microsoft.com/.default',
+            }
+        body = _up.urlencode(form).encode()
+        req = _ur.Request(token_url, data=body, method='POST')
+        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        with _ur.urlopen(req, timeout=15) as resp:
+            tj = json.loads(resp.read().decode())
+        token = tj.get('access_token')
+        if not token:
+            return jsonify({'error': tj.get('error_description') or tj.get('error_codes') or 'No token in response'}), 400
+        scope = tj.get('scope', '')
+        return jsonify({'token': token, 'scope': scope, 'grant_type': grant_type})
+    except Exception as e:
+        app.logger.exception('Teams connect failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'):
+                body_err = json.loads(e.read().decode())
+                err_msg = body_err.get('error_description') or body_err.get('error') or err_msg
+        except Exception:
+            pass
+        return jsonify({'error': err_msg}), 500
+
+@app.route('/api/teams/calendar', methods=['POST'])
+def api_teams_calendar():
+    """Fetch calendar events from Microsoft Graph for a user or the app itself."""
+    try:
+        data = request.get_json() or {}
+        token = data.get('token', '').strip()
+        start_date = data.get('start_date', '')
+        end_date = data.get('end_date', '')
+        upn = (data.get('upn') or '').strip()
+        if not token:
+            return jsonify({'error': 'token required'}), 400
+        if not start_date or not end_date:
+            return jsonify({'error': 'start_date and end_date required'}), 400
+        # Normalize ISO dates
+        start_iso = start_date + 'T00:00:00' if 'T' not in start_date else start_date
+        end_iso   = end_date   + 'T23:59:59' if 'T' not in end_date   else end_date
+        import urllib.request as _ur, urllib.parse as _up
+        # Endpoint: user calendar or app-level calendar
+        use_me = data.get('use_me', False)
+        if use_me or not upn:
+            endpoint = 'https://graph.microsoft.com/v1.0/me/calendarView'
+        else:
+            endpoint = f'https://graph.microsoft.com/v1.0/users/{_up.quote(upn)}/calendarView'
+        params = _up.urlencode({
+            'startDateTime': start_iso,
+            'endDateTime':   end_iso,
+            '$top': 200,
+            '$select': 'subject,start,end,location,organizer,showAs,isOnlineMeeting,onlineMeetingUrl,bodyPreview,webLink',
+            '$orderby': 'start/dateTime',
+        })
+        url = endpoint + '?' + params
+        req = _ur.Request(url)
+        req.add_header('Authorization', 'Bearer ' + token)
+        req.add_header('Content-Type', 'application/json')
+        with _ur.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read().decode())
+        events = result.get('value', [])
+        # Follow @odata.nextLink pages (cap at 1000)
+        next_link = result.get('@odata.nextLink')
+        while next_link and len(events) < 1000:
+            nr = _ur.Request(next_link)
+            nr.add_header('Authorization', 'Bearer ' + token)
+            with _ur.urlopen(nr, timeout=20) as r2:
+                page = json.loads(r2.read().decode())
+            events.extend(page.get('value', []))
+            next_link = page.get('@odata.nextLink')
+        return jsonify({'events': events, 'count': len(events)})
+    except Exception as e:
+        app.logger.exception('Teams calendar fetch failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'):
+                body_err = json.loads(e.read().decode())
+                err_msg = body_err.get('error', {}).get('message') or err_msg
+        except Exception:
+            pass
+        return jsonify({'error': err_msg}), 500
+
+
+@app.route('/api/teams/chats', methods=['POST'])
+def api_teams_chats():
+    """List the current user's recent chats via Microsoft Graph."""
+    try:
+        import urllib.request as _ur, urllib.parse as _up
+        data = request.get_json() or {}
+        token = data.get('token', '').strip()
+        if not token:
+            return jsonify({'error': 'token required'}), 400
+        url = ('https://graph.microsoft.com/v1.0/me/chats'
+               '?$top=50&$expand=members&$select=id,topic,chatType,lastMessagePreview')
+        req = _ur.Request(url)
+        req.add_header('Authorization', 'Bearer ' + token)
+        with _ur.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read().decode())
+        return jsonify({'chats': result.get('value', [])})
+    except Exception as e:
+        app.logger.exception('Teams chats failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'):
+                body_err = json.loads(e.read().decode())
+                err_msg = (body_err.get('error') or {}).get('message') or err_msg
+        except Exception:
+            pass
+        return jsonify({'error': err_msg}), 500
+
+
+@app.route('/api/teams/chat/messages', methods=['POST'])
+def api_teams_chat_messages():
+    """Fetch recent messages from a specific Teams chat."""
+    try:
+        import urllib.request as _ur, urllib.parse as _up
+        data = request.get_json() or {}
+        token   = data.get('token', '').strip()
+        chat_id = data.get('chat_id', '').strip()
+        if not token or not chat_id:
+            return jsonify({'error': 'token and chat_id required'}), 400
+        url = ('https://graph.microsoft.com/v1.0/me/chats/'
+               + _up.quote(chat_id, safe='')
+               + '/messages?$top=50&$select=id,body,from,createdDateTime,messageType')
+        req = _ur.Request(url)
+        req.add_header('Authorization', 'Bearer ' + token)
+        with _ur.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read().decode())
+        msgs = [m for m in result.get('value', []) if m.get('messageType') == 'message']
+        return jsonify({'messages': msgs})
+    except Exception as e:
+        app.logger.exception('Teams chat messages failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'):
+                body_err = json.loads(e.read().decode())
+                err_msg = (body_err.get('error') or {}).get('message') or err_msg
+        except Exception:
+            pass
+        return jsonify({'error': err_msg}), 500
+
+
+@app.route('/api/teams/chat/send', methods=['POST'])
+def api_teams_chat_send():
+    """Send a text message to a Teams chat."""
+    try:
+        import urllib.request as _ur, urllib.parse as _up
+        data = request.get_json() or {}
+        token   = data.get('token', '').strip()
+        chat_id = data.get('chat_id', '').strip()
+        message = data.get('message', '').strip()
+        if not token or not chat_id or not message:
+            return jsonify({'error': 'token, chat_id and message required'}), 400
+        url = ('https://graph.microsoft.com/v1.0/me/chats/'
+               + _up.quote(chat_id, safe='') + '/messages')
+        body = json.dumps({'body': {'content': message, 'contentType': 'text'}}).encode()
+        req = _ur.Request(url, data=body, method='POST')
+        req.add_header('Authorization', 'Bearer ' + token)
+        req.add_header('Content-Type', 'application/json')
+        with _ur.urlopen(req, timeout=20) as resp:
+            result = json.loads(resp.read().decode())
+        return jsonify({'ok': True, 'id': result.get('id')})
+    except Exception as e:
+        app.logger.exception('Teams chat send failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'):
+                body_err = json.loads(e.read().decode())
+                err_msg = (body_err.get('error') or {}).get('message') or err_msg
+        except Exception:
+            pass
+        return jsonify({'error': err_msg}), 500
+
+
+@app.route('/api/teams/device_start', methods=['POST'])
+def api_teams_device_start():
+    """Start an OAuth2 device code flow for Microsoft Graph (supports MFA)."""
+    try:
+        import urllib.request as _ur, urllib.parse as _up
+        data = request.get_json() or {}
+        tenant_id = data.get('tenant_id', 'common').strip() or 'common'
+        if tenant_id.lower() == 'consumers':
+            tenant_id = 'common'
+        client_id = '04b07795-8542-4c45-a359-a4867a4e20c5'  # Azure CLI public client
+        url = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/devicecode'
+        form = _up.urlencode({
+            'client_id': client_id,
+            'scope': 'https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/Chat.Read https://graph.microsoft.com/Chat.ReadWrite https://graph.microsoft.com/User.Read offline_access openid',
+        }).encode()
+        req = _ur.Request(url, data=form, method='POST')
+        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        with _ur.urlopen(req, timeout=15) as resp:
+            j = json.loads(resp.read().decode())
+        return jsonify(j)
+    except Exception as e:
+        app.logger.exception('Device start failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'): err_msg = json.loads(e.read().decode()).get('error_description') or err_msg
+        except Exception: pass
+        return jsonify({'error': err_msg}), 500
+
+
+@app.route('/api/teams/device_poll', methods=['POST'])
+def api_teams_device_poll():
+    """Poll for a token after the user completes device code login."""
+    try:
+        import urllib.request as _ur, urllib.parse as _up, base64 as _b64
+        data = request.get_json() or {}
+        tenant_id   = data.get('tenant_id', 'common').strip() or 'common'
+        device_code = data.get('device_code', '').strip()
+        if not device_code:
+            return jsonify({'error': 'device_code required'}), 400
+        client_id = '04b07795-8542-4c45-a359-a4867a4e20c5'
+        url  = f'https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token'
+        form = _up.urlencode({
+            'grant_type': 'urn:ietf:params:oauth:grant-type:device_code',
+            'client_id':  client_id,
+            'device_code': device_code,
+        }).encode()
+        req = _ur.Request(url, data=form, method='POST')
+        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        try:
+            with _ur.urlopen(req, timeout=15) as resp:
+                tj = json.loads(resp.read().decode())
+            token = tj.get('access_token')
+            if not token:
+                return jsonify({'error': tj.get('error_description') or 'No token'}), 400
+            upn = ''
+            id_token = tj.get('id_token', '')
+            if id_token:
+                try:
+                    parts  = id_token.split('.')
+                    padded = parts[1] + '=' * (4 - len(parts[1]) % 4)
+                    claims = json.loads(_b64.urlsafe_b64decode(padded).decode('utf-8', errors='ignore'))
+                    upn = claims.get('preferred_username') or claims.get('upn') or claims.get('email') or ''
+                except Exception: pass
+            return jsonify({'token': token, 'upn': upn})
+        except Exception as poll_err:
+            err_body = {}
+            try:
+                if hasattr(poll_err, 'read'): err_body = json.loads(poll_err.read().decode())
+            except Exception: pass
+            err_code = err_body.get('error', '')
+            if err_code == 'authorization_pending':
+                return jsonify({'pending': True})
+            elif err_code in ('expired_token', 'code_expired', 'authorization_declined'):
+                return jsonify({'expired': True})
+            return jsonify({'error': err_body.get('error_description') or str(poll_err)}), 400
+    except Exception as e:
+        app.logger.exception('Device poll failed')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/teams/ps_status', methods=['POST'])
+def api_teams_ps_status():
+    """Check if the MicrosoftTeams PS module is installed; try a silent reconnect to detect cached session."""
+    import tempfile, os as _os, re as _re
+    try:
+        ps_script = textwrap.dedent(r"""
+            $m = Get-Module MicrosoftTeams -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+            if (-not $m) { [PSCustomObject]@{module_found=$false} | ConvertTo-Json -Compress; exit }
+            $ver = $m.Version.ToString()
+            try {
+                $conn = Connect-MicrosoftTeams -UseDeviceAuthentication:$false -ErrorAction Stop 2>$null
+                if (-not $conn -or -not $conn.Account) { throw 'no account' }
+                [PSCustomObject]@{module_found=$true; version=$ver; connected=$true; account=[string]$conn.Account; tenant_id=[string]$conn.TenantId} | ConvertTo-Json -Compress
+            } catch {
+                [PSCustomObject]@{module_found=$true; version=$ver; connected=$false} | ConvertTo-Json -Compress
+            }
+        """).strip()
+        tf = tempfile.NamedTemporaryFile(suffix='.ps1', mode='w', delete=False, encoding='utf-8')
+        tf.write(ps_script); tf.close()
+        try:
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tf.name],
+                capture_output=True, text=True, timeout=30
+            )
+        finally:
+            _os.unlink(tf.name)
+        stdout = result.stdout.strip()
+        if not stdout:
+            return jsonify({'error': result.stderr.strip() or 'No output from PowerShell'}), 500
+        m = _re.search(r'\{.*\}', stdout, _re.DOTALL)
+        data = json.loads(m.group(0) if m else stdout)
+        return jsonify(data)
+    except Exception as e:
+        app.logger.exception('PS status check failed')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/teams/ps_connect', methods=['POST'])
+def api_teams_ps_connect():
+    """Run Connect-MicrosoftTeams and return account/tenant from its return value (no admin required)."""
+    import tempfile, os as _os, re as _re
+    try:
+        ps_script = textwrap.dedent(r"""
+            Import-Module MicrosoftTeams -ErrorAction Stop
+            $conn = Connect-MicrosoftTeams -ErrorAction Stop
+            if ($conn -and $conn.Account) {
+                [PSCustomObject]@{connected=$true; account=[string]$conn.Account; tenant_id=[string]$conn.TenantId; tenant_name=[string]$conn.TenantDomain} | ConvertTo-Json -Compress
+            } else {
+                [PSCustomObject]@{connected=$false; error='Connect-MicrosoftTeams returned no account'} | ConvertTo-Json -Compress
+            }
+        """).strip()
+        tf = tempfile.NamedTemporaryFile(suffix='.ps1', mode='w', delete=False, encoding='utf-8')
+        tf.write(ps_script); tf.close()
+        try:
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tf.name],
+                capture_output=True, text=True, timeout=120
+            )
+        finally:
+            _os.unlink(tf.name)
+        stdout = result.stdout.strip()
+        if not stdout:
+            return jsonify({'connected': False, 'error': result.stderr.strip() or 'No output from PowerShell'}), 500
+        m = _re.search(r'\{.*\}', stdout, _re.DOTALL)
+        data = json.loads(m.group(0) if m else stdout)
+        # normalise: use account as tenant_name fallback
+        if data.get('connected') and not data.get('tenant_name'):
+            data['tenant_name'] = data.get('account', '')
+        return jsonify(data)
+    except Exception as e:
+        app.logger.exception('PS connect failed')
+        return jsonify({'connected': False, 'error': str(e)}), 500
+
+
+@app.route('/api/teams/ps_teams', methods=['POST'])
+def api_teams_ps_teams():
+    """Return Teams the signed-in user can see; reconnects silently in the subprocess."""
+    import tempfile, os as _os, re as _re
+    try:
+        ps_script = textwrap.dedent(r"""
+            Import-Module MicrosoftTeams -ErrorAction Stop
+            $conn = Connect-MicrosoftTeams -ErrorAction Stop
+            # Try Get-Team (owner/member list), fall back to Get-AssociatedTeam
+            $teams = $null
+            try { $teams = Get-Team -ErrorAction Stop | Select-Object GroupId, DisplayName, Description, Visibility } catch {}
+            if (-not $teams) {
+                try { $teams = Get-AssociatedTeam -ErrorAction Stop | Select-Object GroupId, DisplayName, Description, Visibility } catch {}
+            }
+            if ($teams) { $teams | ConvertTo-Json -Compress -Depth 3 } else { Write-Output '[]' }
+        """).strip()
+        tf = tempfile.NamedTemporaryFile(suffix='.ps1', mode='w', delete=False, encoding='utf-8')
+        tf.write(ps_script); tf.close()
+        try:
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tf.name],
+                capture_output=True, text=True, timeout=180
+            )
+        finally:
+            _os.unlink(tf.name)
+        stdout = result.stdout.strip()
+        if not stdout:
+            return jsonify({'error': result.stderr.strip() or 'No output'}), 500
+        m = _re.search(r'(\[.*\]|\{.*\})', stdout, _re.DOTALL)
+        raw = m.group(0) if m else stdout
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return jsonify({'error': 'Could not parse Teams output', 'raw': stdout[:500]}), 500
+        if isinstance(parsed, dict): parsed = [parsed]
+        return jsonify({'teams': parsed})
+    except Exception as e:
+        app.logger.exception('PS get-team failed')
+        return jsonify({'error': str(e)}), 500
+
+
+OKTA_TEMPLATE = r'''
+<style>
+.okta-layout { display:grid; grid-template-columns:300px 1fr; gap:20px; margin-top:16px; }
+@media(max-width:860px){ .okta-layout{grid-template-columns:1fr;} }
+.okta-panel { background:#1e1e2e; border:1px solid #2a2a3a; border-radius:10px; padding:18px; }
+.okta-panel h3 { margin:0 0 14px; font-size:1rem; color:#00b4d8; border-bottom:1px solid #2a2a3a; padding-bottom:8px; }
+.ok-field { margin-bottom:10px; }
+.ok-field label { display:block; font-size:.78rem; color:#888; margin-bottom:3px; }
+.ok-input { width:100%; background:#111; border:1px solid #333; color:#eee; padding:6px 9px; border-radius:5px; font-size:.83rem; box-sizing:border-box; }
+.ok-input:focus { outline:none; border-color:#00b4d8; }
+.ok-btn { background:#00b4d8; color:#111; border:none; padding:7px 16px; border-radius:5px; font-size:.85rem; font-weight:600; cursor:pointer; margin-top:4px; }
+.ok-btn:hover { background:#0096b4; color:#fff; }
+.ok-btn-sm { padding:3px 10px; font-size:.76rem; }
+.ok-btn-danger { background:#c0392b; color:#fff; }
+.ok-btn-danger:hover { background:#e74c3c; }
+.ok-status { font-size:.78rem; margin-top:6px; min-height:1.2em; }
+.ok-connected { display:flex; align-items:center; gap:8px; font-size:.8rem; color:#4caf50; margin-bottom:10px; }
+.ok-dot { width:8px; height:8px; background:#4caf50; border-radius:50%; flex-shrink:0; }
+.apps-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; }
+.app-card { background:#161620; border:1px solid #2a2a3a; border-radius:8px; padding:14px 12px; text-align:center; cursor:pointer; transition:border-color .15s, background .15s; text-decoration:none; display:block; }
+.app-card:hover { border-color:#00b4d8; background:#1a1a2e; }
+.app-icon { width:48px; height:48px; border-radius:8px; object-fit:contain; margin:0 auto 8px; display:block; background:#252535; padding:4px; }
+.app-icon-placeholder { width:48px; height:48px; border-radius:8px; background:#252535; margin:0 auto 8px; display:flex; align-items:center; justify-content:center; font-size:1.4rem; }
+.app-name { font-size:.78rem; color:#ddd; font-weight:600; line-height:1.3; word-break:break-word; }
+.app-type { font-size:.67rem; color:#555; margin-top:3px; }
+.apps-empty { color:#555; font-size:.88rem; padding:40px 0; text-align:center; }
+.ok-search { width:100%; background:#111; border:1px solid #333; color:#eee; padding:7px 10px; border-radius:5px; font-size:.83rem; box-sizing:border-box; margin-bottom:14px; }
+.ok-search:focus { outline:none; border-color:#00b4d8; }
+.ok-mfa-panel { background:#1a1a2a; border:1px solid #00b4d8; border-radius:8px; padding:14px; margin-top:10px; display:none; }
+.ok-mfa-panel h4 { margin:0 0 10px; color:#00b4d8; font-size:.9rem; }
+</style>
+
+<div style="display:flex; align-items:center; gap:14px; margin-bottom:4px;">
+  <img src="https://www.vectorlogo.zone/logos/okta/okta-icon.svg" alt="Okta" style="width:36px;height:36px;border-radius:6px;" onerror="this.style.display='none'">
+  <div>
+    <h2 style="margin:0;">Okta App Launcher</h2>
+    <p style="color:#888;font-size:.88rem;margin:2px 0 0;">Sign in with your Okta credentials to browse and launch your assigned apps.</p>
+  </div>
+</div>
+
+<div class="okta-layout">
+
+  <!-- Left: login panel -->
+  <div>
+    <div class="okta-panel">
+      <h3>&#128274; Sign In</h3>
+
+      <div id="ok-connected-banner" style="display:none;" class="ok-connected">
+        <span class="ok-dot"></span>
+        <div>
+          <div id="ok-connected-who" style="font-weight:600;"></div>
+          <div style="color:#888;font-size:.72rem;" id="ok-connected-org"></div>
+        </div>
+        <button class="ok-btn ok-btn-danger ok-btn-sm" onclick="oktaSignOut()" style="margin:0 0 0 auto;">Sign out</button>
+      </div>
+
+      <div id="ok-login-form">
+        <div class="ok-field">
+          <label>Okta Domain</label>
+          <input id="ok-domain" class="ok-input" placeholder="yourorg.okta.com" value="tegna.okta.com">
+        </div>
+        <div class="ok-field">
+          <label>Username (email)</label>
+          <input id="ok-username" class="ok-input" placeholder="you@company.com" autocomplete="username">
+        </div>
+        <div class="ok-field">
+          <label>Password</label>
+          <input id="ok-password" class="ok-input" type="password" placeholder="Your password" autocomplete="current-password">
+        </div>
+        <button class="ok-btn" onclick="oktaSignIn()">&#128274; Sign In to Okta</button>
+        <div class="ok-status" id="ok-sign-in-status"></div>
+      </div>
+
+      <!-- MFA panel (shown when MFA factor required) -->
+      <div class="ok-mfa-panel" id="ok-mfa-panel">
+        <h4>&#128241; Multi-Factor Authentication</h4>
+        <p style="font-size:.78rem;color:#aaa;margin:0 0 10px;" id="ok-mfa-prompt">Enter your verification code.</p>
+        <div class="ok-field">
+          <label>Code</label>
+          <input id="ok-mfa-code" class="ok-input" placeholder="6-digit code" maxlength="10" onkeydown="if(event.key==='Enter')oktaMfaVerify();">
+        </div>
+        <button class="ok-btn" onclick="oktaMfaVerify()">Verify</button>
+        <div class="ok-status" id="ok-mfa-status"></div>
+      </div>
+    </div>
+
+    <!-- App stats -->
+    <div class="okta-panel" style="margin-top:14px;" id="ok-stats-panel" style="display:none;">
+      <h3>&#128202; Stats</h3>
+      <div id="ok-stats-body" style="font-size:.82rem;color:#aaa;"></div>
+    </div>
+  </div>
+
+  <!-- Right: apps grid -->
+  <div>
+    <div class="okta-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h3 style="margin:0;padding:0;border:none;">&#128196; My Apps</h3>
+        <button class="ok-btn ok-btn-sm" onclick="oktaLoadApps()" id="ok-load-apps-btn">&#8635; Refresh</button>
+      </div>
+      <input id="ok-app-search" class="ok-search" placeholder="Search apps&#8230;" oninput="oktaFilterApps()" style="display:none;">
+      <div class="ok-status" id="ok-apps-status"></div>
+      <div class="apps-grid" id="ok-apps-grid"></div>
+      <div class="apps-empty" id="ok-apps-empty">Sign in to load your Okta apps.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Okta state ────────────────────────────────────────────────────────────────
+var _oktaSession   = null;  // session id from Okta
+var _oktaStateToken = null; // for MFA flows
+var _oktaFactorId   = null;
+var _oktaAllApps    = [];
+var _oktaLoginEmail = null; // login email shared with Teams SSO
+var _oktaDomainHost = null; // Okta domain (e.g. company.okta.com)
+
+(function(){
+  var saved = JSON.parse(localStorage.getItem('okta_prefs')||'{}');
+  if(saved.domain)   document.getElementById('ok-domain').value   = saved.domain;
+  if(saved.username) document.getElementById('ok-username').value = saved.username;
+})();
+
+function oktaSavePref(){
+  localStorage.setItem('okta_prefs', JSON.stringify({
+    domain: document.getElementById('ok-domain').value.trim(),
+    username: document.getElementById('ok-username').value.trim()
+  }));
+}
+
+function oktaSignIn(){
+  var domain   = document.getElementById('ok-domain').value.trim().replace(/^https?:\/\//,'').replace(/\/+$/,'');
+  var username = document.getElementById('ok-username').value.trim();
+  var password = document.getElementById('ok-password').value;
+  var st       = document.getElementById('ok-sign-in-status');
+  if(!domain||!username||!password){ st.textContent='\u26A0 Fill in all fields.'; return; }
+  st.textContent='Signing in\u2026';
+  oktaSavePref();
+  fetch('/api/okta/signin',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({domain,username,password})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.session_id){
+      _oktaSession = j.session_id;
+      st.textContent='';
+      showConnected(j);
+      oktaLoadApps();
+    } else if(j.mfa_required){
+      _oktaStateToken = j.state_token;
+      _oktaFactorId   = j.factor_id;
+      document.getElementById('ok-mfa-panel').style.display='';
+      document.getElementById('ok-mfa-prompt').textContent = j.mfa_prompt || 'Enter your authentication code.';
+      st.textContent='';
+    } else {
+      st.innerHTML='<span style="color:#f55;">\u274C '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function oktaMfaVerify(){
+  var code  = document.getElementById('ok-mfa-code').value.trim();
+  var st    = document.getElementById('ok-mfa-status');
+  var domain = document.getElementById('ok-domain').value.trim().replace(/^https?:\/\//,'').replace(/\/+$/,'');
+  if(!code){ st.textContent='\u26A0 Enter the code.'; return; }
+  st.textContent='Verifying\u2026';
+  fetch('/api/okta/mfa',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({domain,state_token:_oktaStateToken,factor_id:_oktaFactorId,passcode:code})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    if(j.session_id){
+      _oktaSession = j.session_id;
+      document.getElementById('ok-mfa-panel').style.display='none';
+      st.textContent='';
+      showConnected(j);
+      oktaLoadApps();
+    } else {
+      st.innerHTML='<span style="color:#f55;">\u274C '+(j.error||JSON.stringify(j))+'</span>';
+    }
+  }).catch(function(e){ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function showConnected(j){
+  var banner = document.getElementById('ok-connected-banner');
+  banner.style.display='flex';
+  document.getElementById('ok-login-form').style.display='none';
+  document.getElementById('ok-connected-who').textContent = j.display_name||j.login||'Signed in';
+  document.getElementById('ok-connected-org').textContent = document.getElementById('ok-domain').value.trim();
+  document.getElementById('ok-app-search').style.display='';
+  // Share identity with Teams SSO — persist to localStorage so Teams page can read it
+  _oktaLoginEmail = j.login || document.getElementById('ok-username').value.trim();
+  _oktaDomainHost = document.getElementById('ok-domain').value.trim().replace(/^https?:\/\//,'').replace(/\/+$/,'');
+  try{
+    localStorage.setItem('okta_sso', JSON.stringify({
+      session_id: _oktaSession,
+      login: _oktaLoginEmail,
+      domain: _oktaDomainHost
+    }));
+  }catch(e){}
+  if(typeof tmCheckOktaSSO === 'function') tmCheckOktaSSO();
+}
+
+function oktaSignOut(){
+  _oktaSession = null;
+  _oktaAllApps = [];
+  _oktaLoginEmail = null;
+  _oktaDomainHost = null;
+  try{ localStorage.removeItem('okta_sso'); }catch(e){}
+  if(typeof tmCheckOktaSSO === 'function') tmCheckOktaSSO();
+  document.getElementById('ok-connected-banner').style.display='none';
+  document.getElementById('ok-login-form').style.display='';
+  document.getElementById('ok-mfa-panel').style.display='none';
+  document.getElementById('ok-apps-grid').innerHTML='';
+  document.getElementById('ok-apps-empty').textContent='Sign in to load your Okta apps.';
+  document.getElementById('ok-apps-empty').style.display='';
+  document.getElementById('ok-app-search').style.display='none';
+  document.getElementById('ok-sign-in-status').textContent='Signed out.';
+  document.getElementById('ok-password').value='';
+}
+
+function oktaLoadApps(){
+  var st = document.getElementById('ok-apps-status');
+  if(!_oktaSession){ st.innerHTML='<span style="color:#f55;">\u26A0 Sign in first.</span>'; return; }
+  var domain = document.getElementById('ok-domain').value.trim().replace(/^https?:\/\//,'').replace(/\/+$/,'');
+  st.textContent='Loading apps\u2026';
+  document.getElementById('ok-apps-empty').style.display='none';
+  fetch('/api/okta/apps',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({domain,session_id:_oktaSession})})
+  .then(function(r){ return r.json(); }).then(function(j){
+    st.textContent='';
+    if(j.apps && j.apps.length > 0){
+      _oktaAllApps = j.apps;
+      oktaRenderApps(_oktaAllApps);
+      var statsEl = document.getElementById('ok-stats-body');
+      statsEl.innerHTML='<b>'+j.apps.length+'</b> apps assigned';
+      document.getElementById('ok-stats-panel').style.display='';
+    } else if(j.apps && j.apps.length === 0){
+      document.getElementById('ok-apps-empty').textContent='No apps assigned to your account in Okta.';
+      document.getElementById('ok-apps-empty').style.display='';
+    } else {
+      st.innerHTML='<span style="color:#f55;">&#10060; '+(j.error||JSON.stringify(j))+'</span>';
+      document.getElementById('ok-apps-empty').style.display='';
+    }
+  }).catch(function(e){ st.innerHTML='<span style="color:#f55;">Error: '+e+'</span>'; });
+}
+
+function oktaRenderApps(apps){
+  var grid  = document.getElementById('ok-apps-grid');
+  var empty = document.getElementById('ok-apps-empty');
+  grid.innerHTML='';
+  if(!apps||apps.length===0){
+    empty.textContent='No apps found.'; empty.style.display=''; return;
+  }
+  empty.style.display='none';
+  // Show all apps (including hidden:true — that just means hidden from the Okta dashboard tile,
+  // not from API access)
+  apps.forEach(function(app){
+    var card = document.createElement('a');
+    card.className='app-card';
+    card.href  = app.linkUrl || '#';
+    card.target='_blank';
+    card.rel   ='noopener noreferrer';
+    var iconHtml = app.logoUrl
+      ? '<img class="app-icon" src="'+app.logoUrl+'" alt="" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\';" loading="lazy">'
+        +'<div class="app-icon-placeholder" style="display:none;">&#128230;</div>'
+      : '<div class="app-icon-placeholder">&#128230;</div>';
+    card.innerHTML = iconHtml
+      +'<div class="app-name">'+escHtmlOk(app.label||app.appName||'App')+'</div>'
+      +'<div class="app-type">'+escHtmlOk(app.appName||'')+'</div>';
+    grid.appendChild(card);
+  });
+}
+
+function oktaFilterApps(){
+  var q = document.getElementById('ok-app-search').value.toLowerCase();
+  if(!q){ oktaRenderApps(_oktaAllApps); return; }
+  oktaRenderApps(_oktaAllApps.filter(function(a){
+    return (a.label||'').toLowerCase().includes(q) || (a.appName||'').toLowerCase().includes(q);
+  }));
+}
+
+function escHtmlOk(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+'''
+
+@app.route('/okta')
+@requires_permission('dashboard')
+def okta_page():
+    return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', OKTA_TEMPLATE), request=request, get_flashed_messages=get_flashed_messages)
+
+
+@app.route('/api/okta/signin', methods=['POST'])
+def api_okta_signin():
+    """Authenticate with Okta Primary Authentication API and create a session."""
+    try:
+        import urllib.request as _ur, urllib.parse as _up, re as _re
+        data = request.get_json() or {}
+        domain   = _re.sub(r'^https?://', '', data.get('domain', '').strip()).rstrip('/')
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+        if not domain or not username or not password:
+            return jsonify({'error': 'domain, username and password required'}), 400
+
+        # Step 1: Primary authentication
+        authn_url = f'https://{domain}/api/v1/authn'
+        authn_body = json.dumps({'username': username, 'password': password,
+                                  'options': {'warnBeforePasswordExpired': False, 'multiOptionalFactorEnroll': False}}).encode()
+        req = _ur.Request(authn_url, data=authn_body, method='POST')
+        req.add_header('Content-Type', 'application/json')
+        req.add_header('Accept', 'application/json')
+        with _ur.urlopen(req, timeout=15) as resp:
+            authn = json.loads(resp.read().decode())
+
+        status = authn.get('status')
+
+        if status == 'SUCCESS':
+            session_token = authn['sessionToken']
+        elif status in ('MFA_REQUIRED', 'MFA_ENROLL_ACTIVATE'):
+            # Return MFA challenge info to the client
+            state_token = authn.get('stateToken', '')
+            factors = authn.get('_embedded', {}).get('factors', [])
+            # Prefer TOTP (token:software:totp) or push
+            factor = next((f for f in factors if f.get('factorType') == 'token:software:totp'), None)
+            if not factor:
+                factor = next((f for f in factors if f.get('factorType') == 'push'), None)
+            if not factor and factors:
+                factor = factors[0]
+            if not factor:
+                return jsonify({'error': 'MFA required but no factors available'}), 400
+            prompt = f'Enter code for: {factor.get("provider","")}'
+            return jsonify({'mfa_required': True, 'state_token': state_token,
+                            'factor_id': factor.get('id', ''), 'mfa_prompt': prompt})
+        elif status == 'LOCKED_OUT':
+            return jsonify({'error': 'Account is locked out.'}), 403
+        elif status == 'PASSWORD_EXPIRED':
+            return jsonify({'error': 'Password has expired. Reset it in Okta first.'}), 403
+        else:
+            return jsonify({'error': f'Unexpected status: {status}'}), 400
+
+        # Step 2: Exchange session token for a session (get session id for API calls)
+        sess_url = f'https://{domain}/api/v1/sessions'
+        sess_body = json.dumps({'sessionToken': session_token}).encode()
+        req2 = _ur.Request(sess_url, data=sess_body, method='POST')
+        req2.add_header('Content-Type', 'application/json')
+        req2.add_header('Accept', 'application/json')
+        with _ur.urlopen(req2, timeout=15) as resp2:
+            session = json.loads(resp2.read().decode())
+
+        return jsonify({
+            'session_id': session.get('id'),
+            'login': session.get('login', username),
+            'display_name': (authn.get('_embedded', {}).get('user', {}).get('profile') or {}).get('displayName', ''),
+        })
+    except Exception as e:
+        app.logger.exception('Okta signin failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'):
+                body_err = json.loads(e.read().decode())
+                err_msg = body_err.get('errorSummary') or body_err.get('message') or err_msg
+        except Exception:
+            pass
+        return jsonify({'error': err_msg}), 500
+
+
+@app.route('/api/okta/mfa', methods=['POST'])
+def api_okta_mfa():
+    """Verify an MFA factor and return a session."""
+    try:
+        import urllib.request as _ur, re as _re
+        data = request.get_json() or {}
+        domain      = _re.sub(r'^https?://', '', data.get('domain', '').strip()).rstrip('/')
+        state_token = data.get('state_token', '')
+        factor_id   = data.get('factor_id', '')
+        passcode    = data.get('passcode', '').strip()
+        if not all([domain, state_token, factor_id, passcode]):
+            return jsonify({'error': 'domain, state_token, factor_id and passcode required'}), 400
+
+        verify_url = f'https://{domain}/api/v1/authn/factors/{factor_id}/verify'
+        body = json.dumps({'stateToken': state_token, 'passCode': passcode}).encode()
+        req = _ur.Request(verify_url, data=body, method='POST')
+        req.add_header('Content-Type', 'application/json')
+        req.add_header('Accept', 'application/json')
+        with _ur.urlopen(req, timeout=15) as resp:
+            authn = json.loads(resp.read().decode())
+
+        if authn.get('status') != 'SUCCESS':
+            return jsonify({'error': f"MFA status: {authn.get('status')}. Check your code."}), 400
+
+        session_token = authn['sessionToken']
+        sess_url  = f'https://{domain}/api/v1/sessions'
+        sess_body = json.dumps({'sessionToken': session_token}).encode()
+        req2 = _ur.Request(sess_url, data=sess_body, method='POST')
+        req2.add_header('Content-Type', 'application/json')
+        req2.add_header('Accept', 'application/json')
+        with _ur.urlopen(req2, timeout=15) as resp2:
+            session = json.loads(resp2.read().decode())
+
+        return jsonify({
+            'session_id': session.get('id'),
+            'login': session.get('login', ''),
+        })
+    except Exception as e:
+        app.logger.exception('Okta MFA failed')
+        err_msg = str(e)
+        try:
+            if hasattr(e, 'read'):
+                body_err = json.loads(e.read().decode())
+                err_msg = body_err.get('errorSummary') or err_msg
+        except Exception:
+            pass
+        return jsonify({'error': err_msg}), 500
+
+
+@app.route('/api/okta/apps', methods=['POST'])
+def api_okta_apps():
+    """Fetch the app links assigned to the current Okta user."""
+    try:
+        import urllib.request as _ur, re as _re
+        data = request.get_json() or {}
+        domain     = _re.sub(r'^https?://', '', data.get('domain', '').strip()).rstrip('/')
+        session_id = data.get('session_id', '').strip()
+        if not domain or not session_id:
+            return jsonify({'error': 'domain and session_id required'}), 400
+
+        url = f'https://{domain}/api/v1/users/me/appLinks'
+        apps = None
+        last_err = ''
+
+        # Try 1: Cookie-based session (standard browser session)
+        try:
+            req = _ur.Request(url)
+            req.add_header('Accept', 'application/json')
+            req.add_header('Cookie', f'sid={session_id}')
+            with _ur.urlopen(req, timeout=20) as resp:
+                apps = json.loads(resp.read().decode())
+        except Exception as e1:
+            last_err = str(e1)
+            try:
+                if hasattr(e1, 'read'):
+                    body = json.loads(e1.read().decode())
+                    last_err = body.get('errorSummary') or last_err
+            except Exception:
+                pass
+
+        # Try 2: SSWS token auth (fallback — works when session_id is also an API token)
+        if apps is None:
+            try:
+                req2 = _ur.Request(url)
+                req2.add_header('Accept', 'application/json')
+                req2.add_header('Authorization', f'SSWS {session_id}')
+                with _ur.urlopen(req2, timeout=20) as resp2:
+                    apps = json.loads(resp2.read().decode())
+                last_err = ''
+            except Exception as e2:
+                try:
+                    if hasattr(e2, 'read'):
+                        body2 = json.loads(e2.read().decode())
+                        last_err = body2.get('errorSummary') or str(e2)
+                except Exception:
+                    last_err = str(e2)
+
+        if apps is None:
+            return jsonify({'error': last_err or 'Could not retrieve apps from Okta'}), 500
+
+        # apps may be a list or a dict with embedded list
+        if isinstance(apps, dict):
+            apps = apps.get('appLinks') or apps.get('value') or []
+
+        return jsonify({'apps': apps, 'count': len(apps)})
+    except Exception as e:
+        app.logger.exception('Okta apps failed')
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/modules/toggle', methods=['POST'])
 @requires_permission('dashboard')
@@ -11893,6 +13994,1381 @@ def cloud_page():
 
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Certificate Management API
+# ─────────────────────────────────────────────────────────────────────────────
+import subprocess as _certsubp, json as _certjson, os as _certos, re as _certre
+import datetime as _certdt, threading as _certlock
+
+_CERT_AUDIT_FILE = _certos.path.join(_certos.path.dirname(_certos.path.abspath(__file__)), 'cert_audit.json')
+_cert_audit_lock = _certlock.Lock()
+
+CERT_STORES_ALL = ['My', 'Root', 'CA', 'TrustedPeople', 'WebHosting']
+
+def _cert_audit_add(action, subject='', detail='', thumbprint=''):
+    entry = {'action': action, 'subject': subject, 'detail': detail,
+             'thumbprint': thumbprint,
+             'timestamp': _certdt.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
+    with _cert_audit_lock:
+        try:
+            existing = []
+            if _certos.path.exists(_CERT_AUDIT_FILE):
+                with open(_CERT_AUDIT_FILE, 'r') as f:
+                    existing = _certjson.load(f)
+        except Exception:
+            existing = []
+        existing.insert(0, entry)
+        existing = existing[:500]
+        with open(_CERT_AUDIT_FILE, 'w') as f:
+            _certjson.dump(existing, f)
+
+def _run_ps(script, timeout=30):
+    try:
+        r = _certsubp.run(
+            ['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+            capture_output=True, text=True, timeout=timeout
+        )
+        return r.stdout.strip(), r.stderr.strip(), r.returncode
+    except Exception as e:
+        return '', str(e), 1
+
+def _ps_list_certs(store):
+    script = (
+        "Get-ChildItem -Path Cert:\\LocalMachine\\{store} -ErrorAction SilentlyContinue | "
+        "Select-Object -Property Subject,Issuer,Thumbprint,NotBefore,NotAfter | "
+        "ConvertTo-Json -Depth 2"
+    ).format(store=store)
+    out, err, rc = _run_ps(script)
+    if not out:
+        return [], err
+    try:
+        raw = _certjson.loads(out)
+        if isinstance(raw, dict):
+            raw = [raw]
+        certs = []
+        for c in (raw or []):
+            def _msdate(v):
+                if not v: return ''
+                m2 = _certre.search(r'(\d+)', str(v))
+                if m2:
+                    try:
+                        ts = int(m2.group(1)) / 1000
+                        return _certdt.datetime.utcfromtimestamp(ts).strftime('%Y-%m-%d')
+                    except Exception:
+                        pass
+                return str(v)[:10]
+            certs.append({
+                'store': store,
+                'subject': c.get('Subject', ''),
+                'issuer': c.get('Issuer', ''),
+                'thumbprint': c.get('Thumbprint', ''),
+                'valid_from': _msdate(c.get('NotBefore', '')),
+                'expiry': _msdate(c.get('NotAfter', '')),
+            })
+        return certs, None
+    except Exception as e:
+        return [], str(e)
+
+
+@app.route('/api/certs/summary')
+def api_certs_summary():
+    total = 0; expired = 0; expiring_soon = 0
+    now = _certdt.datetime.utcnow()
+    for st in CERT_STORES_ALL:
+        certs, _ = _ps_list_certs(st)
+        for c in certs:
+            total += 1
+            exp_str = c.get('expiry', '')
+            if exp_str:
+                try:
+                    exp = _certdt.datetime.strptime(exp_str[:10], '%Y-%m-%d')
+                    dl = (exp - now).days
+                    if dl < 0: expired += 1
+                    elif dl <= 30: expiring_soon += 1
+                except Exception: pass
+    return jsonify({'total': total, 'expired': expired, 'expiring_soon': expiring_soon,
+                    'key_vault': '\u2014', 'app_services': '\u2014'})
+
+
+@app.route('/api/certs/list', methods=['POST'])
+def api_certs_list():
+    data = request.get_json() or {}
+    store = data.get('store', 'My').strip()
+    if store == 'ALL':
+        all_certs = []
+        for st in CERT_STORES_ALL:
+            certs, _ = _ps_list_certs(st)
+            all_certs.extend(certs)
+        return jsonify({'certs': all_certs})
+    certs, err = _ps_list_certs(store)
+    if err and not certs:
+        return jsonify({'error': err}), 500
+    return jsonify({'certs': certs})
+
+
+@app.route('/api/certs/details', methods=['POST'])
+def api_certs_details():
+    data = request.get_json() or {}
+    thumb = data.get('thumbprint', '').strip().replace(' ', '')
+    store = data.get('store', 'My').strip()
+    if not thumb:
+        return jsonify({'error': 'thumbprint required'}), 400
+    try:
+        r = _certsubp.run(['certutil', '-store', store, thumb], capture_output=True, text=True, timeout=20)
+        output = r.stdout or r.stderr
+    except Exception as e:
+        output = str(e)
+    _cert_audit_add('check', thumbprint=thumb, detail='Viewed details from ' + store)
+    return jsonify({'output': output})
+
+
+@app.route('/api/certs/expiring', methods=['POST'])
+def api_certs_expiring():
+    data = request.get_json() or {}
+    days = int(data.get('days', 30))
+    now = _certdt.datetime.utcnow()
+    result = []
+    for st in CERT_STORES_ALL:
+        certs, _ = _ps_list_certs(st)
+        for c in certs:
+            exp_str = c.get('expiry', '')
+            if not exp_str:
+                continue
+            try:
+                exp = _certdt.datetime.strptime(exp_str[:10], '%Y-%m-%d')
+                dl = (exp - now).days
+                if dl <= days:
+                    c['days_left'] = dl
+                    result.append(c)
+            except Exception:
+                pass
+    result.sort(key=lambda x: x.get('days_left', 0))
+    _cert_audit_add('check', detail='Scanned expiring within ' + str(days) + 'd')
+    return jsonify({'certs': result})
+
+
+@app.route('/api/certs/wizard', methods=['POST'])
+def api_certs_wizard():
+    data = request.get_json() or {}
+    op = data.get('op', '').strip()
+
+    if op == 'selfsigned':
+        cn    = data.get('cn', '').strip()
+        days  = int(data.get('days', 365))
+        store = data.get('store', 'My').strip()
+        exportable = str(data.get('export', 'true')).lower() == 'true'
+        if not cn:
+            return jsonify({'error': 'Common Name required'}), 400
+        ef = '-KeyExportPolicy Exportable' if exportable else '-KeyExportPolicy NonExportable'
+        script = (
+            '$cert = New-SelfSignedCertificate -Subject "CN={cn}" '
+            '-DnsName "{cn}" '
+            '-CertStoreLocation "Cert:\\LocalMachine\\{store}" '
+            '-NotAfter (Get-Date).AddDays({days}) {ef}; '
+            'Write-Output ("Thumbprint: " + $cert.Thumbprint); '
+            'Write-Output ("Expires: " + $cert.NotAfter)'
+        ).format(cn=cn.replace('"', '\\"'), store=store, days=days, ef=ef)
+        out, err, rc = _run_ps(script)
+        success = rc == 0 and 'Thumbprint' in out
+        _cert_audit_add('create', subject='CN=' + cn, detail='Self-signed in ' + store + ', ' + str(days) + 'd')
+        return jsonify({'output': out + ('\n[stderr]\n' + err if err else ''),
+                        'success': success, 'message': 'Certificate created' if success else 'Creation may have failed'})
+
+    elif op == 'export_pfx':
+        thumb    = data.get('thumb', '').replace(' ', '').strip()
+        store    = data.get('store', 'My').strip()
+        pfx_path = data.get('pfx-path', '').strip()
+        pfx_pass = data.get('pfx-pass', '')
+        if not thumb or not pfx_path:
+            return jsonify({'error': 'Thumbprint and output path required'}), 400
+        pp = ('$pw = ConvertTo-SecureString -String "{p}" -Force -AsPlainText; '
+              .format(p=pfx_pass.replace('"', '\\"')) if pfx_pass else '$pw = $null; ')
+        script = (
+            '{pp}$cert = Get-ChildItem -Path "Cert:\\LocalMachine\\{store}" | '
+            'Where-Object {{$_.Thumbprint -eq "{t}"}}; '
+            'if(!$cert){{Write-Error "Cert not found"; exit 1}} '
+            'Export-PfxCertificate -Cert $cert -FilePath "{path}" -Password $pw | Out-Null; '
+            'Write-Output "Exported: {path}"'
+        ).format(pp=pp, store=store, t=thumb.upper(), path=pfx_path.replace('"', '\\"'))
+        out, err, rc = _run_ps(script)
+        success = rc == 0
+        _cert_audit_add('export', thumbprint=thumb, detail='Exported PFX to ' + pfx_path)
+        return jsonify({'output': out + ('\n[stderr]\n' + err if err else ''),
+                        'success': success, 'message': 'PFX exported' if success else 'Export failed'})
+
+    elif op == 'import_pfx':
+        pfx_path   = data.get('pfx-path', '').strip()
+        pfx_pass   = data.get('pfx-pass', '')
+        store      = data.get('store', 'My').strip()
+        exportable = str(data.get('export', 'true')).lower() == 'true'
+        if not pfx_path:
+            return jsonify({'error': 'PFX file path required'}), 400
+        pp = ('-Password (ConvertTo-SecureString -String "{p}" -Force -AsPlainText)'
+              .format(p=pfx_pass.replace('"', '\\"')) if pfx_pass else '')
+        ef = '-Exportable' if exportable else ''
+        script = (
+            '$cert = Import-PfxCertificate -FilePath "{path}" '
+            '-CertStoreLocation "Cert:\\LocalMachine\\{store}" {pp} {ef}; '
+            'Write-Output ("Imported: " + $cert.Thumbprint)'
+        ).format(path=pfx_path.replace('"', '\\"'), store=store, pp=pp, ef=ef)
+        out, err, rc = _run_ps(script)
+        success = rc == 0 and 'Imported' in out
+        _cert_audit_add('import', detail='Imported PFX from ' + pfx_path + ' into ' + store)
+        return jsonify({'output': out + ('\n[stderr]\n' + err if err else ''),
+                        'success': success, 'message': 'PFX imported into ' + store if success else 'Import failed'})
+
+    elif op == 'verify':
+        pfx_path = data.get('pfx-path', '').strip()
+        pfx_pass = data.get('pfx-pass', '')
+        if not pfx_path:
+            return jsonify({'error': 'File path required'}), 400
+        cmd = ['certutil']
+        if pfx_pass:
+            cmd += ['-p', pfx_pass]
+        cmd += ['-dump', pfx_path]
+        try:
+            r = _certsubp.run(cmd, capture_output=True, text=True, timeout=20)
+            out = r.stdout or r.stderr
+        except Exception as e:
+            out = str(e)
+        _cert_audit_add('verify', detail='Verified: ' + pfx_path)
+        return jsonify({'output': out, 'success': 'command completed successfully' in out.lower()})
+
+    elif op == 'delete':
+        thumb = data.get('thumb', '').replace(' ', '').strip()
+        store = data.get('store', 'My').strip()
+        if not thumb:
+            return jsonify({'error': 'Thumbprint required'}), 400
+        try:
+            r = _certsubp.run(['certutil', '-delstore', store, thumb], capture_output=True, text=True, timeout=20)
+            out = r.stdout + r.stderr
+            success = r.returncode == 0
+        except Exception as e:
+            out = str(e); success = False
+        _cert_audit_add('delete', thumbprint=thumb, detail='Deleted from ' + store)
+        return jsonify({'output': out, 'success': success,
+                        'message': 'Certificate deleted' if success else 'Delete failed'})
+
+    elif op == 'csr':
+        import tempfile as _tm_csr
+        cn      = data.get('cn', '').strip()
+        san_raw = data.get('san', '').strip()
+        csr_path = data.get('pfx-path', '').strip()
+        if not cn or not csr_path:
+            return jsonify({'error': 'CN and output path required'}), 400
+        sans = [cn] + [s.strip() for s in san_raw.split(',') if s.strip()]
+        sans = list(dict.fromkeys(sans))
+        inf_path = _certos.path.join(_tm_csr.gettempdir(), 'csr_' + cn.replace('.','_')[:24] + '.inf')
+        inf_lines = [
+            '[Version]', 'Signature="$Windows NT$"', '',
+            '[NewRequest]',
+            'Subject = "CN=' + cn + '"',
+            'KeySpec = 1', 'KeyLength = 2048', 'Exportable = TRUE', 'MachineKeySet = TRUE',
+            'SMIME = False', 'PrivateKeyArchive = FALSE', 'UserProtected = FALSE',
+            'UseExistingKeySet = FALSE',
+            'ProviderName = "Microsoft RSA SChannel Cryptographic Provider"',
+            'ProviderType = 12', 'RequestType = PKCS10', 'KeyUsage = 0xa0', '',
+            '[EnhancedKeyUsageExtension]', 'OID=1.3.6.1.5.5.7.3.1', '',
+            '[Extensions]', '2.5.29.17 = "{text}"',
+        ]
+        for s in sans:
+            inf_lines.append('_Continue_ = "dns=' + s + '&"')
+        with open(inf_path, 'w') as _f:
+            _f.write('\r\n'.join(inf_lines) + '\r\n')
+        try:
+            _rr = _certsubp.run(['certreq', '-new', '-machine', inf_path, csr_path],
+                                capture_output=True, text=True, timeout=30)
+            out = _rr.stdout + _rr.stderr
+            success = _rr.returncode == 0 or _certos.path.exists(csr_path)
+            if success and _certos.path.exists(csr_path):
+                with open(csr_path, 'r', errors='replace') as _f2:
+                    out = 'CSR generated: ' + csr_path + '\n\n' + _f2.read()[:3000]
+        except Exception as _e:
+            out = str(_e); success = False
+        finally:
+            if _certos.path.exists(inf_path): _certos.remove(inf_path)
+        _cert_audit_add('create', subject='CN=' + cn, detail='CSR generated: ' + csr_path)
+        return jsonify({'output': out, 'success': success,
+                        'message': 'CSR written to ' + csr_path if success else 'CSR generation failed'})
+
+    elif op == 'export_cer':
+        thumb    = data.get('thumb', '').replace(' ', '').strip()
+        store    = data.get('store', 'My').strip()
+        out_path = data.get('pfx-path', '').strip()
+        fmt      = data.get('fmt', 'DER').strip().upper()
+        if not thumb or not out_path:
+            return jsonify({'error': 'Thumbprint and output path required'}), 400
+        esc = lambda v: v.replace('"', '\\"')
+        if fmt == 'PEM':
+            script = (
+                '$cert = Get-ChildItem "Cert:\\LocalMachine\\{s}" | '
+                'Where-Object {{ $_.Thumbprint -eq "{t}" }}; '
+                'if(!$cert){{ Write-Error "Not found"; exit 1 }} '
+                '$b64 = [Convert]::ToBase64String($cert.RawData,"InsertLineBreaks"); '
+                '"-----BEGIN CERTIFICATE-----`n$b64`n-----END CERTIFICATE-----" | '
+                'Out-File -FilePath "{p}" -Encoding ASCII; '
+                'Write-Output "PEM exported: {p}"'
+            ).format(s=store, t=thumb.upper(), p=esc(out_path))
+        elif fmt == 'P7B':
+            script = (
+                '$cert = Get-ChildItem "Cert:\\LocalMachine\\{s}" | '
+                'Where-Object {{ $_.Thumbprint -eq "{t}" }}; '
+                'if(!$cert){{ Write-Error "Not found"; exit 1 }} '
+                'Export-Certificate -Cert $cert -FilePath "{p}" -Type P7B | Out-Null; '
+                'Write-Output "P7B exported: {p}"'
+            ).format(s=store, t=thumb.upper(), p=esc(out_path))
+        else:
+            script = (
+                '$cert = Get-ChildItem "Cert:\\LocalMachine\\{s}" | '
+                'Where-Object {{ $_.Thumbprint -eq "{t}" }}; '
+                'if(!$cert){{ Write-Error "Not found"; exit 1 }} '
+                'Export-Certificate -Cert $cert -FilePath "{p}" -Type CERT | Out-Null; '
+                'Write-Output "DER exported: {p}"'
+            ).format(s=store, t=thumb.upper(), p=esc(out_path))
+        out, err, rc = _run_ps(script)
+        success = rc == 0
+        _cert_audit_add('export', thumbprint=thumb, detail='Exported ' + fmt + ' to ' + out_path)
+        return jsonify({'output': out + ('\n[stderr]\n' + err if err else ''),
+                        'success': success,
+                        'message': fmt + ' exported: ' + out_path if success else 'Export failed'})
+
+    return jsonify({'error': 'Unknown operation: ' + op}), 400
+
+
+@app.route('/api/certs/delete', methods=['POST'])
+def api_certs_delete():
+    data = request.get_json() or {}
+    thumb = data.get('thumbprint', '').replace(' ', '').strip()
+    store = data.get('store', 'My').strip()
+    if not thumb:
+        return jsonify({'error': 'thumbprint required'}), 400
+    try:
+        r = _certsubp.run(['certutil', '-delstore', store, thumb], capture_output=True, text=True, timeout=20)
+        success = r.returncode == 0
+        out = r.stdout + r.stderr
+    except Exception as e:
+        out = str(e); success = False
+    _cert_audit_add('delete', thumbprint=thumb, detail='Deleted from ' + store)
+    if not success:
+        return jsonify({'error': out or 'Delete failed'}), 500
+    return jsonify({'ok': True})
+
+
+@app.route('/api/certs/appservices', methods=['POST'])
+def api_certs_appservices():
+    data = request.get_json() or {}
+    sub_id = data.get('subscription_id', '').strip()
+    if not sub_id:
+        return jsonify({'error': 'subscription_id required'}), 400
+    try:
+        r = _certsubp.run(
+            ['az', 'webapp', 'list', '--subscription', sub_id,
+             '--query', '[].{name:name,location:location,rg:resourceGroup}', '-o', 'json'],
+            capture_output=True, text=True, timeout=30
+        )
+        if r.returncode != 0:
+            return jsonify({'error': 'Azure CLI error: ' + r.stderr}), 500
+        webapp_list = _certjson.loads(r.stdout or '[]')
+        apps = []
+        for w in webapp_list[:20]:
+            ssl_r = _certsubp.run(
+                ['az', 'webapp', 'config', 'ssl', 'list', '--subscription', sub_id,
+                 '--resource-group', w.get('rg', ''), '--output', 'json'],
+                capture_output=True, text=True, timeout=20
+            )
+            bindings = []
+            if ssl_r.returncode == 0:
+                try:
+                    for b in (_certjson.loads(ssl_r.stdout or '[]')):
+                        bindings.append({'hostname': b.get('hostName', ''),
+                                         'thumbprint': b.get('thumbprint', ''),
+                                         'expiry': b.get('expirationDate', '')})
+                except Exception:
+                    pass
+            apps.append({'name': w.get('name', ''), 'location': w.get('location', ''),
+                         'resource_group': w.get('rg', ''), 'ssl_bindings': bindings})
+        return jsonify({'apps': apps})
+    except FileNotFoundError:
+        return jsonify({'error': 'Azure CLI (az) not found. Install it and run `az login`.'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/certs/appgw', methods=['POST'])
+def api_certs_appgw():
+    data   = request.get_json() or {}
+    sub_id = data.get('subscription_id', '').strip()
+    rg     = data.get('resource_group', '').strip()
+    if not sub_id:
+        return jsonify({'error': 'subscription_id required'}), 400
+    try:
+        gw_cmd = ['az', 'network', 'application-gateway', 'list',
+                  '--subscription', sub_id,
+                  '--query', '[].{name:name,rg:resourceGroup,location:location,sku:sku.name}',
+                  '-o', 'json']
+        if rg:
+            gw_cmd += ['--resource-group', rg]
+        r = _certsubp.run(gw_cmd, capture_output=True, text=True, timeout=40)
+        if r.returncode != 0:
+            return jsonify({'error': 'Azure CLI error: ' + r.stderr}), 500
+        gw_list = _certjson.loads(r.stdout or '[]')
+        gateways = []
+        for gw in gw_list[:15]:
+            gw_name = gw.get('name', '')
+            gw_rg   = gw.get('rg', '')
+            # Fetch SSL certs
+            ssl_r = _certsubp.run(
+                ['az', 'network', 'application-gateway', 'ssl-cert', 'list',
+                 '--gateway-name', gw_name, '--resource-group', gw_rg,
+                 '--subscription', sub_id, '-o', 'json'],
+                capture_output=True, text=True, timeout=20
+            )
+            ssl_certs = []
+            if ssl_r.returncode == 0:
+                try:
+                    for c in (_certjson.loads(ssl_r.stdout or '[]')):
+                        props = c.get('properties', c)
+                        ssl_certs.append({
+                            'name':       c.get('name', ''),
+                            'thumbprint': props.get('publicCertData', '')[:16] or '',
+                            'expiry':     props.get('keyVaultSecretId', '')   # kv-backed certs show id; plain certs show nothing
+                        })
+                except Exception:
+                    pass
+            # Fetch HTTP listeners
+            ls_r = _certsubp.run(
+                ['az', 'network', 'application-gateway', 'http-listener', 'list',
+                 '--gateway-name', gw_name, '--resource-group', gw_rg,
+                 '--subscription', sub_id, '-o', 'json'],
+                capture_output=True, text=True, timeout=20
+            )
+            listeners = []
+            if ls_r.returncode == 0:
+                try:
+                    for l in (_certjson.loads(ls_r.stdout or '[]')):
+                        props = l.get('properties', l)
+                        ssl_ref = props.get('sslCertificate', {})
+                        ssl_name = ssl_ref.get('id', '').split('/')[-1] if ssl_ref else ''
+                        listeners.append({
+                            'name':     l.get('name', ''),
+                            'hostname': props.get('hostName', '') or props.get('hostnames', [''])[0] if props.get('hostnames') else props.get('hostName', ''),
+                            'protocol': props.get('protocol', ''),
+                            'ssl_cert': ssl_name
+                        })
+                except Exception:
+                    pass
+            gateways.append({
+                'name':          gw_name,
+                'resource_group': gw_rg,
+                'location':      gw.get('location', ''),
+                'sku':           gw.get('sku', ''),
+                'ssl_certs':     ssl_certs,
+                'listeners':     listeners
+            })
+        return jsonify({'gateways': gateways})
+    except FileNotFoundError:
+        return jsonify({'error': 'Azure CLI (az) not found. Install it and run `az login`.'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/certs/keyvault/list', methods=['POST'])
+def api_certs_kv_list():
+    data = request.get_json() or {}
+    vault_url = data.get('vault_url', '').strip().rstrip('/')
+    if not vault_url:
+        return jsonify({'error': 'vault_url required'}), 400
+    vault_name = vault_url.split('//')[1].split('.')[0] if '//' in vault_url else vault_url
+    try:
+        r = _certsubp.run(
+            ['az', 'keyvault', 'certificate', 'list', '--vault-name', vault_name, '-o', 'json'],
+            capture_output=True, text=True, timeout=30
+        )
+        if r.returncode != 0:
+            return jsonify({'error': 'Azure CLI error: ' + r.stderr}), 500
+        raw = _certjson.loads(r.stdout or '[]')
+        certs = []
+        for c in raw:
+            attr = c.get('attributes', {})
+            certs.append({'name': c.get('name', '') or c.get('id', '').split('/')[-1],
+                          'id': c.get('id', ''),
+                          'enabled': attr.get('enabled', True),
+                          'expiry': attr.get('expires', ''),
+                          'created': attr.get('created', '')})
+        return jsonify({'certs': certs})
+    except FileNotFoundError:
+        return jsonify({'error': 'Azure CLI not found'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/certs/keyvault/versions', methods=['POST'])
+def api_certs_kv_versions():
+    data = request.get_json() or {}
+    vault_url = data.get('vault_url', '').strip().rstrip('/')
+    cert_id   = data.get('cert_id', '').strip()
+    cert_name = cert_id.split('/')[-1] if '/' in cert_id else cert_id
+    vault_name = vault_url.split('//')[1].split('.')[0] if '//' in vault_url else vault_url
+    try:
+        r = _certsubp.run(
+            ['az', 'keyvault', 'certificate', 'list-versions',
+             '--vault-name', vault_name, '--name', cert_name, '-o', 'json'],
+            capture_output=True, text=True, timeout=20
+        )
+        if r.returncode != 0:
+            return jsonify({'error': r.stderr}), 500
+        return jsonify(_certjson.loads(r.stdout or '[]'))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/certs/keyvault/sync', methods=['POST'])
+def api_certs_kv_sync():
+    data = request.get_json() or {}
+    thumb     = data.get('thumbprint', '').replace(' ', '').strip()
+    cert_name = data.get('cert_name', '').strip()
+    vault_url = data.get('vault_url', '').strip().rstrip('/')
+    if not thumb or not cert_name or not vault_url:
+        return jsonify({'error': 'thumbprint, cert_name, and vault_url required'}), 400
+    vault_name = vault_url.split('//')[1].split('.')[0] if '//' in vault_url else vault_url
+    import tempfile as _tmpmod
+    tmp_pfx  = _certos.path.join(_tmpmod.gettempdir(), 'kvsync_' + thumb[:8] + '.pfx')
+    tmp_pass = 'KVSync_' + thumb[:6]
+    try:
+        script = (
+            '$pw = ConvertTo-SecureString -String "{p}" -Force -AsPlainText; '
+            '$cert = Get-ChildItem -Path "Cert:\\LocalMachine\\My" | Where-Object {{$_.Thumbprint -eq "{t}"}}; '
+            'if(!$cert){{Write-Error "Cert not found in My store"; exit 1}} '
+            'Export-PfxCertificate -Cert $cert -FilePath "{f}" -Password $pw | Out-Null; '
+            'Write-Output "exported"'
+        ).format(p=tmp_pass, t=thumb.upper(), f=tmp_pfx)
+        out, err, rc = _run_ps(script)
+        if rc != 0 or 'exported' not in out:
+            return jsonify({'error': 'Failed to export PFX: ' + err}), 500
+        r = _certsubp.run(
+            ['az', 'keyvault', 'certificate', 'import',
+             '--vault-name', vault_name, '--name', cert_name,
+             '--file', tmp_pfx, '--password', tmp_pass],
+            capture_output=True, text=True, timeout=60
+        )
+        success = r.returncode == 0
+        _cert_audit_add('sync', thumbprint=thumb, detail='Synced to KV ' + vault_name + ' as ' + cert_name)
+        if _certos.path.exists(tmp_pfx):
+            _certos.remove(tmp_pfx)
+        if not success:
+            return jsonify({'error': 'KV import error: ' + r.stderr}), 500
+        return jsonify({'ok': True, 'message': 'Synced to Key Vault as ' + cert_name})
+    except FileNotFoundError:
+        return jsonify({'error': 'Azure CLI not found'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/certs/audit')
+def api_certs_audit():
+    action_filter = request.args.get('action', '').strip()
+    try:
+        if _certos.path.exists(_CERT_AUDIT_FILE):
+            with open(_CERT_AUDIT_FILE, 'r') as f:
+                entries = _certjson.load(f)
+        else:
+            entries = []
+    except Exception:
+        entries = []
+    if action_filter:
+        entries = [e for e in entries if e.get('action', '') == action_filter]
+    return jsonify({'entries': entries})
+
+
+@app.route('/api/certs/audit/clear', methods=['POST'])
+def api_certs_audit_clear():
+    with _cert_audit_lock:
+        try:
+            with open(_CERT_AUDIT_FILE, 'w') as f:
+                _certjson.dump([], f)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    return jsonify({'ok': True})
+
+
+@app.route('/api/certs/chain', methods=['POST'])
+def api_certs_chain():
+    """Run certutil -verifystore to show the full cert chain for a thumbprint."""
+    data  = request.get_json() or {}
+    thumb = data.get('thumbprint', '').replace(' ', '').strip()
+    store = data.get('store', 'My').strip()
+    if not thumb:
+        return jsonify({'error': 'thumbprint required'}), 400
+    try:
+        r1 = _certsubp.run(['certutil', '-verifystore', store, thumb],
+                           capture_output=True, text=True, timeout=30)
+        r2 = _certsubp.run(['certutil', '-store', store, thumb],
+                           capture_output=True, text=True, timeout=15)
+        return jsonify({
+            'ok':    r1.returncode == 0,
+            'chain': r1.stdout + r1.stderr,
+            'dump':  r2.stdout + r2.stderr,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Akamai CDN — CPS, Route 53, Origin Certs
+# ─────────────────────────────────────────────────────────────────────────────
+try:
+    import boto3 as _boto3
+    _HAS_BOTO3 = True
+except ImportError:
+    _HAS_BOTO3 = False
+
+# In-memory credential store (reset on server restart)
+_ak_creds_store = {}
+
+
+def _ak_eg_request(method, url_path, body, creds):
+    """Make an Akamai EdgeGrid-signed request.
+    url_path may be a relative path (/cps/v2/...) or an absolute URL returned
+    by Akamai in allowedInput links — both are handled correctly.
+    Falls back to unsigned requests if edgegrid-python is not installed.
+    """
+    import requests as _rq
+    host = creds.get('host', '').strip('/')
+    if not host:
+        raise ValueError('Akamai host not configured')
+    base = 'https://' + host if not host.startswith('http') else host
+    # If Akamai gave us a full URL (e.g. from allowedInput[].update), use it as-is
+    full_url = url_path if url_path.startswith('http') else base + url_path
+    try:
+        from akamai.edgegrid import EdgeGridAuth
+        session = _rq.Session()
+        session.auth = EdgeGridAuth(
+            client_token=creds.get('client_token', ''),
+            client_secret=creds.get('client_secret', ''),
+            access_token=creds.get('access_token', ''),
+        )
+        r = session.request(method, full_url, json=body if body else None,
+                            headers={'Accept': 'application/json', 'Content-Type': 'application/json'},
+                            timeout=30)
+    except ImportError:
+        r = _rq.request(method, full_url, json=body or None,
+                        headers={'Accept': 'application/json', 'Content-Type': 'application/json'},
+                        timeout=20)
+    try:
+        return r.status_code, r.json()
+    except Exception:
+        return r.status_code, {'_text': r.text[:500]}
+
+
+def _r53_client(creds):
+    if not _HAS_BOTO3:
+        raise RuntimeError('boto3 not installed — run: pip install boto3')
+    return _boto3.client(
+        'route53',
+        aws_access_key_id=creds.get('aws_key') or None,
+        aws_secret_access_key=creds.get('aws_secret') or None,
+        region_name=creds.get('aws_region') or 'us-east-1',
+    )
+
+
+def _get_ak_creds():
+    return _ak_creds_store.get('default', {})
+
+
+@app.route('/api/akamai/creds/save', methods=['POST'])
+def api_akamai_creds_save():
+    data = request.get_json() or {}
+    _ak_creds_store['default'] = {
+        'host':           data.get('host', '').strip(),
+        'client_token':   data.get('client_token', '').strip(),
+        'access_token':   data.get('access_token', '').strip(),
+        'client_secret':  data.get('client_secret', '').strip(),
+        'aws_key':        data.get('aws_key', '').strip(),
+        'aws_secret':     data.get('aws_secret', '').strip(),
+        'aws_region':     data.get('aws_region', 'us-east-1').strip(),
+        'r53_zone':       data.get('r53_zone', '').strip(),
+        'contract':       data.get('contract', '').strip(),
+    }
+    return jsonify({'ok': True})
+
+
+@app.route('/api/akamai/creds/test', methods=['POST'])
+def api_akamai_creds_test():
+    creds = _get_ak_creds()
+    result = {}
+    # Test Akamai
+    if creds.get('host') and creds.get('client_token'):
+        try:
+            sc, _ = _ak_eg_request('GET', '/cps/v2/enrollments?contractId=dummy', None, creds)
+            result['akamai_ok'] = sc < 500
+            if sc >= 500:
+                result['akamai_err'] = 'HTTP ' + str(sc)
+        except Exception as e:
+            result['akamai_ok'] = False
+            result['akamai_err'] = str(e)[:120]
+    else:
+        result['akamai_ok'] = False
+        result['akamai_err'] = 'Host / credentials not set'
+    # Test AWS Route 53
+    try:
+        r53 = _r53_client(creds)
+        r53.list_hosted_zones(MaxItems='1')
+        result['aws_ok'] = True
+    except RuntimeError as e:
+        result['aws_ok'] = False
+        result['aws_err'] = str(e)
+    except Exception as e:
+        result['aws_ok'] = False
+        result['aws_err'] = str(e)[:120]
+    return jsonify(result)
+
+
+@app.route('/api/akamai/cps/list', methods=['POST'])
+def api_akamai_cps_list():
+    data = request.get_json() or {}
+    creds = _get_ak_creds()
+    contract_id = data.get('contract_id', creds.get('contract', '')).strip()
+    if not contract_id:
+        return jsonify({'error': 'contract_id required'}), 400
+    try:
+        enrollments = []
+        next_url = '/cps/v2/enrollments?contractId=' + contract_id
+        while next_url:
+            sc, resp = _ak_eg_request('GET', next_url, None, creds)
+            if sc >= 400:
+                return jsonify({'error': 'Akamai API ' + str(sc) + ': ' + str(resp)[:200]}), 502
+            for e in resp.get('enrollments', []):
+                csr = e.get('csr', {})
+                loc = e.get('location', '')
+                eid = loc.split('/')[-1] if loc else str(e.get('id', ''))
+                cert = e.get('signedCert', {}) or {}
+                changes = e.get('pendingChanges', [])
+                enrollments.append({
+                    'id': eid,
+                    'cn': csr.get('cn', ''),
+                    'cert_type': e.get('certificateType', ''),
+                    'validation_type': e.get('validationType', ''),
+                    'status': 'active' if cert else ('pending' if changes else 'inactive'),
+                    'expiry': cert.get('notAfter', ''),
+                    'pending_changes': bool(changes),
+                    'sans': csr.get('sans', []),
+                })
+            next_url = resp.get('nextPageLink', None) or None
+        return jsonify({'enrollments': enrollments})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/cps/details', methods=['POST'])
+def api_akamai_cps_details():
+    data = request.get_json() or {}
+    eid  = str(data.get('enrollment_id', '')).strip()
+    if not eid:
+        return jsonify({'error': 'enrollment_id required'}), 400
+    creds = _get_ak_creds()
+    try:
+        sc, resp = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid, None, creds)
+        if sc >= 400:
+            return jsonify({'error': 'CPS ' + str(sc)}), 502
+        return jsonify(resp)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/cps/changes', methods=['POST'])
+def api_akamai_cps_changes():
+    data = request.get_json() or {}
+    eid  = str(data.get('enrollment_id', '')).strip()
+    creds = _get_ak_creds()
+    try:
+        sc, resp = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid + '/changes', None, creds)
+        if sc >= 400:
+            return jsonify({'error': 'CPS changes error ' + str(sc)}), 502
+        return jsonify({'changes': resp.get('changes', [])})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/cps/deploy', methods=['POST'])
+def api_akamai_cps_deploy():
+    data = request.get_json() or {}
+    eid  = str(data.get('enrollment_id', '')).strip()
+    creds = _get_ak_creds()
+    try:
+        sc, resp = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid + '/changes', None, creds)
+        if sc >= 400:
+            return jsonify({'error': 'Cannot fetch changes: ' + str(sc)}), 502
+        changes = resp.get('changes', [])
+        if not changes:
+            return jsonify({'ok': True, 'message': 'No pending changes to deploy'})
+        change_loc = str(changes[0])
+        change_id  = change_loc.split('/')[-1]
+        import datetime as _d
+        expire_dt = (_d.datetime.utcnow() + _d.timedelta(days=365)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        body = {'certificationNotAfter': expire_dt, 'notAfter': expire_dt}
+        sc2, resp2 = _ak_eg_request('PUT',
+            '/cps/v2/enrollments/' + eid + '/changes/' + change_id + '/deployment-schedule',
+            body, creds)
+        ok = sc2 < 400
+        _cert_audit_add('sync', detail='Akamai deploy enrollment ' + eid + ': HTTP ' + str(sc2))
+        return jsonify({'ok': ok, 'message': 'Deployment ' + ('submitted' if ok else ('failed: ' + str(resp2)[:80]))})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/cps/dv-challenges', methods=['POST'])
+def api_akamai_cps_dv_challenges():
+    data = request.get_json() or {}
+    eid  = str(data.get('enrollment_id', '')).strip()
+    creds = _get_ak_creds()
+    try:
+        sc, resp = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid + '/changes', None, creds)
+        if sc >= 400:
+            return jsonify({'error': 'CPS error ' + str(sc)}), 502
+        changes = resp.get('changes', [])
+        if not changes:
+            return jsonify({'challenges': []})
+        change_id = str(changes[0]).split('/')[-1]
+        sc2, chg = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid + '/changes/' + change_id, None, creds)
+        if sc2 >= 400:
+            return jsonify({'error': 'Change detail error ' + str(sc2)}), 502
+        raw = chg.get('dvChallenges', []) or chg.get('allowedInput', [])
+        out = []
+        for ch in raw:
+            out.append({'domain': ch.get('domain', ''), 'token': ch.get('token', ''), 'answer': ch.get('answer', '')})
+        return jsonify({'challenges': out})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Route 53 ──────────────────────────────────────────────────────────────────
+
+@app.route('/api/akamai/r53/add-record', methods=['POST'])
+def api_akamai_r53_add_record():
+    data    = request.get_json() or {}
+    zone_id = data.get('zone_id', '').strip()
+    name    = data.get('name', '').strip()
+    value   = data.get('value', '').strip()
+    rtype   = data.get('type', 'CNAME').strip().upper()
+    ttl     = int(data.get('ttl', 300))
+    comment = data.get('comment', 'Added by MasterChief cert manager')
+    if not zone_id or not name or not value:
+        return jsonify({'error': 'zone_id, name, and value are required'}), 400
+    creds = _get_ak_creds()
+    try:
+        r53 = _r53_client(creds)
+        fqdn   = name  if name.endswith('.')  else name  + '.'
+        fvalue = value if (rtype != 'CNAME' or value.endswith('.')) else value + '.'
+        r53.change_resource_record_sets(
+            HostedZoneId=zone_id,
+            ChangeBatch={
+                'Comment': comment,
+                'Changes': [{
+                    'Action': 'UPSERT',
+                    'ResourceRecordSet': {
+                        'Name': fqdn, 'Type': rtype,
+                        'TTL': ttl, 'ResourceRecords': [{'Value': fvalue}],
+                    }
+                }]
+            }
+        )
+        _cert_audit_add('sync', detail='Route53 UPSERT ' + rtype + ': ' + fqdn + ' → ' + fvalue)
+        return jsonify({'ok': True, 'message': rtype + ' upserted: ' + fqdn + ' → ' + fvalue})
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/r53/check-record', methods=['POST'])
+def api_akamai_r53_check_record():
+    data    = request.get_json() or {}
+    zone_id = data.get('zone_id', '').strip()
+    name    = data.get('name', '').strip()
+    creds   = _get_ak_creds()
+    found   = False; rvalue = ''; dns_val = ''
+    if zone_id:
+        try:
+            r53     = _r53_client(creds)
+            pager   = r53.get_paginator('list_resource_record_sets')
+            search  = name if name.endswith('.') else name + '.'
+            for page in pager.paginate(HostedZoneId=zone_id):
+                for rr in page.get('ResourceRecordSets', []):
+                    if rr['Name'].rstrip('.') == search.rstrip('.'):
+                        found  = True
+                        rvalue = ', '.join(v['Value'] for v in rr.get('ResourceRecords', []))
+                        break
+                if found: break
+        except Exception:
+            pass
+    try:
+        import socket as _s
+        dns_val = _s.getaddrinfo(name.rstrip('.'), None)[0][4][0]
+    except Exception:
+        pass
+    return jsonify({'found': found, 'value': rvalue, 'dns_value': dns_val})
+
+
+@app.route('/api/akamai/r53/list-records', methods=['POST'])
+def api_akamai_r53_list_records():
+    data    = request.get_json() or {}
+    zone_id = data.get('zone_id', '').strip()
+    if not zone_id:
+        return jsonify({'error': 'zone_id required'}), 400
+    creds = _get_ak_creds()
+    try:
+        r53   = _r53_client(creds)
+        pager = r53.get_paginator('list_resource_record_sets')
+        records = []
+        for page in pager.paginate(HostedZoneId=zone_id):
+            for rr in page.get('ResourceRecordSets', []):
+                vals = [v['Value'] for v in rr.get('ResourceRecords', [])]
+                if rr.get('AliasTarget'):
+                    vals = [rr['AliasTarget'].get('DNSName', '')]
+                records.append({'name': rr['Name'].rstrip('.'), 'type': rr['Type'],
+                                'ttl': rr.get('TTL', ''), 'values': vals, 'value': ', '.join(vals)})
+        return jsonify({'records': records})
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Origin SSL / Sync ─────────────────────────────────────────────────────────
+
+@app.route('/api/akamai/origins/check-ssl', methods=['POST'])
+def api_akamai_origins_check_ssl():
+    import ssl as _ssl2, socket as _sock2, datetime as _dssl
+    data    = request.get_json() or {}
+    origins = data.get('origins', {})
+    results = {}
+    for region, hostname in origins.items():
+        hostname = (hostname or '').strip()
+        if not hostname:
+            continue
+        try:
+            ctx = _ssl2.create_default_context()
+            with ctx.wrap_socket(_sock2.socket(), server_hostname=hostname) as s:
+                s.settimeout(8)
+                s.connect((hostname, 443))
+                cert = s.getpeercert()
+            not_after = cert.get('notAfter', '')
+            try:
+                exp = _dssl.datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
+                exp_str = exp.strftime('%Y-%m-%d')
+            except Exception:
+                exp_str = not_after
+            results[region] = {'ok': True, 'expiry': exp_str,
+                               'subject': dict(x[0] for x in cert.get('subject', []))}
+        except Exception as e:
+            results[region] = {'ok': False, 'error': str(e)[:80]}
+    return jsonify({'results': results})
+
+
+@app.route('/api/akamai/origins/sync-to-kv', methods=['POST'])
+def api_akamai_origins_sync_to_kv():
+    import tempfile as _tm2
+    data      = request.get_json() or {}
+    origin    = data.get('origin', '').strip()
+    region    = data.get('region', 'ctrl').strip()
+    vault_url = data.get('vault_url', '').strip().rstrip('/')
+    if not origin or not vault_url:
+        return jsonify({'error': 'origin and vault_url required'}), 400
+    vault_name = vault_url.split('//')[1].split('.')[0] if '//' in vault_url else vault_url
+    certs, _   = _ps_list_certs('My')
+    match = next((c for c in certs if origin.lower() in (c.get('subject') or '').lower()), None)
+    if not match:
+        return jsonify({'error': 'No cert in My store matching: ' + origin}), 404
+    thumb     = match['thumbprint']
+    cert_name = ('origin-' + region + '-' + origin.replace('.', '-'))[:127]
+    tmp_pfx   = _certos.path.join(_tm2.gettempdir(), 'orig_sync_' + region + '.pfx')
+    tmp_pass  = 'OrigSync_' + region
+    script = (
+        '$pw = ConvertTo-SecureString -String "{p}" -Force -AsPlainText; '
+        '$cert = Get-ChildItem -Path "Cert:\\LocalMachine\\My" | Where-Object {{$_.Thumbprint -eq "{t}"}}; '
+        'if(!$cert){{Write-Error "not found"; exit 1}} '
+        'Export-PfxCertificate -Cert $cert -FilePath "{f}" -Password $pw | Out-Null; '
+        'Write-Output "ok"'
+    ).format(p=tmp_pass, t=thumb.upper(), f=tmp_pfx)
+    out, err, rc = _run_ps(script)
+    if rc != 0 or 'ok' not in out:
+        return jsonify({'error': 'PFX export failed: ' + err}), 500
+    try:
+        r = _certsubp.run(
+            ['az', 'keyvault', 'certificate', 'import',
+             '--vault-name', vault_name, '--name', cert_name,
+             '--file', tmp_pfx, '--password', tmp_pass],
+            capture_output=True, text=True, timeout=60)
+        if _certos.path.exists(tmp_pfx):
+            _certos.remove(tmp_pfx)
+        if r.returncode != 0:
+            return jsonify({'error': 'KV import: ' + r.stderr}), 500
+        _cert_audit_add('sync', thumbprint=thumb,
+                        detail='Synced origin ' + region + ' (' + origin + ') to KV as ' + cert_name)
+        return jsonify({'ok': True, 'cert_name': cert_name})
+    except FileNotFoundError:
+        return jsonify({'error': 'Azure CLI not found'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/cps/upload-cert', methods=['POST'])
+def api_akamai_cps_upload_cert():
+    """Upload a 3rd-party certificate to a pending CPS change."""
+    data  = request.get_json() or {}
+    eid   = str(data.get('enrollment_id', '')).strip()
+    cert  = data.get('certificate', '').strip()
+    chain = data.get('trust_chain', '').strip()
+    if not eid or not cert:
+        return jsonify({'error': 'enrollment_id and certificate required'}), 400
+    creds = _get_ak_creds()
+    try:
+        sc, resp = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid + '/changes', None, creds)
+        if sc >= 400:
+            return jsonify({'error': 'Cannot fetch changes: HTTP ' + str(sc)}), 502
+        changes = resp.get('changes', [])
+        if not changes:
+            return jsonify({'error': 'No pending changes found for enrollment ' + eid}), 404
+        change_id = str(changes[0]).split('/')[-1]
+        body = {
+            'certificatesAndTrustChains': [{
+                'certificate': cert,
+                'trustChain': chain if chain else None,
+                'keyAlgorithm': 'RSA',
+            }]
+        }
+        sc2, resp2 = _ak_eg_request(
+            'POST',
+            '/cps/v2/enrollments/' + eid + '/changes/' + change_id + '/input/update/third-party-csr',
+            body, creds)
+        if sc2 >= 400:
+            return jsonify({'error': 'CPS upload HTTP ' + str(sc2) + ': ' + str(resp2)[:200]}), 502
+        _cert_audit_add('sync', detail='Uploaded cert to CPS enrollment ' + eid + ' change ' + change_id)
+        return jsonify({'ok': True, 'message': 'Certificate uploaded to enrollment ' + eid + ' (change ' + change_id + ')'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/cps/acknowledge', methods=['POST'])
+def api_akamai_cps_acknowledge():
+    """Acknowledge a pending CPS change.
+    Automatically selects the correct acknowledgment path:
+      - Let's Encrypt DV  → lets-encrypt-challenges-completed
+      - OV / EV / 3rd-party → post-verification-warnings
+    """
+    data = request.get_json() or {}
+    eid  = str(data.get('enrollment_id', '')).strip()
+    if not eid:
+        return jsonify({'error': 'enrollment_id required'}), 400
+    creds = _get_ak_creds()
+    try:
+        # Get enrollment detail to determine cert / validation type
+        sc0, enr = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid, None, creds)
+        cert_type = ''
+        val_type  = ''
+        if sc0 < 400:
+            cert_type = str(enr.get('certificateType', '')).lower()
+            val_type  = str(enr.get('validationType',  '')).lower()
+
+        sc, resp = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid + '/changes', None, creds)
+        if sc >= 400:
+            return jsonify({'error': 'Cannot fetch changes: HTTP ' + str(sc)}), 502
+        changes = resp.get('changes', [])
+        if not changes:
+            return jsonify({'ok': True, 'message': 'No pending changes to acknowledge'})
+        change_id = str(changes[0]).split('/')[-1]
+
+        # Get change detail to inspect allowedInput (most reliable way to pick the right path)
+        ack_path = None
+        sc_chg, chg_detail = _ak_eg_request(
+            'GET', '/cps/v2/enrollments/' + eid + '/changes/' + change_id, None, creds)
+        if sc_chg < 400:
+            for inp in (chg_detail.get('allowedInput') or []):
+                ack = inp.get('acknowledge', inp.get('href', ''))
+                if 'lets-encrypt' in ack.lower():
+                    ack_path = ack
+                    break
+                if 'post-verification' in ack.lower() and ack_path is None:
+                    ack_path = ack
+
+        # Fallback: choose by cert type
+        if not ack_path:
+            is_le = (cert_type in ('lets-encrypt', 'let\'s-encrypt')) or val_type == 'dv'
+            if is_le:
+                ack_path = ('/cps/v2/enrollments/' + eid + '/changes/' + change_id +
+                            '/input/acknowledge/lets-encrypt-challenges-completed')
+            else:
+                ack_path = ('/cps/v2/enrollments/' + eid + '/changes/' + change_id +
+                            '/input/acknowledge/post-verification-warnings')
+
+        sc2, resp2 = _ak_eg_request('POST', ack_path, {'acknowledgement': 'acknowledge'}, creds)
+        ok = sc2 < 400
+        _cert_audit_add('check', detail='Acknowledged enrollment ' + eid + ' change ' + change_id +
+                        ' path=' + ack_path.split('/')[-1] + ' HTTP ' + str(sc2))
+        return jsonify({'ok': ok, 'ack_path': ack_path.split('/')[-1],
+                        'message': 'Acknowledged' if ok else 'Acknowledge failed: HTTP ' + str(sc2) + ' ' + str(resp2)[:120]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/akamai/cps/sprint-scan', methods=['POST'])
+def api_akamai_cps_sprint_scan():
+    """
+    Bulk sprint DV scan: iterate over one or more contracts, aggregate
+    enrollment status, DV CNAME challenges, SAN capacity, and expiry flags.
+    Also performs optional Route 53 CNAME presence checks per flagged enrollment.
+
+    Request body:
+        contracts     [str]  – list of Akamai contract IDs to scan
+        zone          str    – Route 53 hosted-zone ID (optional; enables R53 check)
+        san_threshold int    – flag if san_count >= this value  (default 85)
+        expiry_days   int    – flag certs expiring within N days (default 60)
+    """
+    import datetime as _dt
+    data          = request.get_json() or {}
+    contracts     = [c.strip() for c in data.get('contracts', []) if str(c).strip()]
+    zone_id       = data.get('zone', '').strip()
+    san_threshold = int(data.get('san_threshold', 85))
+    expiry_days   = int(data.get('expiry_days', 60))
+    creds         = _get_ak_creds()
+
+    if not contracts:
+        return jsonify({'error': 'At least one contract ID is required'}), 400
+
+    now_dt  = _dt.datetime.utcnow()
+    warn_dt = now_dt + _dt.timedelta(days=expiry_days)
+    all_enr = []
+    errors  = []
+
+    # Helper: fetch DV challenges for an enrollment's first pending change
+    def _fetch_challenges(eid, changes):
+        out = []
+        try:
+            change_id = str(changes[0]).split('/')[-1]
+            sc2, chg = _ak_eg_request(
+                'GET', '/cps/v2/enrollments/' + eid + '/changes/' + change_id, None, creds)
+            if sc2 >= 400:
+                return out
+
+            # 1) Preferred: follow allowedInput link to LE challenges resource
+            for inp in (chg.get('allowedInput') or []):
+                link = inp.get('update', inp.get('href', ''))
+                if 'lets-encrypt' in link.lower():
+                    sc3, le = _ak_eg_request('GET', link, None, creds)
+                    if sc3 < 400:
+                        raw = (le.get('dns-challenges') or le.get('dv-challenges') or
+                               le.get('dvChallenges') or [])
+                        for dc in raw:
+                            fp = dc.get('fullPath', dc.get('full_path', dc.get('token', '')))
+                            rv = dc.get('responseBody', dc.get('response', dc.get('answer', '')))
+                            out.append({
+                                'domain':    dc.get('domain', dc.get('hostname', '')),
+                                'full_path': fp,
+                                'name':      fp,
+                                'response':  rv,
+                                'value':     rv,
+                            })
+                    break
+
+            # 2) Fallback: dvChallenges directly on the change object
+            if not out:
+                for dc in (chg.get('dvChallenges') or chg.get('dv-challenges') or []):
+                    fp = dc.get('fullPath', dc.get('full_path', dc.get('token', '')))
+                    rv = dc.get('responseBody', dc.get('response', dc.get('answer', '')))
+                    out.append({
+                        'domain':    dc.get('domain', dc.get('hostname', '')),
+                        'full_path': fp,
+                        'name':      fp,
+                        'response':  rv,
+                        'value':     rv,
+                    })
+        except Exception:
+            pass
+        return out
+
+    # Helper: check R53 for a CNAME name
+    def _r53_check(cname):
+        if not zone_id or not cname:
+            return None
+        try:
+            r53    = _r53_client(creds)
+            search = cname if cname.endswith('.') else cname + '.'
+            pager  = r53.get_paginator('list_resource_record_sets')
+            for page in pager.paginate(HostedZoneId=zone_id):
+                for rr in page.get('ResourceRecordSets', []):
+                    rn = rr.get('Name', '')
+                    if rn == search or rn.rstrip('.') == cname.rstrip('.'):
+                        return 'found'
+            return 'missing'
+        except Exception:
+            return 'error'
+
+    for contract_id in contracts:
+        try:
+            raw_enrollments = []
+            next_url = '/cps/v2/enrollments?contractId=' + contract_id
+            while next_url:
+                sc, resp = _ak_eg_request('GET', next_url, None, creds)
+                if sc >= 400:
+                    errors.append({'contract': contract_id, 'error': 'CPS API HTTP ' + str(sc)})
+                    next_url = None
+                    break
+                raw_enrollments.extend(resp.get('enrollments', []))
+                next_url = resp.get('nextPageLink', None) or None
+
+            for e in raw_enrollments:
+                csr_obj   = e.get('csr', {}) or {}
+                loc       = e.get('location', '')
+                eid       = loc.split('/')[-1] if loc else str(e.get('id', ''))
+                cert_obj  = e.get('signedCert', {}) or {}
+                changes   = e.get('pendingChanges', [])
+                sans      = csr_obj.get('sans', []) or []
+                san_count = len(sans) + 1            # +1 for CN itself
+                cn        = csr_obj.get('cn', '')
+                val_type  = e.get('validationType', '').lower()
+                cert_type = e.get('certificateType', '')
+                not_after_str = cert_obj.get('notAfter', '')
+
+                status = 'active' if cert_obj else ('pending' if changes else 'inactive')
+
+                # Parse ISO expiry date
+                not_after_dt = None
+                if not_after_str:
+                    for fmt in ('%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d'):
+                        try:
+                            clean = not_after_str[:19]
+                            not_after_dt = _dt.datetime.strptime(clean, fmt[:len(clean)])
+                            break
+                        except Exception:
+                            pass
+
+                flag_dv       = bool(changes) and val_type == 'dv'
+                flag_expiry   = bool(not_after_dt and not_after_dt <= warn_dt)
+                flag_capacity = san_count >= san_threshold
+
+                # Fetch DV challenges only for enrollments that need them
+                challenges = _fetch_challenges(eid, changes) if flag_dv else []
+
+                # R53 check for first challenge CNAME (only if DV flagged & zone provided)
+                r53_status = None
+                if flag_dv and challenges and zone_id:
+                    cname = challenges[0].get('full_path') or challenges[0].get('name', '')
+                    r53_status = _r53_check(cname)
+
+                all_enr.append({
+                    'enrollment_id':   eid,
+                    'cn':              cn,
+                    'contract':        contract_id,
+                    'cert_type':       cert_type,
+                    'validation_type': val_type,
+                    'status':          status,
+                    'not_after':       not_after_str[:10] if not_after_str else '',
+                    'san_count':       san_count,
+                    'sans_preview':    sans[:5],
+                    'pending_changes': bool(changes),
+                    'flag_dv':         flag_dv,
+                    'flag_expiry':     flag_expiry,
+                    'flag_capacity':   flag_capacity,
+                    'challenges':      challenges,
+                    'r53_status':      r53_status,
+                })
+        except Exception as ex:
+            errors.append({'contract': contract_id, 'error': str(ex)})
+
+    # Sort: flagged (DV first, then expiry/capacity) then by expiry date ascending
+    all_enr.sort(key=lambda x: (
+        0 if x['flag_dv'] else (1 if (x['flag_expiry'] or x['flag_capacity']) else 2),
+        x.get('not_after', '9999') or '9999',
+    ))
+
+    flagged = sum(1 for e in all_enr if e['flag_dv'] or e['flag_expiry'] or e['flag_capacity'])
+    _cert_audit_add('check', detail='Sprint scan: ' + str(len(contracts)) + ' contract(s), ' +
+                    str(len(all_enr)) + ' enrollments, ' + str(flagged) + ' flagged')
+
+    return jsonify({
+        'enrollments': all_enr,
+        'total':       len(all_enr),
+        'flagged':     flagged,
+        'errors':      errors,
+    })
+
+
+@app.route('/api/akamai/cps/renew', methods=['POST'])
+def api_akamai_cps_renew():
+    """Trigger a renewal for an enrollment that is expiring but has no pending change.
+    POSTs to /cps/v2/enrollments/{id} with allowAutoRenew=true, or falls back to
+    triggering an empty update to nudge the renewal workflow.
+    """
+    data = request.get_json() or {}
+    eid  = str(data.get('enrollment_id', '')).strip()
+    if not eid:
+        return jsonify({'error': 'enrollment_id required'}), 400
+    creds = _get_ak_creds()
+    try:
+        # Fetch current enrollment to confirm state and get current body
+        sc0, enr = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid, None, creds)
+        if sc0 >= 400:
+            return jsonify({'error': 'Cannot fetch enrollment: HTTP ' + str(sc0)}), 502
+
+        # If there are already pending changes, nothing to trigger
+        changes = enr.get('pendingChanges', [])
+        if changes:
+            return jsonify({'ok': True, 'message': 'Enrollment already has a pending change — no renewal needed',
+                            'change_id': str(changes[0]).split('/')[-1]})
+
+        # Build a minimal renewal payload — preserve existing CSR fields
+        csr_obj = enr.get('csr', {}) or {}
+        renew_body = {
+            'csr': {
+                'cn':           csr_obj.get('cn', ''),
+                'sans':         csr_obj.get('sans', []),
+                'c':            csr_obj.get('c', ''),
+                'st':           csr_obj.get('st', ''),
+                'l':            csr_obj.get('l', ''),
+                'o':            csr_obj.get('o', ''),
+                'ou':           csr_obj.get('ou', ''),
+            },
+            'ra':                    enr.get('ra', 'lets-encrypt'),
+            'validationType':        enr.get('validationType', 'dv'),
+            'certificateType':       enr.get('certificateType', 'san'),
+            'networkConfiguration':  enr.get('networkConfiguration', {}),
+            'signatureAlgorithm':    enr.get('signatureAlgorithm', 'SHA-256'),
+            'changeManagement':      enr.get('changeManagement', False),
+            'autoRenewalStartTime':  None,
+        }
+
+        sc2, resp2 = _ak_eg_request(
+            'PUT', '/cps/v2/enrollments/' + eid +
+            '?allow-cancel-pending-changes=true&force-renewal=true',
+            renew_body, creds)
+
+        if sc2 >= 400:
+            # Some APIs return 202 on success; treat anything < 400 as ok
+            return jsonify({'error': 'Renewal request failed: HTTP ' + str(sc2) +
+                            ' — ' + str(resp2)[:200]}), 502
+
+        change_id = None
+        if isinstance(resp2, dict):
+            loc = resp2.get('enrollment', '') or resp2.get('location', '') or ''
+            if not loc:
+                # Re-fetch changes to get the new change ID
+                sc3, ch = _ak_eg_request('GET', '/cps/v2/enrollments/' + eid + '/changes', None, creds)
+                if sc3 < 400:
+                    chlist = ch.get('changes', [])
+                    change_id = str(chlist[0]).split('/')[-1] if chlist else None
+            else:
+                change_id = loc.split('/')[-1]
+
+        _cert_audit_add('sync', detail='Renewal triggered for enrollment ' + eid +
+                        (' change ' + change_id if change_id else '') + ' HTTP ' + str(sc2))
+        return jsonify({'ok': True,
+                        'message': 'Renewal submitted for enrollment ' + eid,
+                        'change_id': change_id})
+    except Exception as ex:
+        return jsonify({'error': str(ex)}), 500
+
+
 @app.route('/secrets')
 
 def secrets_page():
@@ -12644,4 +16120,3 @@ if __name__=='__main__':
                 time.sleep(1)
         else:
             raise
-

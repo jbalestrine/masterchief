@@ -1,0 +1,271 @@
+# User Management Module for Enterprise Hub-and-Spoke Architecture
+# This module creates Azure AD groups, custom RBAC roles, and role assignments
+
+terraform {
+  required_providers {
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.0"
+    }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+}
+
+# Azure AD Groups for different roles
+resource "azuread_group" "platform_admins" {
+  count = var.create_platform_admin_group ? 1 : 0
+
+  display_name     = var.platform_admin_group_name
+  description      = "Platform Administrators - Full access to all resources"
+  security_enabled = true
+  owners           = var.platform_admin_owners
+  members          = var.platform_admin_members
+}
+
+resource "azuread_group" "network_admins" {
+  count = var.create_network_admin_group ? 1 : 0
+
+  display_name     = var.network_admin_group_name
+  description      = "Network Administrators - Access to networking resources"
+  security_enabled = true
+  owners           = var.network_admin_owners
+  members          = var.network_admin_members
+}
+
+resource "azuread_group" "security_admins" {
+  count = var.create_security_admin_group ? 1 : 0
+
+  display_name     = var.security_admin_group_name
+  description      = "Security Administrators - Access to security resources"
+  security_enabled = true
+  owners           = var.security_admin_owners
+  members          = var.security_admin_members
+}
+
+resource "azuread_group" "developers" {
+  count = var.create_developer_group ? 1 : 0
+
+  display_name     = var.developer_group_name
+  description      = "Developers - Access to development resources"
+  security_enabled = true
+  owners           = var.developer_owners
+  members          = var.developer_members
+}
+
+resource "azuread_group" "readers" {
+  count = var.create_reader_group ? 1 : 0
+
+  display_name     = var.reader_group_name
+  description      = "Readers - Read-only access to resources"
+  security_enabled = true
+  owners           = var.reader_owners
+  members          = var.reader_members
+}
+
+# Custom RBAC Roles
+resource "azurerm_role_definition" "platform_admin" {
+  count = var.create_custom_roles ? 1 : 0
+
+  name        = var.platform_admin_role_name
+  scope       = var.scope
+  description = "Custom Platform Administrator role with elevated permissions"
+
+  permissions {
+    actions = [
+      "*",
+    ]
+    not_actions = [
+      "Microsoft.Authorization/*/Delete",
+      "Microsoft.Authorization/elevateAccess/Action",
+    ]
+  }
+
+  assignable_scopes = var.assignable_scopes
+}
+
+resource "azurerm_role_definition" "network_admin" {
+  count = var.create_custom_roles ? 1 : 0
+
+  name        = var.network_admin_role_name
+  scope       = var.scope
+  description = "Custom Network Administrator role"
+
+  permissions {
+    actions = [
+      "Microsoft.Network/*",
+      "Microsoft.Compute/virtualMachines/read",
+      "Microsoft.Compute/virtualMachines/start/action",
+      "Microsoft.Compute/virtualMachines/restart/action",
+      "Microsoft.Compute/virtualMachines/deallocate/action",
+      "Microsoft.Resources/subscriptions/resourceGroups/read",
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = var.assignable_scopes
+}
+
+resource "azurerm_role_definition" "security_admin" {
+  count = var.create_custom_roles ? 1 : 0
+
+  name        = var.security_admin_role_name
+  scope       = var.scope
+  description = "Custom Security Administrator role"
+
+  permissions {
+    actions = [
+      "Microsoft.Security/*",
+      "Microsoft.KeyVault/*",
+      "Microsoft.Authorization/policyAssignments/*",
+      "Microsoft.Authorization/policyDefinitions/*",
+      "Microsoft.Authorization/policySetDefinitions/*",
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = var.assignable_scopes
+}
+
+resource "azurerm_role_definition" "aks_admin" {
+  count = var.create_custom_roles && var.enable_aks_rbac ? 1 : 0
+
+  name        = var.aks_admin_role_name
+  scope       = var.scope
+  description = "Custom AKS Administrator role"
+
+  permissions {
+    actions = [
+      "Microsoft.ContainerService/managedClusters/*",
+      "Microsoft.ContainerService/managedClusters/agentPools/*",
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = var.assignable_scopes
+}
+
+# Role Assignments for Groups
+resource "azurerm_role_assignment" "platform_admin_subscription" {
+  count = var.create_platform_admin_group && var.assign_platform_admin_role ? 1 : 0
+
+  scope                = var.scope
+  role_definition_name = var.create_custom_roles ? azurerm_role_definition.platform_admin[0].name : "Owner"
+  principal_id         = azuread_group.platform_admins[0].object_id
+}
+
+resource "azurerm_role_assignment" "network_admin_hub" {
+  count = var.create_network_admin_group && var.assign_network_admin_role ? 1 : 0
+
+  scope                = var.hub_scope
+  role_definition_name = var.create_custom_roles ? azurerm_role_definition.network_admin[0].name : "Network Contributor"
+  principal_id         = azuread_group.network_admins[0].object_id
+}
+
+resource "azurerm_role_assignment" "security_admin_subscription" {
+  count = var.create_security_admin_group && var.assign_security_admin_role ? 1 : 0
+
+  scope                = var.scope
+  role_definition_name = var.create_custom_roles ? azurerm_role_definition.security_admin[0].name : "Security Admin"
+  principal_id         = azuread_group.security_admins[0].object_id
+}
+
+resource "azurerm_role_assignment" "developer_spoke" {
+  count = var.create_developer_group && var.assign_developer_role ? 1 : 0
+
+  scope                = var.spoke_scope
+  role_definition_name = "Contributor"
+  principal_id         = azuread_group.developers[0].object_id
+}
+
+resource "azurerm_role_assignment" "reader_subscription" {
+  count = var.create_reader_group && var.assign_reader_role ? 1 : 0
+
+  scope                = var.scope
+  role_definition_name = "Reader"
+  principal_id         = azuread_group.readers[0].object_id
+}
+
+# AKS-specific role assignments
+resource "azurerm_role_assignment" "aks_admin_spoke" {
+  count = var.create_custom_roles && var.enable_aks_rbac && var.assign_aks_admin_role ? 1 : 0
+
+  scope                = var.spoke_scope
+  role_definition_name = azurerm_role_definition.aks_admin[0].name
+  principal_id         = var.aks_admin_principal_id
+}
+
+# Azure AD Application for AKS (if needed)
+resource "azuread_application" "aks" {
+  count = var.create_aks_ad_application ? 1 : 0
+
+  display_name = var.aks_ad_app_name
+  owners       = var.aks_ad_app_owners
+}
+
+resource "azuread_service_principal" "aks" {
+  count = var.create_aks_ad_application ? 1 : 0
+
+  application_id = azuread_application.aks[0].application_id
+  owners         = var.aks_ad_app_owners
+}
+
+resource "azuread_service_principal_password" "aks" {
+  count = var.create_aks_ad_application ? 1 : 0
+
+  service_principal_id = azuread_service_principal.aks[0].object_id
+  end_date             = var.aks_sp_password_end_date
+}
+
+# Azure AD Groups for AKS RBAC (if enabled)
+resource "azuread_group" "aks_cluster_admins" {
+  count = var.enable_aks_rbac && var.create_aks_cluster_admin_group ? 1 : 0
+
+  display_name     = var.aks_cluster_admin_group_name
+  description      = "AKS Cluster Administrators"
+  security_enabled = true
+  owners           = var.aks_cluster_admin_owners
+  members          = var.aks_cluster_admin_members
+}
+
+resource "azuread_group" "aks_cluster_users" {
+  count = var.enable_aks_rbac && var.create_aks_cluster_user_group ? 1 : 0
+
+  display_name     = var.aks_cluster_user_group_name
+  description      = "AKS Cluster Users"
+  security_enabled = true
+  owners           = var.aks_cluster_user_owners
+  members          = var.aks_cluster_user_members
+}
+
+# Azure Policy Assignments for governance
+resource "azurerm_policy_assignment" "subscription_compliance" {
+  count = var.enable_policy_assignments ? 1 : 0
+
+  name                 = var.policy_assignment_name
+  scope                = var.scope
+  policy_definition_id = var.policy_definition_id
+  description          = "Enterprise compliance policy assignment"
+  display_name         = var.policy_display_name
+
+  parameters = var.policy_parameters
+}
+
+# Management Group role assignments (if using management groups)
+resource "azurerm_role_assignment" "mg_platform_admin" {
+  count = var.management_group_id != "" && var.assign_mg_roles ? 1 : 0
+
+  scope                = "/providers/Microsoft.Management/managementGroups/${var.management_group_id}"
+  role_definition_name = "Owner"
+  principal_id         = var.mg_platform_admin_principal_id
+}
+
+resource "azurerm_role_assignment" "mg_reader" {
+  count = var.management_group_id != "" && var.assign_mg_roles ? 1 : 0
+
+  scope                = "/providers/Microsoft.Management/managementGroups/${var.management_group_id}"
+  role_definition_name = "Reader"
+  principal_id         = var.mg_reader_principal_id
+}

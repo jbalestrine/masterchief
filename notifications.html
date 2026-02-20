@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notifications - MasterChief</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;line-height:1.6;}
+.container{max-width:1400px;margin:0 auto;padding:20px;}
+header{background:#2d2d2d;padding:20px;margin-bottom:30px;border-bottom:3px solid #4CAF50;}
+h1{color:#4CAF50;font-size:2.5em;margin-bottom:10px;}
+.subtitle{color:#888;font-size:1.1em;}
+nav{background:#252525;padding:15px;margin-bottom:30px;border-radius:8px;}
+nav a{color:#4CAF50;text-decoration:none;margin-right:20px;padding:8px 15px;border-radius:5px;display:inline-block;transition:all 0.3s;}
+nav a:hover,nav a.active{background:#4CAF50;color:#fff;}
+.card{background:#2d2d2d;padding:25px;border-radius:10px;border-left:4px solid #4CAF50;box-shadow:0 4px 6px rgba(0,0,0,0.3);}
+.card h3{color:#4CAF50;margin-bottom:15px;font-size:1.4em;}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th,td{padding:12px;text-align:left;border-bottom:1px solid #3a3a3a;}
+th{background:#252525;color:#4CAF50;font-weight:bold;}
+tr:hover{background:#333;}
+.btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;transition:all 0.3s;}
+.btn:hover{background:#45a049;transform:translateY(-2px);}
+.btn-danger{background:#f44336;}.btn-danger:hover{background:#da190b;}
+.btn-warning{background:#ff9800;}.btn-warning:hover{background:#e68900;}
+.btn-info{background:#2196F3;}.btn-info:hover{background:#0b7dda;}
+.btn-sm{padding:5px 10px;font-size:0.85em;}
+.form-group{margin-bottom:20px;}
+label{display:block;margin-bottom:8px;color:#4CAF50;font-weight:bold;}
+input,textarea,select{width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#4CAF50;}
+.status-badge{padding:5px 12px;border-radius:15px;font-size:0.85em;font-weight:bold;}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;}
+.modal-content{background:#2d2d2d;margin:50px auto;padding:30px;border-radius:10px;max-width:700px;position:relative;}
+.close{position:absolute;top:15px;right:20px;font-size:30px;cursor:pointer;color:#888;}
+.close:hover{color:#4CAF50;}
+
+/* Page-specific styles */
+.page-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.badge-count{background:#f44336;color:#fff;border-radius:50%;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:0.85em;font-weight:bold;margin-left:10px;vertical-align:middle;}
+.badge-count.zero{background:#555;}
+.tabs{display:flex;gap:0;margin-bottom:25px;border-bottom:2px solid #3a3a3a;}
+.tab-btn{background:none;color:#888;border:none;padding:14px 28px;cursor:pointer;font-size:1em;font-weight:bold;border-bottom:3px solid transparent;transition:all 0.3s;margin-bottom:-2px;}
+.tab-btn:hover{color:#e0e0e0;}
+.tab-btn.active{color:#4CAF50;border-bottom-color:#4CAF50;}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* Inbox */
+.inbox-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;}
+.inbox-toolbar select{width:auto;min-width:160px;}
+.notif-card{background:#2d2d2d;border-radius:8px;padding:18px 20px;margin-bottom:12px;display:flex;align-items:flex-start;gap:15px;border-left:4px solid #3a3a3a;transition:all 0.3s;cursor:pointer;position:relative;}
+.notif-card.unread{border-left-color:#2196F3;background:#2f2f3a;}
+.notif-card.read{opacity:0.6;}
+.notif-card:hover{background:#353535;}
+.notif-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0;color:#fff;}
+.notif-icon.info{background:#2196F3;}
+.notif-icon.warning{background:#ff9800;}
+.notif-icon.error{background:#f44336;}
+.notif-icon.success{background:#4CAF50;}
+.notif-body{flex:1;min-width:0;}
+.notif-title{font-weight:bold;font-size:1.05em;margin-bottom:4px;color:#e0e0e0;}
+.notif-message{color:#aaa;font-size:0.95em;margin-bottom:6px;}
+.notif-meta{display:flex;gap:15px;font-size:0.8em;color:#666;}
+.notif-meta span{display:inline-flex;align-items:center;gap:4px;}
+.notif-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0;}
+.notif-empty{text-align:center;padding:60px 20px;color:#666;font-size:1.1em;}
+
+/* Channels */
+.channels-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px;}
+.channel-card{background:#2d2d2d;border-radius:10px;padding:22px;border-left:4px solid #4CAF50;box-shadow:0 4px 6px rgba(0,0,0,0.3);}
+.channel-card .channel-header{display:flex;align-items:center;gap:12px;margin-bottom:15px;}
+.channel-card .channel-icon{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.4em;background:#252525;color:#4CAF50;}
+.channel-card .channel-name{font-size:1.2em;font-weight:bold;color:#e0e0e0;}
+.channel-card .channel-type{font-size:0.85em;color:#888;text-transform:uppercase;}
+.channel-card .channel-footer{display:flex;justify-content:space-between;align-items:center;margin-top:15px;flex-wrap:wrap;gap:8px;}
+.status-active{background:#1b3a1b;color:#4CAF50;}
+.status-inactive{background:#3a1b1b;color:#f44336;}
+.status-pending{background:#3a351b;color:#ff9800;}
+
+/* Rules */
+.toggle-switch{position:relative;display:inline-block;width:46px;height:24px;}
+.toggle-switch input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#555;transition:0.3s;border-radius:24px;}
+.toggle-slider:before{content:"";position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:0.3s;border-radius:50%;}
+.toggle-switch input:checked+.toggle-slider{background:#4CAF50;}
+.toggle-switch input:checked+.toggle-slider:before{transform:translateX(22px);}
+
+/* Dynamic config fields */
+.config-fields{margin-top:10px;}
+.config-fields .form-group{margin-bottom:12px;}
+
+/* Scrollable modal */
+.modal-content{max-height:85vh;overflow-y:auto;}
+
+@media(max-width:768px){
+  .channels-grid{grid-template-columns:1fr;}
+  .inbox-toolbar{flex-direction:column;align-items:stretch;}
+  .notif-card{flex-direction:column;}
+  .notif-actions{flex-direction:row;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h1>Notification Center <span id="unreadBadge" class="badge-count zero">0</span></h1>
+        <p class="subtitle">Manage alerts, channels, and notification rules</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <nav>
+    <a href="/">Dashboard</a>
+    <a href="/echo-chat">&#127769; Echo Chat</a>
+    <a href="/scripts">Scripts</a>
+    <a href="/processes">Processes</a>
+    <a href="/services">Services</a>
+    <a href="/addons">Addons</a>
+    <a href="/echo-train">Training</a>
+    <a href="/pipelines">Pipelines</a>
+    <a href="/cloud">Cloud</a>
+    <a href="/secrets">Secrets</a>
+    <a href="/echo-memory">Memory</a>
+    <a href="/marketplace">Marketplace</a>
+    <a href="/notifications" class="active">Alerts</a>
+    <a href="/rbac">Access</a>
+  </nav>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="inbox">Inbox</button>
+    <button class="tab-btn" data-tab="channels">Channels</button>
+    <button class="tab-btn" data-tab="rules">Rules</button>
+  </div>
+
+  <!-- ==================== INBOX TAB ==================== -->
+  <div id="tab-inbox" class="tab-content active">
+    <div class="inbox-toolbar">
+      <div>
+        <button class="btn" onclick="markAllRead()">Mark All Read</button>
+      </div>
+      <div>
+        <select id="inboxFilter" onchange="loadNotifications()">
+          <option value="all">All</option>
+          <option value="unread">Unread</option>
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="error">Error</option>
+          <option value="success">Success</option>
+        </select>
+      </div>
+    </div>
+    <div id="notifList"></div>
+  </div>
+
+  <!-- ==================== CHANNELS TAB ==================== -->
+  <div id="tab-channels" class="tab-content">
+    <div style="margin-bottom:20px;">
+      <button class="btn" onclick="openChannelModal()">+ Add Channel</button>
+    </div>
+    <div id="channelGrid" class="channels-grid"></div>
+  </div>
+
+  <!-- ==================== RULES TAB ==================== -->
+  <div id="tab-rules" class="tab-content">
+    <div style="margin-bottom:20px;">
+      <button class="btn" onclick="openRuleModal()">+ Add Rule</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Event Type</th>
+            <th>Severity</th>
+            <th>Channel</th>
+            <th>Active</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rulesTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== CHANNEL MODAL ==================== -->
+<div id="channelModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('channelModal')">&times;</span>
+    <h3 style="color:#4CAF50;margin-bottom:20px;" id="channelModalTitle">Add Channel</h3>
+    <form id="channelForm" onsubmit="saveChannel(event)">
+      <input type="hidden" id="channelEditId" value="">
+      <div class="form-group">
+        <label for="channelName">Channel Name</label>
+        <input type="text" id="channelName" required placeholder="e.g. Slack Ops Channel">
+      </div>
+      <div class="form-group">
+        <label for="channelType">Type</label>
+        <select id="channelType" onchange="renderChannelConfigFields()" required>
+          <option value="">-- Select Type --</option>
+          <option value="slack">Slack</option>
+          <option value="teams">Microsoft Teams</option>
+          <option value="discord">Discord</option>
+          <option value="email">Email</option>
+          <option value="in_app">In-App</option>
+        </select>
+      </div>
+      <div id="channelConfigFields" class="config-fields"></div>
+      <button type="submit" class="btn" style="margin-top:10px;">Save Channel</button>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== RULE MODAL ==================== -->
+<div id="ruleModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeModal('ruleModal')">&times;</span>
+    <h3 style="color:#4CAF50;margin-bottom:20px;" id="ruleModalTitle">Add Rule</h3>
+    <form id="ruleForm" onsubmit="saveRule(event)">
+      <input type="hidden" id="ruleEditId" value="">
+      <div class="form-group">
+        <label for="ruleName">Rule Name</label>
+        <input type="text" id="ruleName" required placeholder="e.g. Alert on pipeline failure">
+      </div>
+      <div class="form-group">
+        <label for="ruleEventType">Event Type</label>
+        <select id="ruleEventType" required>
+          <option value="">-- Select Event --</option>
+          <option value="pipeline_completed">Pipeline Completed</option>
+          <option value="pipeline_failed">Pipeline Failed</option>
+          <option value="deployment_started">Deployment Started</option>
+          <option value="deployment_completed">Deployment Completed</option>
+          <option value="deployment_failed">Deployment Failed</option>
+          <option value="training_completed">Training Completed</option>
+          <option value="security_alert">Security Alert</option>
+          <option value="system_alert">System Alert</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="ruleSeverity">Severity Filter</label>
+        <select id="ruleSeverity" required>
+          <option value="all">All</option>
+          <option value="info">Info</option>
+          <option value="warning">Warning</option>
+          <option value="error">Error</option>
+          <option value="critical">Critical</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="ruleChannel">Channel</label>
+        <select id="ruleChannel" required>
+          <option value="">-- Select Channel --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label style="display:inline-flex;align-items:center;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="ruleActive" checked style="width:auto;">
+          Active
+        </label>
+      </div>
+      <button type="submit" class="btn" style="margin-top:10px;">Save Rule</button>
+    </form>
+  </div>
+</div>
+
+<script>
+// ======================== STATE ========================
+let channels = [];
+let rules = [];
+let notifications = [];
+let pollTimer = null;
+
+// ======================== TABS ========================
+document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+
+    if (btn.dataset.tab === 'inbox') loadNotifications();
+    if (btn.dataset.tab === 'channels') loadChannels();
+    if (btn.dataset.tab === 'rules') loadRules();
+  });
+});
+
+// ======================== API HELPERS ========================
+function api(method, url, body) {
+  var opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(url, opts).then(function(r) { return r.json(); });
+}
+
+// ======================== BADGE POLLING ========================
+function pollUnreadCount() {
+  api('GET', '/api/notifications/count').then(function(data) {
+    if (data.ok) {
+      var count = data.result.unread || data.result.count || 0;
+      var badge = document.getElementById('unreadBadge');
+      badge.textContent = count;
+      if (count > 0) {
+        badge.classList.remove('zero');
+      } else {
+        badge.classList.add('zero');
+      }
+    }
+  }).catch(function() {});
+}
+
+function startPolling() {
+  pollUnreadCount();
+  pollTimer = setInterval(pollUnreadCount, 30000);
+}
+
+// ======================== NOTIFICATIONS / INBOX ========================
+function severityIcon(sev) {
+  var icons = { info: '\u2139\uFE0F', warning: '\u26A0\uFE0F', error: '\u274C', success: '\u2705' };
+  return icons[sev] || '\u2139\uFE0F';
+}
+
+function severityClass(sev) {
+  var map = { info: 'info', warning: 'warning', error: 'error', success: 'success' };
+  return map[sev] || 'info';
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  var diff = Date.now() - new Date(ts).getTime();
+  var sec = Math.floor(diff / 1000);
+  if (sec < 60) return sec + 's ago';
+  var min = Math.floor(sec / 60);
+  if (min < 60) return min + 'm ago';
+  var hr = Math.floor(min / 60);
+  if (hr < 24) return hr + 'h ago';
+  var d = Math.floor(hr / 24);
+  return d + 'd ago';
+}
+
+function loadNotifications() {
+  var filter = document.getElementById('inboxFilter').value;
+  var params = [];
+  if (filter === 'unread') params.push('unread=true');
+  else if (['info', 'warning', 'error', 'success'].indexOf(filter) !== -1) params.push('severity=' + filter);
+  var qs = params.length ? '?' + params.join('&') : '';
+
+  api('GET', '/api/notifications' + qs).then(function(data) {
+    if (!data.ok) { renderNotifList([]); return; }
+    notifications = data.result || [];
+    renderNotifList(notifications);
+  }).catch(function() {
+    renderNotifList([]);
+  });
+}
+
+function renderNotifList(items) {
+  var container = document.getElementById('notifList');
+  if (!items.length) {
+    container.innerHTML = '<div class="notif-empty">No notifications to display.</div>';
+    return;
+  }
+  var html = '';
+  items.forEach(function(n) {
+    var readClass = n.read ? 'read' : 'unread';
+    var sev = n.severity || 'info';
+    html += '<div class="notif-card ' + readClass + '" data-id="' + n.id + '" onclick="markRead(\'' + n.id + '\')">';
+    html += '  <div class="notif-icon ' + severityClass(sev) + '">' + severityIcon(sev) + '</div>';
+    html += '  <div class="notif-body">';
+    html += '    <div class="notif-title">' + escHtml(n.title || 'Notification') + '</div>';
+    html += '    <div class="notif-message">' + escHtml(n.message || '') + '</div>';
+    html += '    <div class="notif-meta">';
+    html += '      <span>Source: ' + escHtml(n.source || 'system') + '</span>';
+    html += '      <span>' + escHtml(timeAgo(n.timestamp || n.created_at)) + '</span>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <div class="notif-actions">';
+    html += '    <button class="btn btn-danger btn-sm" onclick="deleteNotif(event,\'' + n.id + '\')">Delete</button>';
+    html += '  </div>';
+    html += '</div>';
+  });
+  container.innerHTML = html;
+}
+
+function markRead(nid) {
+  api('POST', '/api/notifications/' + nid + '/read').then(function(data) {
+    if (data.ok) {
+      loadNotifications();
+      pollUnreadCount();
+    }
+  }).catch(function() {});
+}
+
+function markAllRead() {
+  api('POST', '/api/notifications/read_all').then(function(data) {
+    if (data.ok) {
+      loadNotifications();
+      pollUnreadCount();
+    }
+  }).catch(function() {});
+}
+
+function deleteNotif(e, nid) {
+  e.stopPropagation();
+  if (!confirm('Delete this notification?')) return;
+  api('DELETE', '/api/notifications/' + nid).then(function(data) {
+    if (data.ok) {
+      loadNotifications();
+      pollUnreadCount();
+    }
+  }).catch(function() {});
+}
+
+// ======================== CHANNELS ========================
+function channelTypeIcon(type) {
+  var icons = {
+    slack: '\uD83D\uDCAC',
+    teams: '\uD83D\uDCE3',
+    discord: '\uD83C\uDFAE',
+    email: '\u2709\uFE0F',
+    in_app: '\uD83D\uDD14'
+  };
+  return icons[type] || '\uD83D\uDD14';
+}
+
+function loadChannels() {
+  api('GET', '/api/notifications/channels').then(function(data) {
+    if (!data.ok) { channels = []; renderChannels(); return; }
+    channels = data.result || [];
+    renderChannels();
+  }).catch(function() {
+    channels = [];
+    renderChannels();
+  });
+}
+
+function renderChannels() {
+  var grid = document.getElementById('channelGrid');
+  if (!channels.length) {
+    grid.innerHTML = '<div class="notif-empty" style="grid-column:1/-1;">No channels configured. Click "Add Channel" to create one.</div>';
+    return;
+  }
+  var html = '';
+  channels.forEach(function(ch) {
+    var statusClass = ch.status === 'active' ? 'status-active' : (ch.status === 'pending' ? 'status-pending' : 'status-inactive');
+    var statusLabel = ch.status || 'active';
+    html += '<div class="channel-card">';
+    html += '  <div class="channel-header">';
+    html += '    <div class="channel-icon">' + channelTypeIcon(ch.type) + '</div>';
+    html += '    <div>';
+    html += '      <div class="channel-name">' + escHtml(ch.name) + '</div>';
+    html += '      <div class="channel-type">' + escHtml(ch.type) + '</div>';
+    html += '    </div>';
+    html += '    <span class="status-badge ' + statusClass + '" style="margin-left:auto;">' + escHtml(statusLabel) + '</span>';
+    html += '  </div>';
+    html += '  <div class="channel-footer">';
+    html += '    <div>';
+    html += '      <button class="btn btn-info btn-sm" onclick="testChannel(\'' + ch.id + '\')">Test</button>';
+    html += '      <button class="btn btn-sm" onclick="editChannel(\'' + ch.id + '\')">Edit</button>';
+    html += '      <button class="btn btn-danger btn-sm" onclick="deleteChannel(\'' + ch.id + '\')">Delete</button>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '</div>';
+  });
+  grid.innerHTML = html;
+}
+
+function renderChannelConfigFields() {
+  var type = document.getElementById('channelType').value;
+  var container = document.getElementById('channelConfigFields');
+  var html = '';
+
+  if (type === 'slack' || type === 'teams' || type === 'discord') {
+    html += '<div class="form-group">';
+    html += '  <label for="cfgWebhookUrl">Webhook URL</label>';
+    html += '  <input type="url" id="cfgWebhookUrl" placeholder="https://hooks.example.com/..." required>';
+    html += '</div>';
+  } else if (type === 'email') {
+    html += '<div class="form-group"><label for="cfgSmtpHost">SMTP Host</label><input type="text" id="cfgSmtpHost" placeholder="smtp.example.com" required></div>';
+    html += '<div class="form-group"><label for="cfgSmtpPort">SMTP Port</label><input type="number" id="cfgSmtpPort" placeholder="587" required></div>';
+    html += '<div class="form-group"><label for="cfgSmtpUser">SMTP User</label><input type="text" id="cfgSmtpUser" placeholder="user@example.com" required></div>';
+    html += '<div class="form-group"><label for="cfgSmtpPass">SMTP Password</label><input type="password" id="cfgSmtpPass" placeholder="password" required></div>';
+    html += '<div class="form-group"><label for="cfgFromEmail">From Email</label><input type="email" id="cfgFromEmail" placeholder="alerts@example.com" required></div>';
+    html += '<div class="form-group"><label for="cfgToEmail">To Email</label><input type="email" id="cfgToEmail" placeholder="ops@example.com" required></div>';
+  }
+  // in_app: no extra fields
+
+  container.innerHTML = html;
+}
+
+function getChannelConfig() {
+  var type = document.getElementById('channelType').value;
+  var config = {};
+  if (type === 'slack' || type === 'teams' || type === 'discord') {
+    config.webhook_url = document.getElementById('cfgWebhookUrl').value;
+  } else if (type === 'email') {
+    config.smtp_host = document.getElementById('cfgSmtpHost').value;
+    config.smtp_port = parseInt(document.getElementById('cfgSmtpPort').value, 10);
+    config.smtp_user = document.getElementById('cfgSmtpUser').value;
+    config.smtp_pass = document.getElementById('cfgSmtpPass').value;
+    config.from_email = document.getElementById('cfgFromEmail').value;
+    config.to_email = document.getElementById('cfgToEmail').value;
+  }
+  return config;
+}
+
+function setChannelConfig(type, config) {
+  if (!config) return;
+  setTimeout(function() {
+    if ((type === 'slack' || type === 'teams' || type === 'discord') && config.webhook_url) {
+      var el = document.getElementById('cfgWebhookUrl');
+      if (el) el.value = config.webhook_url;
+    } else if (type === 'email') {
+      var fields = ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'from_email', 'to_email'];
+      var ids = ['cfgSmtpHost', 'cfgSmtpPort', 'cfgSmtpUser', 'cfgSmtpPass', 'cfgFromEmail', 'cfgToEmail'];
+      for (var i = 0; i < fields.length; i++) {
+        var el = document.getElementById(ids[i]);
+        if (el && config[fields[i]] !== undefined) el.value = config[fields[i]];
+      }
+    }
+  }, 50);
+}
+
+function openChannelModal(ch) {
+  document.getElementById('channelEditId').value = '';
+  document.getElementById('channelModalTitle').textContent = 'Add Channel';
+  document.getElementById('channelForm').reset();
+  document.getElementById('channelConfigFields').innerHTML = '';
+  if (ch) {
+    document.getElementById('channelEditId').value = ch.id;
+    document.getElementById('channelModalTitle').textContent = 'Edit Channel';
+    document.getElementById('channelName').value = ch.name;
+    document.getElementById('channelType').value = ch.type;
+    renderChannelConfigFields();
+    setChannelConfig(ch.type, ch.config);
+  }
+  document.getElementById('channelModal').style.display = 'block';
+}
+
+function saveChannel(e) {
+  e.preventDefault();
+  var editId = document.getElementById('channelEditId').value;
+  var payload = {
+    name: document.getElementById('channelName').value,
+    type: document.getElementById('channelType').value,
+    config: getChannelConfig()
+  };
+
+  var method, url;
+  if (editId) {
+    method = 'PUT';
+    url = '/api/notifications/channels/' + editId;
+  } else {
+    method = 'POST';
+    url = '/api/notifications/channels';
+  }
+
+  api(method, url, payload).then(function(data) {
+    if (data.ok) {
+      closeModal('channelModal');
+      loadChannels();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to save channel'));
+    }
+  }).catch(function() {
+    alert('Network error saving channel');
+  });
+}
+
+function editChannel(cid) {
+  var ch = channels.find(function(c) { return c.id === cid || c.id === parseInt(cid, 10); });
+  if (ch) openChannelModal(ch);
+}
+
+function deleteChannel(cid) {
+  if (!confirm('Delete this channel?')) return;
+  api('DELETE', '/api/notifications/channels/' + cid).then(function(data) {
+    if (data.ok) loadChannels();
+  }).catch(function() {});
+}
+
+function testChannel(cid) {
+  api('POST', '/api/notifications/channels/' + cid + '/test').then(function(data) {
+    if (data.ok) {
+      alert('Test notification sent successfully!');
+    } else {
+      alert('Test failed: ' + (data.error || 'Unknown error'));
+    }
+  }).catch(function() {
+    alert('Network error testing channel');
+  });
+}
+
+// ======================== RULES ========================
+function loadRules() {
+  // Also load channels for the rule channel dropdown
+  api('GET', '/api/notifications/channels').then(function(chData) {
+    if (chData.ok) channels = chData.result || [];
+    return api('GET', '/api/notifications/rules');
+  }).then(function(data) {
+    if (!data.ok) { rules = []; renderRules(); return; }
+    rules = data.result || [];
+    renderRules();
+  }).catch(function() {
+    rules = [];
+    renderRules();
+  });
+}
+
+function renderRules() {
+  var tbody = document.getElementById('rulesTableBody');
+  if (!rules.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#666;padding:40px;">No rules configured. Click "Add Rule" to create one.</td></tr>';
+    return;
+  }
+
+  var html = '';
+  rules.forEach(function(r) {
+    var chName = '—';
+    var ch = channels.find(function(c) { return c.id === r.channel_id || String(c.id) === String(r.channel_id); });
+    if (ch) chName = ch.name;
+
+    html += '<tr>';
+    html += '  <td>' + escHtml(r.name || '') + '</td>';
+    html += '  <td>' + escHtml(r.event_type || '') + '</td>';
+    html += '  <td>' + escHtml(r.severity || 'all') + '</td>';
+    html += '  <td>' + escHtml(chName) + '</td>';
+    html += '  <td>';
+    html += '    <label class="toggle-switch">';
+    html += '      <input type="checkbox" ' + (r.active ? 'checked' : '') + ' onchange="toggleRule(\'' + r.id + '\', this.checked)">';
+    html += '      <span class="toggle-slider"></span>';
+    html += '    </label>';
+    html += '  </td>';
+    html += '  <td>';
+    html += '    <button class="btn btn-sm" onclick="editRule(\'' + r.id + '\')">Edit</button>';
+    html += '    <button class="btn btn-danger btn-sm" onclick="deleteRule(\'' + r.id + '\')">Delete</button>';
+    html += '  </td>';
+    html += '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+function populateRuleChannelSelect(selectedId) {
+  var sel = document.getElementById('ruleChannel');
+  sel.innerHTML = '<option value="">-- Select Channel --</option>';
+  channels.forEach(function(ch) {
+    var opt = document.createElement('option');
+    opt.value = ch.id;
+    opt.textContent = ch.name + ' (' + ch.type + ')';
+    if (String(ch.id) === String(selectedId)) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function openRuleModal(r) {
+  document.getElementById('ruleEditId').value = '';
+  document.getElementById('ruleModalTitle').textContent = 'Add Rule';
+  document.getElementById('ruleForm').reset();
+  document.getElementById('ruleActive').checked = true;
+  populateRuleChannelSelect('');
+
+  if (r) {
+    document.getElementById('ruleEditId').value = r.id;
+    document.getElementById('ruleModalTitle').textContent = 'Edit Rule';
+    document.getElementById('ruleName').value = r.name;
+    document.getElementById('ruleEventType').value = r.event_type;
+    document.getElementById('ruleSeverity').value = r.severity || 'all';
+    populateRuleChannelSelect(r.channel_id);
+    document.getElementById('ruleActive').checked = !!r.active;
+  }
+  document.getElementById('ruleModal').style.display = 'block';
+}
+
+function saveRule(e) {
+  e.preventDefault();
+  var editId = document.getElementById('ruleEditId').value;
+  var payload = {
+    name: document.getElementById('ruleName').value,
+    event_type: document.getElementById('ruleEventType').value,
+    severity: document.getElementById('ruleSeverity').value,
+    channel_id: document.getElementById('ruleChannel').value,
+    active: document.getElementById('ruleActive').checked
+  };
+
+  var method, url;
+  if (editId) {
+    method = 'PUT';
+    url = '/api/notifications/rules/' + editId;
+  } else {
+    method = 'POST';
+    url = '/api/notifications/rules';
+  }
+
+  api(method, url, payload).then(function(data) {
+    if (data.ok) {
+      closeModal('ruleModal');
+      loadRules();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to save rule'));
+    }
+  }).catch(function() {
+    alert('Network error saving rule');
+  });
+}
+
+function editRule(rid) {
+  var r = rules.find(function(rule) { return rule.id === rid || String(rule.id) === String(rid); });
+  if (r) openRuleModal(r);
+}
+
+function deleteRule(rid) {
+  if (!confirm('Delete this rule?')) return;
+  api('DELETE', '/api/notifications/rules/' + rid).then(function(data) {
+    if (data.ok) loadRules();
+  }).catch(function() {});
+}
+
+function toggleRule(rid, active) {
+  var r = rules.find(function(rule) { return rule.id === rid || String(rule.id) === String(rid); });
+  if (!r) return;
+  var payload = {
+    name: r.name,
+    event_type: r.event_type,
+    severity: r.severity,
+    channel_id: r.channel_id,
+    active: active
+  };
+  api('PUT', '/api/notifications/rules/' + rid, payload).then(function(data) {
+    if (data.ok) loadRules();
+  }).catch(function() {});
+}
+
+// ======================== MODAL HELPERS ========================
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+// Close modals on outside click
+window.addEventListener('click', function(e) {
+  if (e.target.classList.contains('modal')) {
+    e.target.style.display = 'none';
+  }
+});
+
+// Close modals on Escape
+window.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal').forEach(function(m) { m.style.display = 'none'; });
+  }
+});
+
+// ======================== UTILITY ========================
+function escHtml(str) {
+  if (!str) return '';
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+// ======================== INIT ========================
+document.addEventListener('DOMContentLoaded', function() {
+  loadNotifications();
+  startPolling();
+});
+</script>
+
+</body>
+</html>
