@@ -1,0 +1,265 @@
+# Enterprise Hub-and-Spoke Architecture
+
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.0"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.0"
+    }
+  }
+
+  required_version = ">= 1.0"
+}
+
+# Configure the Microsoft Azure Provider
+provider "azurerm" {
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+    key_vault {
+      purge_soft_delete_on_destroy    = true
+      recover_soft_deleted_key_vaults = true
+    }
+  }
+}
+
+# Configure Azure AD Provider
+provider "azuread" {
+  tenant_id = var.tenant_id
+}
+
+# Hub Module
+module "hub" {
+  source = "./modules/hub"
+
+  hub_resource_group_name = var.hub_resource_group_name
+  location                = var.location
+  hub_vnet_name          = var.hub_vnet_name
+  hub_address_space      = var.hub_address_space
+  tags                   = var.tags
+
+  # Firewall Configuration
+  enable_firewall        = var.enable_firewall
+  firewall_name          = var.firewall_name
+  firewall_sku_tier      = var.firewall_sku_tier
+
+  # Gateway Configuration
+  enable_vpn_gateway     = var.enable_vpn_gateway
+  vpn_gateway_name       = var.vpn_gateway_name
+  vpn_gateway_sku        = var.vpn_gateway_sku
+
+  enable_expressroute_gateway = var.enable_expressroute_gateway
+  expressroute_gateway_name   = var.expressroute_gateway_name
+  expressroute_gateway_sku    = var.expressroute_gateway_sku
+
+  # Bastion Configuration
+  enable_bastion         = var.enable_bastion
+  bastion_name           = var.bastion_name
+  bastion_sku            = var.bastion_sku
+
+  # Route Table Configuration
+  enable_route_table     = var.enable_route_table
+  route_table_name       = var.route_table_name
+}
+
+# Spoke Modules
+{% for spoke in spokes %}
+module "spoke_{{ spoke.name }}" {
+  source = "./modules/spoke"
+
+  spoke_resource_group_name = "{{ spoke.resource_group_name | default('rg-spoke-' + spoke.name) }}"
+  location                  = var.location
+  spoke_vnet_name          = "{{ spoke.vnet_name | default('vnet-spoke-' + spoke.name) }}"
+  spoke_address_space      = {{ spoke.address_space | tojson }}
+  tags                     = var.tags
+
+  # Hub References
+  hub_vnet_id             = module.hub.hub_vnet_id
+  hub_resource_group_name = var.hub_resource_group_name
+  hub_vnet_name          = var.hub_vnet_name
+  firewall_private_ip    = module.hub.firewall_private_ip
+
+  # VNET Peering
+  use_remote_gateways    = true
+  allow_gateway_transit  = true
+
+  # AKS Configuration
+  enable_aks             = {{ spoke.enable_aks | lower }}
+  aks_cluster_name       = "{{ spoke.name }}-aks"
+  aks_dns_prefix         = "{{ spoke.name }}"
+  aks_kubernetes_version = "1.27.0"
+  aks_sku_tier           = "Free"
+  aks_default_node_pool_name = "default"
+  aks_node_count         = {{ spoke.aks_node_count }}
+  aks_vm_size            = "{{ spoke.aks_vm_size }}"
+  aks_enable_auto_scaling = true
+  aks_min_node_count     = 1
+  aks_max_node_count     = 10
+  aks_max_pods_per_node  = 30
+  aks_os_disk_size_gb    = 128
+  aks_os_disk_type       = "Managed"
+  aks_node_pool_type     = "VirtualMachineScaleSets"
+  aks_availability_zones = ["1", "2", "3"]
+  aks_network_plugin     = "azure"
+  aks_network_policy     = "azure"
+  aks_load_balancer_sku  = "standard"
+  aks_outbound_type      = "loadBalancer"
+  aks_dns_service_ip     = "10.0.0.10"
+  aks_docker_bridge_cidr = "172.17.0.1/16"
+  aks_service_cidr       = "10.0.0.0/16"
+  aks_admin_group_object_ids = []
+  enable_monitoring      = {{ spoke.enable_monitoring | lower }}
+
+  # Application Gateway
+  enable_app_gateway     = {{ spoke.enable_app_gateway | lower }}
+  appgw_name             = "{{ spoke.name }}-appgw"
+  appgw_sku_name         = "WAF_v2"
+  appgw_sku_tier         = "WAF_v2"
+  appgw_capacity         = 2
+  waf_firewall_mode      = "Prevention"
+  waf_rule_set_type      = "OWASP"
+  waf_rule_set_version   = "3.2"
+
+  # Subnets
+  aks_subnet_name        = "aks"
+  aks_subnet_prefixes    = ["10.1.0.0/22"]
+  appgw_subnet_name      = "appgw"
+  appgw_subnet_prefixes  = ["10.1.4.0/24"]
+  enable_private_endpoints = true
+  private_endpoints_subnet_name = "private-endpoints"
+  private_endpoints_subnet_prefixes = ["10.1.5.0/24"]
+
+  # Storage
+  enable_storage         = {{ spoke.enable_storage | lower }}
+  storage_account_name   = "{{ spoke.name }}storage"
+  storage_account_tier   = "Standard"
+  storage_account_replication_type = "GRS"
+  storage_account_kind   = "StorageV2"
+  enable_static_website  = false
+  storage_network_default_action = "Deny"
+  storage_network_bypass = ["AzureServices"]
+
+  # Key Vault
+  enable_key_vault       = {{ spoke.enable_key_vault | lower }}
+  key_vault_name         = "{{ spoke.name }}-kv"
+  key_vault_disk_encryption = true
+  key_vault_soft_delete_retention_days = 90
+  key_vault_purge_protection = true
+  key_vault_sku          = "standard"
+  key_vault_network_default_action = "Deny"
+  key_vault_network_bypass = ["AzureServices"]
+
+  # ACR
+  enable_acr             = {{ spoke.enable_acr | lower }}
+  acr_name               = "{{ spoke.name }}acr"
+  acr_sku                = "Basic"
+  acr_admin_enabled      = false
+}
+{% endfor %}
+
+# User Management Module
+module "user_management" {
+  source = "./modules/user_management"
+
+  scope                   = "/subscriptions/${var.subscription_id}"
+  tenant_id              = var.tenant_id
+
+  # Group Configuration
+  group_owners           = []
+  platform_admins_group_name = "Platform-Administrators"
+  platform_admins_members = {{ platform_admins_members | tojson }}
+  developers_group_name  = "Developers"
+  developers_members     = {{ developers_members | tojson }}
+  devops_engineers_group_name = "DevOps-Engineers"
+  devops_engineers_members = {{ devops_engineers_members | tojson }}
+  security_auditors_group_name = "Security-Auditors"
+  security_auditors_members = {{ security_auditors_members | tojson }}
+  end_users_group_name   = "End-Users"
+  end_users_members      = {{ end_users_members | tojson }}
+
+  # Resource IDs for role assignments
+  resource_group_ids     = concat(
+    [module.hub.hub_resource_group_name],
+    {% for spoke in spokes %}
+    [module.spoke_{{ spoke.name }}.spoke_resource_group_name]{% if not loop.last %},{% endif %}
+    {% endfor %}
+  )
+
+  # Service-specific IDs
+  aks_cluster_id         = {% for spoke in spokes %}{% if spoke.enable_aks %}module.spoke_{{ spoke.name }}.aks_cluster_id{% endif %}{% endfor %}{% if not spokes %}""{% endif %}
+  key_vault_id           = {% for spoke in spokes %}{% if spoke.enable_key_vault %}module.spoke_{{ spoke.name }}.key_vault_id{% endif %}{% endfor %}{% if not spokes %}""{% endif %}
+  storage_account_id     = {% for spoke in spokes %}{% if spoke.enable_storage %}module.spoke_{{ spoke.name }}.storage_account_id{% endif %}{% endfor %}{% if not spokes %}""{% endif %}
+  acr_id                 = {% for spoke in spokes %}{% if spoke.enable_acr %}module.spoke_{{ spoke.name }}.acr_id{% endif %}{% endfor %}{% if not spokes %}""{% endif %}
+
+  # Feature toggles
+  enable_aks_role_assignments = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_aks %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  enable_key_vault_access = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_key_vault %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  enable_storage_role_assignments = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_storage %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  enable_acr_role_assignments = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_acr %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+
+  # Custom roles
+  create_custom_roles    = {{ create_custom_roles | lower }}
+
+  tags = var.tags
+}
+
+# Visualization Module
+module "visualization" {
+  source = "./modules/visualization"
+
+  hub_resource_group_name = var.hub_resource_group_name
+  hub_vnet_name          = var.hub_vnet_name
+  hub_address_space      = var.hub_address_space
+
+  spoke_resource_groups  = [
+    {% for spoke in spokes %}
+    module.spoke_{{ spoke.name }}.spoke_resource_group_name{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+  spoke_vnets            = [
+    {% for spoke in spokes %}
+    {
+      name           = module.spoke_{{ spoke.name }}.spoke_vnet_name
+      resource_group = module.spoke_{{ spoke.name }}.spoke_resource_group_name
+      address_space  = module.spoke_{{ spoke.name }}.spoke_vnet_address_space
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+
+  enable_aks             = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_aks %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  aks_clusters           = [
+    {% for spoke in spokes %}
+    {% if spoke.enable_aks %}
+    {
+      name               = module.spoke_{{ spoke.name }}.aks_cluster_name
+      resource_group     = module.spoke_{{ spoke.name }}.spoke_resource_group_name
+      node_count         = {{ spoke.aks_node_count }}
+      kubernetes_version = "1.27.0"
+    }{% if not loop.last %},{% endif %}
+    {% endif %}
+    {% endfor %}
+  ]
+
+  enable_app_gateway     = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_app_gateway %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  enable_storage         = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_storage %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  enable_key_vault       = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_key_vault %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  enable_acr             = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_acr %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+  enable_monitoring      = {% if spokes %}{% for spoke in spokes %}{% if spoke.enable_monitoring %}true{% endif %}{% endfor %}{% else %}false{% endif %}
+
+  user_groups            = ["Platform-Administrators", "Developers", "DevOps-Engineers", "Security-Auditors", "End-Users"]
+  custom_roles           = ["Platform Administrator", "Developer", "DevOps Engineer", "Security Auditor"]
+
+  location               = var.location
+  subscription_id        = var.subscription_id
+  tenant_id              = var.tenant_id
+  tags                   = var.tags
+}

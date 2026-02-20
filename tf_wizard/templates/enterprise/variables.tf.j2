@@ -1,0 +1,192 @@
+# Enterprise Hub-and-Spoke Architecture Variables
+
+# Azure Configuration
+variable "subscription_id" {
+  description = "Azure subscription ID"
+  type        = string
+}
+
+variable "tenant_id" {
+  description = "Azure tenant ID"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+  default     = "East US"
+}
+
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+  default     = {
+    Environment = "Production"
+    Project     = "Enterprise-Hub-Spoke"
+    ManagedBy   = "Terraform"
+  }
+}
+
+# Hub Configuration
+variable "hub_resource_group_name" {
+  description = "Name of the hub resource group"
+  type        = string
+  default     = "rg-hub-network"
+}
+
+variable "hub_vnet_name" {
+  description = "Name of the hub virtual network"
+  type        = string
+  default     = "vnet-hub"
+}
+
+variable "hub_address_space" {
+  description = "Address space for the hub VNET"
+  type        = list(string)
+  default     = ["10.0.0.0/16"]
+}
+
+# Hub - Firewall Configuration
+variable "enable_firewall" {
+  description = "Enable Azure Firewall in hub"
+  type        = bool
+  default     = true
+}
+
+variable "firewall_name" {
+  description = "Name of the Azure Firewall"
+  type        = string
+  default     = "fw-hub"
+}
+
+variable "firewall_sku_tier" {
+  description = "SKU tier for Azure Firewall"
+  type        = string
+  default     = "Standard"
+}
+
+# Hub - Gateway Configuration
+variable "enable_vpn_gateway" {
+  description = "Enable VPN Gateway in hub"
+  type        = bool
+  default     = true
+}
+
+variable "vpn_gateway_name" {
+  description = "Name of the VPN Gateway"
+  type        = string
+  default     = "vpngw-hub"
+}
+
+variable "vpn_gateway_sku" {
+  description = "SKU for VPN Gateway"
+  type        = string
+  default     = "VpnGw1"
+}
+
+variable "enable_expressroute_gateway" {
+  description = "Enable ExpressRoute Gateway in hub"
+  type        = bool
+  default     = false
+}
+
+variable "expressroute_gateway_name" {
+  description = "Name of the ExpressRoute Gateway"
+  type        = string
+  default     = "ergw-hub"
+}
+
+variable "expressroute_gateway_sku" {
+  description = "SKU for ExpressRoute Gateway"
+  type        = string
+  default     = "Standard"
+}
+
+# Hub - Bastion Configuration
+variable "enable_bastion" {
+  description = "Enable Azure Bastion in hub"
+  type        = bool
+  default     = true
+}
+
+variable "bastion_name" {
+  description = "Name of the Azure Bastion"
+  type        = string
+  default     = "bastion-hub"
+}
+
+variable "bastion_sku" {
+  description = "SKU for Azure Bastion"
+  type        = string
+  default     = "Basic"
+}
+
+# Hub - Route Table Configuration
+variable "enable_route_table" {
+  description = "Enable route table in hub"
+  type        = bool
+  default     = true
+}
+
+variable "route_table_name" {
+  description = "Name of the route table"
+  type        = string
+  default     = "rt-hub"
+}
+
+# Spokes Configuration
+variable "spokes" {
+  description = "Configuration for spoke networks"
+  type = list(object({
+    name = string
+    resource_group_name = optional(string)
+    vnet_name = optional(string)
+    address_space = optional(list(string), ["10.1.0.0/16"])
+    enable_aks = optional(bool, true)
+    enable_app_gateway = optional(bool, false)
+    enable_storage = optional(bool, true)
+    enable_key_vault = optional(bool, true)
+    enable_acr = optional(bool, true)
+    enable_monitoring = optional(bool, true)
+    aks_node_count = optional(number, 3)
+    aks_vm_size = optional(string, "Standard_D2_v2")
+  }))
+  default = []
+}
+
+# User Management Configuration
+variable "platform_admins_members" {
+  description = "Object IDs of platform administrators"
+  type        = list(string)
+  default     = []
+}
+
+variable "developers_members" {
+  description = "Object IDs of developers"
+  type        = list(string)
+  default     = []
+}
+
+variable "devops_engineers_members" {
+  description = "Object IDs of DevOps engineers"
+  type        = list(string)
+  default     = []
+}
+
+variable "security_auditors_members" {
+  description = "Object IDs of security auditors"
+  type        = list(string)
+  default     = []
+}
+
+variable "end_users_members" {
+  description = "Object IDs of end users"
+  type        = list(string)
+  default     = []
+}
+
+variable "create_custom_roles" {
+  description = "Create custom role definitions"
+  type        = bool
+  default     = true
+}

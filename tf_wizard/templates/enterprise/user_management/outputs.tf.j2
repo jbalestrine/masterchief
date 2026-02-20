@@ -1,0 +1,163 @@
+output "platform_admin_group_id" {
+  description = "ID of the platform admin group"
+  value       = var.create_platform_admin_group ? azuread_group.platform_admins[0].object_id : null
+}
+
+output "platform_admin_group_name" {
+  description = "Name of the platform admin group"
+  value       = var.create_platform_admin_group ? azuread_group.platform_admins[0].display_name : null
+}
+
+output "network_admin_group_id" {
+  description = "ID of the network admin group"
+  value       = var.create_network_admin_group ? azuread_group.network_admins[0].object_id : null
+}
+
+output "network_admin_group_name" {
+  description = "Name of the network admin group"
+  value       = var.create_network_admin_group ? azuread_group.network_admins[0].display_name : null
+}
+
+output "security_admin_group_id" {
+  description = "ID of the security admin group"
+  value       = var.create_security_admin_group ? azuread_group.security_admins[0].object_id : null
+}
+
+output "security_admin_group_name" {
+  description = "Name of the security admin group"
+  value       = var.create_security_admin_group ? azuread_group.security_admins[0].display_name : null
+}
+
+output "developer_group_id" {
+  description = "ID of the developer group"
+  value       = var.create_developer_group ? azuread_group.developers[0].object_id : null
+}
+
+output "developer_group_name" {
+  description = "Name of the developer group"
+  value       = var.create_developer_group ? azuread_group.developers[0].display_name : null
+}
+
+output "reader_group_id" {
+  description = "ID of the reader group"
+  value       = var.create_reader_group ? azuread_group.readers[0].object_id : null
+}
+
+output "reader_group_name" {
+  description = "Name of the reader group"
+  value       = var.create_reader_group ? azuread_group.readers[0].display_name : null
+}
+
+output "platform_admin_role_id" {
+  description = "ID of the custom platform admin role"
+  value       = var.create_custom_roles ? azurerm_role_definition.platform_admin[0].role_definition_id : null
+}
+
+output "platform_admin_role_name" {
+  description = "Name of the custom platform admin role"
+  value       = var.create_custom_roles ? azurerm_role_definition.platform_admin[0].name : null
+}
+
+output "network_admin_role_id" {
+  description = "ID of the custom network admin role"
+  value       = var.create_custom_roles ? azurerm_role_definition.network_admin[0].role_definition_id : null
+}
+
+output "network_admin_role_name" {
+  description = "Name of the custom network admin role"
+  value       = var.create_custom_roles ? azurerm_role_definition.network_admin[0].name : null
+}
+
+output "security_admin_role_id" {
+  description = "ID of the custom security admin role"
+  value       = var.create_custom_roles ? azurerm_role_definition.security_admin[0].role_definition_id : null
+}
+
+output "security_admin_role_name" {
+  description = "Name of the custom security admin role"
+  value       = var.create_custom_roles ? azurerm_role_definition.security_admin[0].name : null
+}
+
+output "aks_admin_role_id" {
+  description = "ID of the custom AKS admin role"
+  value       = var.create_custom_roles && var.enable_aks_rbac ? azurerm_role_definition.aks_admin[0].role_definition_id : null
+}
+
+output "aks_admin_role_name" {
+  description = "Name of the custom AKS admin role"
+  value       = var.create_custom_roles && var.enable_aks_rbac ? azurerm_role_definition.aks_admin[0].name : null
+}
+
+output "aks_cluster_admin_group_id" {
+  description = "ID of the AKS cluster admin group"
+  value       = var.enable_aks_rbac && var.create_aks_cluster_admin_group ? azuread_group.aks_cluster_admins[0].object_id : null
+}
+
+output "aks_cluster_admin_group_name" {
+  description = "Name of the AKS cluster admin group"
+  value       = var.enable_aks_rbac && var.create_aks_cluster_admin_group ? azuread_group.aks_cluster_admins[0].display_name : null
+}
+
+output "aks_cluster_user_group_id" {
+  description = "ID of the AKS cluster user group"
+  value       = var.enable_aks_rbac && var.create_aks_cluster_user_group ? azuread_group.aks_cluster_users[0].object_id : null
+}
+
+output "aks_cluster_user_group_name" {
+  description = "Name of the AKS cluster user group"
+  value       = var.enable_aks_rbac && var.create_aks_cluster_user_group ? azuread_group.aks_cluster_users[0].display_name : null
+}
+
+output "aks_ad_application_id" {
+  description = "ID of the Azure AD application for AKS"
+  value       = var.create_aks_ad_application ? azuread_application.aks[0].object_id : null
+}
+
+output "aks_ad_application_client_id" {
+  description = "Client ID of the Azure AD application for AKS"
+  value       = var.create_aks_ad_application ? azuread_application.aks[0].application_id : null
+}
+
+output "aks_service_principal_id" {
+  description = "ID of the AKS service principal"
+  value       = var.create_aks_ad_application ? azuread_service_principal.aks[0].object_id : null
+}
+
+output "aks_service_principal_password" {
+  description = "Password for the AKS service principal"
+  value       = var.create_aks_ad_application ? azuread_service_principal_password.aks[0].value : null
+  sensitive   = true
+}
+
+output "policy_assignment_id" {
+  description = "ID of the policy assignment"
+  value       = var.enable_policy_assignments ? azurerm_policy_assignment.subscription_compliance[0].id : null
+}
+
+output "policy_assignment_name" {
+  description = "Name of the policy assignment"
+  value       = var.enable_policy_assignments ? azurerm_policy_assignment.subscription_compliance[0].name : null
+}
+
+output "all_group_ids" {
+  description = "Map of all created group IDs"
+  value = {
+    platform_admins = var.create_platform_admin_group ? azuread_group.platform_admins[0].object_id : null
+    network_admins  = var.create_network_admin_group ? azuread_group.network_admins[0].object_id : null
+    security_admins = var.create_security_admin_group ? azuread_group.security_admins[0].object_id : null
+    developers      = var.create_developer_group ? azuread_group.developers[0].object_id : null
+    readers         = var.create_reader_group ? azuread_group.readers[0].object_id : null
+    aks_cluster_admins = var.enable_aks_rbac && var.create_aks_cluster_admin_group ? azuread_group.aks_cluster_admins[0].object_id : null
+    aks_cluster_users  = var.enable_aks_rbac && var.create_aks_cluster_user_group ? azuread_group.aks_cluster_users[0].object_id : null
+  }
+}
+
+output "all_role_definition_ids" {
+  description = "Map of all created custom role definition IDs"
+  value = var.create_custom_roles ? {
+    platform_admin = azurerm_role_definition.platform_admin[0].role_definition_id
+    network_admin  = azurerm_role_definition.network_admin[0].role_definition_id
+    security_admin = azurerm_role_definition.security_admin[0].role_definition_id
+    aks_admin      = var.enable_aks_rbac ? azurerm_role_definition.aks_admin[0].role_definition_id : null
+  } : {}
+}

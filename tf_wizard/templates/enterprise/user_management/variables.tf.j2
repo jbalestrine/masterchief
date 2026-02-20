@@ -1,0 +1,362 @@
+# Variables for User Management Module
+
+# Scope and Assignment Configuration
+variable "scope" {
+  description = "The scope at which the role assignment applies (subscription, resource group, etc.)"
+  type        = string
+  default     = ""
+}
+
+variable "hub_scope" {
+  description = "The scope of the hub resource group"
+  type        = string
+  default     = ""
+}
+
+variable "spoke_scope" {
+  description = "The scope of the spoke resource group"
+  type        = string
+  default     = ""
+}
+
+variable "assignable_scopes" {
+  description = "List of scopes where the custom role can be assigned"
+  type        = list(string)
+  default     = []
+}
+
+variable "management_group_id" {
+  description = "ID of the management group (if using management groups)"
+  type        = string
+  default     = ""
+}
+
+# Platform Admin Group Configuration
+variable "create_platform_admin_group" {
+  description = "Whether to create the platform admin group"
+  type        = bool
+  default     = true
+}
+
+variable "platform_admin_group_name" {
+  description = "Name of the platform admin group"
+  type        = string
+  default     = "Platform-Administrators"
+}
+
+variable "platform_admin_owners" {
+  description = "List of object IDs for platform admin group owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "platform_admin_members" {
+  description = "List of object IDs for platform admin group members"
+  type        = list(string)
+  default     = []
+}
+
+variable "assign_platform_admin_role" {
+  description = "Whether to assign platform admin role to the group"
+  type        = bool
+  default     = true
+}
+
+# Network Admin Group Configuration
+variable "create_network_admin_group" {
+  description = "Whether to create the network admin group"
+  type        = bool
+  default     = true
+}
+
+variable "network_admin_group_name" {
+  description = "Name of the network admin group"
+  type        = string
+  default     = "Network-Administrators"
+}
+
+variable "network_admin_owners" {
+  description = "List of object IDs for network admin group owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "network_admin_members" {
+  description = "List of object IDs for network admin group members"
+  type        = list(string)
+  default     = []
+}
+
+variable "assign_network_admin_role" {
+  description = "Whether to assign network admin role to the group"
+  type        = bool
+  default     = true
+}
+
+# Security Admin Group Configuration
+variable "create_security_admin_group" {
+  description = "Whether to create the security admin group"
+  type        = bool
+  default     = true
+}
+
+variable "security_admin_group_name" {
+  description = "Name of the security admin group"
+  type        = string
+  default     = "Security-Administrators"
+}
+
+variable "security_admin_owners" {
+  description = "List of object IDs for security admin group owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "security_admin_members" {
+  description = "List of object IDs for security admin group members"
+  type        = list(string)
+  default     = []
+}
+
+variable "assign_security_admin_role" {
+  description = "Whether to assign security admin role to the group"
+  type        = bool
+  default     = true
+}
+
+# Developer Group Configuration
+variable "create_developer_group" {
+  description = "Whether to create the developer group"
+  type        = bool
+  default     = true
+}
+
+variable "developer_group_name" {
+  description = "Name of the developer group"
+  type        = string
+  default     = "Developers"
+}
+
+variable "developer_owners" {
+  description = "List of object IDs for developer group owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "developer_members" {
+  description = "List of object IDs for developer group members"
+  type        = list(string)
+  default     = []
+}
+
+variable "assign_developer_role" {
+  description = "Whether to assign developer role to the group"
+  type        = bool
+  default     = true
+}
+
+# Reader Group Configuration
+variable "create_reader_group" {
+  description = "Whether to create the reader group"
+  type        = bool
+  default     = true
+}
+
+variable "reader_group_name" {
+  description = "Name of the reader group"
+  type        = string
+  default     = "Readers"
+}
+
+variable "reader_owners" {
+  description = "List of object IDs for reader group owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "reader_members" {
+  description = "List of object IDs for reader group members"
+  type        = list(string)
+  default     = []
+}
+
+variable "assign_reader_role" {
+  description = "Whether to assign reader role to the group"
+  type        = bool
+  default     = true
+}
+
+# Custom Roles Configuration
+variable "create_custom_roles" {
+  description = "Whether to create custom RBAC roles"
+  type        = bool
+  default     = true
+}
+
+variable "platform_admin_role_name" {
+  description = "Name of the custom platform admin role"
+  type        = string
+  default     = "Platform Administrator"
+}
+
+variable "network_admin_role_name" {
+  description = "Name of the custom network admin role"
+  type        = string
+  default     = "Network Administrator"
+}
+
+variable "security_admin_role_name" {
+  description = "Name of the custom security admin role"
+  type        = string
+  default     = "Security Administrator"
+}
+
+variable "aks_admin_role_name" {
+  description = "Name of the custom AKS admin role"
+  type        = string
+  default     = "AKS Administrator"
+}
+
+# AKS RBAC Configuration
+variable "enable_aks_rbac" {
+  description = "Whether to enable AKS RBAC integration"
+  type        = bool
+  default     = true
+}
+
+variable "assign_aks_admin_role" {
+  description = "Whether to assign AKS admin role"
+  type        = bool
+  default     = true
+}
+
+variable "aks_admin_principal_id" {
+  description = "Principal ID for AKS admin role assignment"
+  type        = string
+  default     = ""
+}
+
+# AKS Azure AD Application Configuration
+variable "create_aks_ad_application" {
+  description = "Whether to create Azure AD application for AKS"
+  type        = bool
+  default     = false
+}
+
+variable "aks_ad_app_name" {
+  description = "Name of the Azure AD application for AKS"
+  type        = string
+  default     = "AKS-Service-Principal"
+}
+
+variable "aks_ad_app_owners" {
+  description = "List of object IDs for AKS AD app owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "aks_sp_password_end_date" {
+  description = "End date for AKS service principal password"
+  type        = string
+  default     = "2024-12-31T23:59:59Z"
+}
+
+# AKS Cluster Admin Group Configuration
+variable "create_aks_cluster_admin_group" {
+  description = "Whether to create AKS cluster admin group"
+  type        = bool
+  default     = true
+}
+
+variable "aks_cluster_admin_group_name" {
+  description = "Name of the AKS cluster admin group"
+  type        = string
+  default     = "AKS-Cluster-Admins"
+}
+
+variable "aks_cluster_admin_owners" {
+  description = "List of object IDs for AKS cluster admin group owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "aks_cluster_admin_members" {
+  description = "List of object IDs for AKS cluster admin group members"
+  type        = list(string)
+  default     = []
+}
+
+# AKS Cluster User Group Configuration
+variable "create_aks_cluster_user_group" {
+  description = "Whether to create AKS cluster user group"
+  type        = bool
+  default     = true
+}
+
+variable "aks_cluster_user_group_name" {
+  description = "Name of the AKS cluster user group"
+  type        = string
+  default     = "AKS-Cluster-Users"
+}
+
+variable "aks_cluster_user_owners" {
+  description = "List of object IDs for AKS cluster user group owners"
+  type        = list(string)
+  default     = []
+}
+
+variable "aks_cluster_user_members" {
+  description = "List of object IDs for AKS cluster user group members"
+  type        = list(string)
+  default     = []
+}
+
+# Policy Assignment Configuration
+variable "enable_policy_assignments" {
+  description = "Whether to create Azure Policy assignments"
+  type        = bool
+  default     = true
+}
+
+variable "policy_assignment_name" {
+  description = "Name of the policy assignment"
+  type        = string
+  default     = "enterprise-compliance"
+}
+
+variable "policy_definition_id" {
+  description = "ID of the policy definition to assign"
+  type        = string
+  default     = ""
+}
+
+variable "policy_display_name" {
+  description = "Display name for the policy assignment"
+  type        = string
+  default     = "Enterprise Compliance Policy"
+}
+
+variable "policy_parameters" {
+  description = "Parameters for the policy assignment"
+  type        = string
+  default     = "{}"
+}
+
+# Management Group Role Assignments
+variable "assign_mg_roles" {
+  description = "Whether to assign roles at management group level"
+  type        = bool
+  default     = false
+}
+
+variable "mg_platform_admin_principal_id" {
+  description = "Principal ID for management group platform admin"
+  type        = string
+  default     = ""
+}
+
+variable "mg_reader_principal_id" {
+  description = "Principal ID for management group reader"
+  type        = string
+  default     = ""
+}

@@ -1,0 +1,98 @@
+variable "hub_resource_group_name" {
+  description = "Name of the hub resource group"
+  type        = string
+}
+
+variable "location" {
+  description = "Azure region for resources"
+  type        = string
+}
+
+variable "hub_vnet_name" {
+  description = "Name of the hub virtual network"
+  type        = string
+}
+
+variable "hub_address_space" {
+  description = "Address space for the hub VNET"
+  type        = list(string)
+}
+
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+}
+
+# Firewall Configuration
+variable "enable_firewall" {
+  description = "Enable Azure Firewall in hub"
+  type        = bool
+}
+
+variable "firewall_name" {
+  description = "Name of the Azure Firewall"
+  type        = string
+}
+
+variable "firewall_sku_tier" {
+  description = "SKU tier for Azure Firewall"
+  type        = string
+}
+
+# Gateway Configuration
+variable "enable_vpn_gateway" {
+  description = "Enable VPN Gateway in hub"
+  type        = bool
+}
+
+variable "vpn_gateway_name" {
+  description = "Name of the VPN Gateway"
+  type        = string
+}
+
+variable "vpn_gateway_sku" {
+  description = "SKU for VPN Gateway"
+  type        = string
+}
+
+variable "enable_expressroute_gateway" {
+  description = "Enable ExpressRoute Gateway in hub"
+  type        = bool
+}
+
+variable "expressroute_gateway_name" {
+  description = "Name of the ExpressRoute Gateway"
+  type        = string
+}
+
+variable "expressroute_gateway_sku" {
+  description = "SKU for ExpressRoute Gateway"
+  type        = string
+}
+
+# Bastion Configuration
+variable "enable_bastion" {
+  description = "Enable Azure Bastion in hub"
+  type        = bool
+}
+
+variable "bastion_name" {
+  description = "Name of the Azure Bastion"
+  type        = string
+}
+
+variable "bastion_sku" {
+  description = "SKU for Azure Bastion"
+  type        = string
+}
+
+# Route Table Configuration
+variable "enable_route_table" {
+  description = "Enable route table in hub"
+  type        = bool
+}
+
+variable "route_table_name" {
+  description = "Name of the route table"
+  type        = string
+}

@@ -1,0 +1,103 @@
+output "docs_storage_account_id" {
+  description = "ID of the documentation storage account"
+  value       = var.create_docs_storage ? azurerm_storage_account.docs[0].id : null
+}
+
+output "docs_storage_account_name" {
+  description = "Name of the documentation storage account"
+  value       = var.create_docs_storage ? azurerm_storage_account.docs[0].name : null
+}
+
+output "docs_storage_primary_endpoint" {
+  description = "Primary endpoint of the documentation storage account"
+  value       = var.create_docs_storage ? azurerm_storage_account.docs[0].primary_web_endpoint : null
+}
+
+output "docs_container_urls" {
+  description = "URLs for documentation containers"
+  value = var.create_docs_storage ? {
+    docs     = azurerm_storage_container.docs[0].id
+    diagrams = azurerm_storage_container.diagrams[0].id
+    reports  = azurerm_storage_container.reports[0].id
+  } : {}
+}
+
+output "generated_files" {
+  description = "List of generated documentation files"
+  value = {
+    diagrams = var.generate_diagrams ? [
+      "architecture-diagram.md",
+      "network-diagram.md",
+      "security-diagram.md"
+    ] : []
+    docs = var.generate_docs ? [
+      "deployment-guide.md",
+      "security-guide.md",
+      "operations-guide.md"
+    ] : []
+    reports = var.generate_reports ? [
+      "cost-estimation.md",
+      "compliance-report.md"
+    ] : []
+  }
+}
+
+output "architecture_diagram_url" {
+  description = "URL to the architecture diagram"
+  value       = var.generate_diagrams && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}diagrams/architecture-diagram.md" : null
+}
+
+output "network_diagram_url" {
+  description = "URL to the network diagram"
+  value       = var.generate_diagrams && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}diagrams/network-diagram.md" : null
+}
+
+output "security_diagram_url" {
+  description = "URL to the security diagram"
+  value       = var.generate_diagrams && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}diagrams/security-diagram.md" : null
+}
+
+output "deployment_guide_url" {
+  description = "URL to the deployment guide"
+  value       = var.generate_docs && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}docs/deployment-guide.md" : null
+}
+
+output "security_guide_url" {
+  description = "URL to the security guide"
+  value       = var.generate_docs && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}docs/security-guide.md" : null
+}
+
+output "operations_guide_url" {
+  description = "URL to the operations guide"
+  value       = var.generate_docs && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}docs/operations-guide.md" : null
+}
+
+output "cost_estimation_url" {
+  description = "URL to the cost estimation report"
+  value       = var.generate_reports && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}reports/cost-estimation.md" : null
+}
+
+output "compliance_report_url" {
+  description = "URL to the compliance report"
+  value       = var.generate_reports && var.create_docs_storage ? "${azurerm_storage_account.docs[0].primary_web_endpoint}reports/compliance-report.md" : null
+}
+
+output "documentation_website_url" {
+  description = "URL to the documentation website"
+  value       = var.create_docs_storage ? azurerm_storage_account.docs[0].primary_web_endpoint : null
+}
+
+output "local_file_paths" {
+  description = "Local file paths for generated documentation"
+  value = {
+    architecture_diagram = var.generate_diagrams ? local_file.architecture_diagram[0].filename : null
+    network_diagram      = var.generate_diagrams ? local_file.network_diagram[0].filename : null
+    security_diagram     = var.generate_diagrams ? local_file.security_diagram[0].filename : null
+    deployment_guide     = var.generate_docs ? local_file.deployment_guide[0].filename : null
+    security_guide       = var.generate_docs ? local_file.security_guide[0].filename : null
+    operations_guide     = var.generate_docs ? local_file.operations_guide[0].filename : null
+    cost_estimation      = var.generate_reports ? local_file.cost_estimation[0].filename : null
+    compliance_report    = var.generate_reports ? local_file.compliance_report[0].filename : null
+    index_html           = var.create_docs_storage ? local_file.index_html[0].filename : null
+  }
+}

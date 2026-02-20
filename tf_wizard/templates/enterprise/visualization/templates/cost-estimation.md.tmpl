@@ -1,0 +1,269 @@
+# ${enterprise_name} - Enterprise Cost Estimation
+
+## Cost Analysis Overview
+
+This document provides detailed cost estimates for the **${enterprise_name}** enterprise hub-and-spoke architecture deployment.
+
+## Cost Assumptions
+
+### Infrastructure Configuration
+- **Region**: ${hub_location} (hub), %{ for location in spoke_locations ~}${location}%{ if not loop.last %}, %{ endif ~}%{ endfor ~} (spokes)
+- **Availability**: Zone-redundant deployment (3 availability zones)
+- **Billing**: Pay-as-you-go pricing (${currency})
+- **Term**: Monthly estimates based on 730 hours/month
+
+### Service Configurations
+%{ if enable_aks ~}
+- **AKS Nodes**: ${aks_node_count} nodes per cluster (${aks_node_size})
+%{ endif ~}
+%{ if enable_storage ~}
+- **Storage Redundancy**: ${storage_redundancy}
+%{ endif ~}
+- **Monitoring**: ${enable_monitoring ? "Enabled" : "Disabled"}
+- **Backup**: Included in base estimates
+
+## Monthly Cost Breakdown
+
+### Hub Infrastructure Costs
+
+#### Networking (${hub_location})
+| Service | Configuration | Monthly Cost |
+|---------|---------------|--------------|
+%{ if enable_firewall ~}
+| Azure Firewall | Standard (1 TB processed) | $1,250 |
+%{ endif ~}
+%{ if enable_bastion ~}
+| Azure Bastion | Basic tier | $138 |
+%{ endif ~}
+| VPN Gateway | VpnGw1 (if enabled) | $130 |
+| ExpressRoute Gateway | High Performance (if enabled) | $2,600 |
+| **Network Total** | | **$3,118** |
+
+#### Management & Monitoring
+| Service | Configuration | Monthly Cost |
+|---------|---------------|--------------|
+%{ if enable_monitoring ~}
+| Log Analytics | 5 GB/day ingestion | $750 |
+| Application Insights | Basic tier | $55 |
+%{ endif ~}
+| Azure Monitor | Base monitoring | $15 |
+| **Management Total** | | **$820** |
+
+### Spoke Infrastructure Costs
+
+%{ for location in spoke_locations ~}
+#### ${location} Spoke
+
+##### Compute Resources
+| Service | Configuration | Monthly Cost |
+|---------|---------------|--------------|
+%{ if enable_aks ~}
+| AKS Cluster | ${aks_node_count} × ${aks_node_size} nodes | $2,400 |
+| AKS Uptime SLA | 99.95% uptime guarantee | $146 |
+%{ endif ~}
+| VM Scale Sets | Reserved for future use | $0 |
+| **Compute Total** | | **$2,546** |
+
+##### Application Delivery
+| Service | Configuration | Monthly Cost |
+|---------|---------------|--------------|
+%{ if enable_app_gateway ~}
+| Application Gateway | WAF v2, Medium | $420 |
+| WAF Policy | OWASP rules | $60 |
+%{ endif ~}
+| Front Door | Standard tier (if used) | $100 |
+| **Delivery Total** | | **$580** |
+
+##### Data & Storage
+| Service | Configuration | Monthly Cost |
+|---------|---------------|--------------|
+%{ if enable_storage ~}
+| Storage Account | General purpose v2, ${storage_redundancy} | $25 |
+| Storage Transactions | 10K transactions/day | $2 |
+%{ endif ~}
+%{ if enable_key_vault ~}
+| Key Vault | Standard tier | $3 |
+%{ endif ~}
+%{ if enable_acr ~}
+| Container Registry | Basic tier | $5 |
+%{ endif ~}
+| **Data Total** | | **$35** |
+
+**${location} Spoke Total**: **$3,161**
+
+%{ endfor ~}
+
+### Security & Compliance Costs
+
+| Service | Configuration | Monthly Cost |
+|---------|---------------|--------------|
+| Microsoft Defender for Cloud | Standard tier | $15/server |
+| Azure Policy | No additional cost | $0 |
+| Azure Blueprints | No additional cost | $0 |
+| **Security Total** | | **$15** |
+
+### Identity & Access Management
+
+| Service | Configuration | Monthly Cost |
+|---------|---------------|--------------|
+| Azure AD Premium P1 | Per user licensing | $6/user |
+| Azure AD B2C | If used for external users | $0.018/transaction |
+| **Identity Total** | | **Variable** |
+
+## Total Monthly Cost Summary
+
+| Component | Monthly Cost | Percentage |
+|-----------|--------------|------------|
+| Hub Infrastructure | $3,938 | 45% |
+%{ for location in spoke_locations ~}
+| ${location} Spoke | $3,161 | 36% |
+%{ endfor ~}
+| Security & Compliance | $15 | 0.2% |
+| Identity Management | Variable | 5% |
+| **Total Estimated Cost** | **$7,114** | **100%** |
+
+*Note: Identity costs depend on user count and licensing model*
+
+## Annual Cost Projection
+
+### Year 1 Total Cost
+- **Monthly Average**: $7,114
+- **Annual Total**: $85,368
+- **Setup Costs**: $2,500 (one-time)
+- **Total Year 1**: $87,868
+
+### Cost Optimization Opportunities
+
+#### Reserved Instances (Savings: 20-40%)
+- **AKS Nodes**: 1-year reservation saves 20%
+- **VM Scale Sets**: 3-year reservation saves 40%
+- **Potential Annual Savings**: $17,000
+
+#### Storage Optimization (Savings: 10-50%)
+- **Storage Tiering**: Move cold data to cool/archive
+- **Lifecycle Policies**: Automated data movement
+- **Potential Annual Savings**: $4,000
+
+#### Networking Optimization (Savings: 5-15%)
+- **ExpressRoute**: Negotiate better rates for high bandwidth
+- **VPN**: Use site-to-site instead of point-to-site where possible
+- **Potential Annual Savings**: $5,000
+
+### Optimized Annual Cost
+- **Base Cost**: $85,368
+- **Optimizations**: -$26,000
+- **Optimized Annual**: $59,368
+- **Monthly Average**: $4,947
+
+## Cost Monitoring & Alerting
+
+### Azure Cost Management
+```bash
+# Set up budget alerts
+az consumption budget create \
+  --name "enterprise-budget" \
+  --amount 8000 \
+  --time-grain Monthly \
+  --start-date 2024-01-01 \
+  --end-date 2024-12-31
+```
+
+### Cost Analysis Queries
+```kql
+// Top cost by resource group
+AzureConsumption
+| where TimeGenerated > ago(30d)
+| summarize TotalCost = sum(Cost) by ResourceGroup
+| order by TotalCost desc
+
+// Cost by service
+AzureConsumption
+| where TimeGenerated > ago(30d)
+| summarize TotalCost = sum(Cost) by ServiceName
+| order by TotalCost desc
+
+// Daily spending trend
+AzureConsumption
+| where TimeGenerated > ago(90d)
+| summarize DailyCost = sum(Cost) by bin(TimeGenerated, 1d)
+| render timechart
+```
+
+## Scaling Cost Impact
+
+### Horizontal Scaling
+- **Additional AKS Nodes**: +$800/month per 3 nodes
+- **Extra Storage**: +$10/month per TB
+- **New Spoke**: +$3,161/month
+
+### Vertical Scaling
+- **Larger VM Sizes**: +20-50% compute costs
+- **Higher Storage Performance**: +2-5x storage costs
+- **Premium Networking**: +50% network costs
+
+## Cost Control Measures
+
+### Budget Management
+- **Monthly Budget**: $8,000 with 80% alert threshold
+- **Department Allocation**: Track costs by team/project
+- **Resource Tagging**: Mandatory tagging for cost tracking
+
+### Automated Cost Controls
+- **Auto-shutdown**: Development environments (weekdays 6 PM)
+- **Scaling Policies**: Scale down during off-hours
+- **Quota Management**: Prevent resource over-provisioning
+
+### Cost Review Process
+- **Weekly Review**: Monitor spending trends
+- **Monthly Analysis**: Identify optimization opportunities
+- **Quarterly Planning**: Adjust budgets and forecasts
+
+## Financial Responsibility
+
+### Cost Center Allocation
+- **Infrastructure**: 60% (hub and networking)
+- **Application**: 30% (AKS, App Gateway)
+- **Security**: 5% (monitoring, compliance)
+- **Management**: 5% (automation, tooling)
+
+### Chargeback Model
+- **Business Units**: Pay for their spoke resources
+- **Shared Services**: Pro-rated hub costs
+- **Overhead**: Management and security costs
+
+## Recommendations
+
+### Immediate Actions (Month 1-3)
+1. **Implement Cost Alerts**: Set up budget monitoring
+2. **Resource Tagging**: Establish tagging strategy
+3. **Reserved Instances**: Purchase for stable workloads
+4. **Storage Optimization**: Configure lifecycle policies
+
+### Medium-term (Month 3-6)
+1. **Auto-scaling**: Implement intelligent scaling
+2. **Cost Analytics**: Set up detailed reporting
+3. **Quota Policies**: Prevent cost overruns
+4. **Architecture Review**: Optimize for cost efficiency
+
+### Long-term (Month 6-12)
+1. **FinOps Culture**: Train teams on cost awareness
+2. **Cloud Optimization**: Regular architecture reviews
+3. **Vendor Negotiations**: Optimize Azure pricing
+4. **Multi-cloud Evaluation**: Assess hybrid approaches
+
+## Contact Information
+
+**Financial Team**:
+- **Finance Manager**: finance@yourcompany.com
+- **Cost Center Owners**: cost-owners@yourcompany.com
+
+**Technical Team**:
+- **Cloud Architect**: architect@yourcompany.com
+- **DevOps Lead**: devops@yourcompany.com
+
+---
+
+**Cost Estimate Date**: $(date)
+**Currency**: ${currency}
+**Pricing Valid Until**: 6 months from estimate date
+**Assumptions Review**: Quarterly
