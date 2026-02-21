@@ -9861,7 +9861,8 @@ def addons_module_run_setup(module_name, setup_script):
             # PHP web-based setup scripts
             verbose_output.append(f'🐘 PHP setup script detected: {setup_script}')
             verbose_output.append(f'🌐 This appears to be a web-based installer')
-            verbose_output.append(f'💡 Access it via: http://localhost:8080/addons/modules/{module_name}/web/{setup_script}')
+            _mc_url = app.config.get('MC_BASE_URL', 'http://127.0.0.1:8080')
+            verbose_output.append(f'💡 Access it via: {_mc_url}/addons/modules/{module_name}/web/{setup_script}')
 
             # Use _find_php() which will auto-download PHP 8.3 if not installed
             try:
@@ -10701,6 +10702,9 @@ def launch_addon(module_name: str, extract_dir: Path):
     cmd = list(ep['cmd'])
     env = os.environ.copy()
     env['PORT'] = str(port)          # honoured by many frameworks
+    # Let addons call back to MasterChief
+    env['MC_BASE_URL'] = app.config.get('MC_BASE_URL', 'http://127.0.0.1:8080')
+    env['MC_PORT']     = str(app.config.get('MC_PORT', 8080))
 
     if ep['type'] == 'php':
         try:
@@ -16808,6 +16812,10 @@ if __name__=='__main__':
         print(f'✅  Using port {_port} instead (http://localhost:{_port})')
     else:
         print(f'Dashboard: http://localhost:{_port}')
+
+    # Store resolved port so addons and routes can reference it
+    app.config['MC_PORT']     = _port
+    app.config['MC_BASE_URL'] = f'http://127.0.0.1:{_port}'
 
     try:
         app.run(host='0.0.0.0', port=_port, debug=args.debug, threaded=True)
