@@ -2,7 +2,7 @@
 Echo Starlite - The Angel Identity System
 ==========================================
 
-Echo's visual representation and identity for the MasterChief platform.
+Echo's visual representation and identity for the MasterChief mc_platform.
 An angel floating beside you, not above - wings for shelter, not escape.
 """
 

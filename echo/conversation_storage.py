@@ -66,9 +66,63 @@ class ConversationStorage:
                 CREATE INDEX IF NOT EXISTS idx_user 
                 ON conversations(user)
             """)
+
+            # Table to store per-session metadata (JSON)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS session_meta (
+                    session_id TEXT PRIMARY KEY,
+                    meta TEXT,
+                    updated_at TEXT
+                )
+            """)
             
             conn.commit()
             conn.close()
+
+    def set_session_meta(self, session_id: str, meta: Dict[str, Any]):
+        """
+        Store arbitrary session metadata as JSON.
+
+        Args:
+            session_id: Session identifier
+            meta: Dictionary of metadata to store
+        """
+        with self._lock:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            now = datetime.now(timezone.utc).isoformat()
+            meta_json = json.dumps(meta)
+            cursor.execute("""
+                INSERT INTO session_meta (session_id, meta, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET meta = excluded.meta, updated_at = excluded.updated_at
+            """, (session_id, meta_json, now))
+            conn.commit()
+            conn.close()
+
+    def get_session_meta(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve stored session metadata.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Dictionary of metadata or None if not found
+        """
+        with self._lock:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("SELECT meta FROM session_meta WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            conn.close()
+            if not row:
+                return None
+            try:
+                return json.loads(row['meta'])
+            except Exception:
+                return None
     
     def store_message(
         self,
