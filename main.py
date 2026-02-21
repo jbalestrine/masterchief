@@ -16642,6 +16642,94 @@ def web_tf_wizard():
     return redirect(url_for('web_ide'))
 
 
+# ══════════════════════════════════════════════════════════════
+#  System Diagnostics  /sys/*
+# ══════════════════════════════════════════════════════════════
+
+@app.route('/sys/diagnostics')
+def sys_diagnostics():
+    """MasterChief full-repo system diagnostics page."""
+    try:
+        from templates.diagnostics import DIAGNOSTICS_TEMPLATE
+        return render_template_string(DIAGNOSTICS_TEMPLATE)
+    except Exception as exc:
+        return f'<pre style="color:red">Diagnostics load error: {exc}</pre>', 500
+
+
+@app.route('/sys/api/scan')
+def sys_api_scan():
+    """Run full AST workspace scan and return JSON diagnostics data.
+    Results are cached for 60s. Pass ?force=1 to bust the cache."""
+    try:
+        import sys_diagnostics as _sd
+        import concurrent.futures as _cf
+        force = request.args.get('force', '0') == '1'
+        # Run in thread executor so Flask stays responsive
+        with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_sd.get_cached_scan, force)
+            data = future.result(timeout=120)
+        return jsonify(data)
+    except Exception as exc:
+        app.logger.exception('sys_api_scan error')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/sys/api/file')
+def sys_api_file():
+    """Return source file content for the inspector panel.
+    Query params: path (required), line (optional, 1-based)."""
+    rel_path = request.args.get('path', '')
+    line     = int(request.args.get('line', 0) or 0)
+    if not rel_path:
+        return jsonify({'error': 'path parameter required'}), 400
+    try:
+        import sys_diagnostics as _sd
+        data = _sd.get_file_content(rel_path, line)
+        # If raw download requested via Accept header or ?raw=1
+        if request.args.get('raw'):
+            ctype = {
+                '.py':'text/x-python', '.html':'text/html',
+                '.js':'application/javascript', '.css':'text/css',
+                '.json':'application/json', '.md':'text/markdown',
+            }.get('.' + rel_path.rsplit('.', 1)[-1], 'text/plain')
+            return data.get('content', ''), 200, {'Content-Type': ctype + '; charset=utf-8'}
+        return jsonify(data)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/sys/api/services')
+def sys_api_services():
+    """Return currently running addon services and their status."""
+    try:
+        running = app.config.get('running_services', {})
+        services = []
+        for name, svc in running.items():
+            proc = svc.get('process')
+            alive = proc is not None and proc.poll() is None
+            services.append({
+                'name':        name,
+                'status':      'running' if alive else 'stopped',
+                'pid':         svc.get('pid'),
+                'port':        svc.get('port'),
+                'entry_point': svc.get('entry_point'),
+                'type':        svc.get('type'),
+                'start_time':  svc.get('start_time'),
+            })
+        # Also surface the main app itself
+        import os as _os
+        services.insert(0, {
+            'name':   'masterchief (main)',
+            'status': 'running',
+            'pid':    _os.getpid(),
+            'port':   8080,
+            'entry_point': 'main.py',
+            'type':   'python',
+        })
+        return jsonify({'services': services})
+    except Exception as exc:
+        return jsonify({'error': str(exc), 'services': []}), 500
+
 
 if __name__=='__main__':
 
@@ -16722,7 +16810,7 @@ if __name__=='__main__':
         print(f'Dashboard: http://localhost:{_port}')
 
     try:
-        app.run(host='0.0.0.0', port=_port, debug=args.debug)
+        app.run(host='0.0.0.0', port=_port, debug=args.debug, threaded=True)
     except OSError as e:
         if 'Windows error 6' in str(e):
             print(f"⚠️  Windows console error encountered, but server should be running on http://localhost:{_port}")
