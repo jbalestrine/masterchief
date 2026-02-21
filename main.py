@@ -241,6 +241,18 @@ app.config['RBAC_ENABLED'] = True
 
 ENABLED_MODULES = load_enabled_modules()
 
+@app.context_processor
+def inject_ui_modules():
+    """Inject pinned addon modules into every template so they appear in the nav."""
+    try:
+        ui_modules_file = app.config['UPLOAD_FOLDER'] / 'ui_modules.json'
+        if ui_modules_file.exists():
+            with open(ui_modules_file, 'r') as _f:
+                return {'ui_modules': json.load(_f)}
+    except Exception:
+        pass
+    return {'ui_modules': {}}
+
 for folder in [app.config['UPLOAD_FOLDER'],app.config['SCRIPTS_FOLDER'],_data_dir]:
 
     folder.mkdir(parents=True,exist_ok=True)
@@ -2414,6 +2426,8 @@ code{color:#4CAF50;}
 
 <a href="/okta" class="{{ 'active' if request.path=='/okta' else '' }}">🔒 Okta</a>
 
+{% for _mod_name, _mod in ui_modules.items() %}<a href="{{ _mod.url }}" class="{{ 'active' if _mod.url in request.path else '' }}" title="Addon Module: {{ _mod_name }}">{{ _mod.icon }} {{ _mod_name }}</a>
+{% endfor %}
 </nav>
 
 {% with messages=get_flashed_messages(with_categories=true) %}
@@ -3179,8 +3193,8 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 </div>
 
 <!-- Blank Module Creation Wizard Modal -->
-<div id="blankModuleWizard" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;">
-    <div class="modal-content" style="background:#2d2d2d;margin:50px auto;padding:30px;border-radius:10px;max-width:700px;position:relative;">
+<div id="blankModuleWizard" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:1000;overflow-y:auto;">
+    <div class="modal-content" style="background:#2d2d2d;margin:40px auto;padding:30px;border-radius:10px;max-width:760px;position:relative;">
         <span class="close" style="position:absolute;top:15px;right:20px;font-size:30px;cursor:pointer;color:#888;" onclick="closeModal('blankModuleWizard')">&times;</span>
         <h2 style="color: #4CAF50; margin-bottom: 20px;">🆕 Create Blank Module</h2>
 
@@ -3206,11 +3220,56 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
             <textarea id="moduleDescription" rows="3" placeholder="Describe what this module will do..." style="width:100%;padding:12px;background:#1a1a1a;border:1px solid #3a3a3a;color:#e0e0e0;border-radius:5px;font-size:1em;"></textarea>
         </div>
 
+        <div class="form-group" style="margin-bottom:20px;">
+            <label style="display:block;margin-bottom:10px;color:#4CAF50;font-weight:bold;">⚡ Capabilities (select any that apply)</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="web_ui" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    🌐 <span><strong>Web UI</strong><br><small style="color:#888;">Flask Blueprint with routes + HTML template</small></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="rest_api" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    🔌 <span><strong>REST API</strong><br><small style="color:#888;">JSON endpoints with GET/POST stubs</small></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="echo_hook" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    🌙 <span><strong>Echo Chat Hook</strong><br><small style="color:#888;">Register intent handler with Echo</small></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="rbac" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    🔒 <span><strong>RBAC-Aware</strong><br><small style="color:#888;">Role checks on protected routes</small></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="background_jobs" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    ⚙️ <span><strong>Background Jobs</strong><br><small style="color:#888;">Thread-based async job runner</small></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="settings_page" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    ⚙️ <span><strong>Settings Page</strong><br><small style="color:#888;">Persistent key/value settings UI</small></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="scheduled_task" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    ⏰ <span><strong>Scheduled Task</strong><br><small style="color:#888;">Cron-style background scheduler</small></span>
+                </label>
+                <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                    <input type="checkbox" name="capabilities" value="sqlite" style="width:16px;height:16px;accent-color:#4CAF50;">
+                    🗄️ <span><strong>SQLite DB</strong><br><small style="color:#888;">Local database with db.py helper</small></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:20px;">
+            <label style="display:flex;align-items:center;gap:8px;color:#ccc;cursor:pointer;background:#1a1a1a;padding:10px;border-radius:6px;border:1px solid #3a3a3a;">
+                <input type="checkbox" id="autoLoadModule" style="width:16px;height:16px;accent-color:#4CAF50;">
+                🚀 <span><strong>Auto-load on startup</strong><br><small style="color:#888;">Register this module every time MasterChief starts</small></span>
+            </label>
+        </div>
+
         <div style="background: #1a1a1a; padding: 15px; border-radius: 5px; margin: 20px 0;">
             <h4 style="color: #4CAF50; margin: 0 0 10px 0;">What happens next?</h4>
             <ul style="color: #ccc; margin: 0; padding-left: 20px;">
                 <li>A new directory structure will be created for your module</li>
-                <li>You can add files and edit code through the module management interface</li>
+                <li>Selected capabilities generate ready-to-edit scaffold files</li>
                 <li>Use the Build, Load, and Register Features buttons to activate your module</li>
                 <li>Access your module at: <code style="background: #2d2d2d; padding: 2px 4px; border-radius: 3px;">/addons/modules/{module_name}</code></li>
             </ul>
@@ -3218,7 +3277,7 @@ ADDONS_TEMPLATE="""{% extends "base.html" %}
 
         <div style="text-align: right; margin-top: 20px;">
             <button class="btn btn-info" onclick="closeModal('blankModuleWizard')" style="background:#2196F3;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;">Cancel</button>
-            <button class="btn" onclick="createBlankModule()" style="background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;margin-left:10px;">Create Module</button>
+            <button id="createModuleBtn" class="btn" onclick="createBlankModule()" style="background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;margin-left:10px;">Create Module</button>
         </div>
     </div>
 </div>
@@ -3236,6 +3295,8 @@ function createBlankModule() {
     const moduleName = document.getElementById('moduleName').value.trim();
     const moduleType = document.getElementById('moduleType').value;
     const description = document.getElementById('moduleDescription').value.trim();
+    const autoLoad = document.getElementById('autoLoadModule').checked;
+    const capabilities = Array.from(document.querySelectorAll('input[name="capabilities"]:checked')).map(c => c.value);
 
     if (!moduleName) {
         alert('Please enter a module name');
@@ -3247,8 +3308,7 @@ function createBlankModule() {
         return;
     }
 
-    // Show loading
-    const btn = event.target || document.querySelector('#blankModuleWizard .btn:not(.btn-info)');
+    const btn = document.getElementById('createModuleBtn');
     const originalText = btn.textContent;
     btn.textContent = 'Creating...';
     btn.disabled = true;
@@ -3259,13 +3319,16 @@ function createBlankModule() {
         body: JSON.stringify({
             name: moduleName,
             type: moduleType,
-            description: description
+            description: description,
+            capabilities: capabilities,
+            auto_load: autoLoad
         })
     })
     .then(r => r.json())
     .then(j => {
         if (j.success) {
-            alert('Blank module created successfully! You can now add files and manage it.');
+            const caps = capabilities.length ? ' with: ' + capabilities.join(', ') : '';
+            alert('Module "' + moduleName + '" created' + caps + '!');
             closeModal('blankModuleWizard');
             location.reload();
         } else {
@@ -8309,6 +8372,8 @@ def addons_create_blank_module():
         module_name = data.get('name', '').strip()
         module_type = data.get('type', 'python')
         description = data.get('description', '').strip()
+        capabilities = data.get('capabilities', [])
+        auto_load = bool(data.get('auto_load', False))
 
         if not module_name:
             return jsonify({'success': False, 'error': 'Module name is required'}), 400
@@ -8332,22 +8397,50 @@ def addons_create_blank_module():
 
 __version__ = "0.1.0"
 __author__ = "MasterChief"
-''')
+''', encoding='utf-8')
 
-            # Create main.py
+            # Create main.py — a real Flask dev server so Start works out of the box
             (extract_dir / 'main.py').write_text(f'''"""
-Main module for {module_name}
+Main server for {module_name}
 {description or ''}
+Run directly:  python main.py
+Or load via the addon system which calls addon.py init().
 """
+from flask import Flask, jsonify, render_template_string
+import os
 
-def main():
-    """Main function - customize this for your module"""
-    print(f"Hello from {module_name}!")
-    # Add your code here
+app = Flask(__name__)
 
-if __name__ == "__main__":
-    main()
-''')
+INDEX_HTML = """<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{module_name}</title>
+  <style>
+    body {{background:#1a1a1a;color:#e0e0e0;font-family:Arial,sans-serif;padding:40px;text-align:center;}}
+    h1 {{color:#4CAF50;}} a {{color:#7B1FA2;}}
+  </style>
+</head>
+<body>
+  <h1>🧩 {module_name}</h1>
+  <p>{description or 'Custom module — edit main.py or addon.py to get started.'}</p>
+  <p><a href="/api/status">API Status</a></p>
+</body>
+</html>"""
+
+@app.route('/')
+def index():
+    return render_template_string(INDEX_HTML)
+
+@app.route('/api/status')
+def status():
+    return jsonify({{'module': '{module_name}', 'status': 'ok', 'version': '0.1.0'}})
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    print(f'[MC] Running on http://localhost:{{port}}', flush=True)
+    app.run(host='0.0.0.0', port=port, debug=False)
+''', encoding='utf-8')
 
             # Create config.py
             (extract_dir / 'config.py').write_text(f'''"""
@@ -8361,7 +8454,7 @@ MODULE_DESCRIPTION = "{description or 'A custom Python module'}"
 
 # Add your configuration variables here
 DEBUG = True
-''')
+''', encoding='utf-8')
 
         elif module_type == 'web':
             # Create basic web structure
@@ -8380,7 +8473,7 @@ def home():
 
 if __name__ == "__main__":
     app.run(debug=True)
-''')
+''', encoding='utf-8')
 
             (extract_dir / 'templates').mkdir(exist_ok=True)
             (extract_dir / 'static').mkdir(exist_ok=True)
@@ -8410,7 +8503,7 @@ def info():
 
 if __name__ == "__main__":
     app.run(debug=True)
-''')
+''', encoding='utf-8')
 
         else:
             # Generic/other type - just create a basic README
@@ -8425,7 +8518,7 @@ Add your code and documentation here.
 ## Usage
 
 Customize this module according to your needs.
-''')
+''', encoding='utf-8')
 
         # Create README.md for all types
         readme_path = extract_dir / 'README.md'
@@ -8455,7 +8548,239 @@ This module includes the following files:
 ## Development
 
 Edit files directly through the web interface or upload additional files as needed.
-''')
+''', encoding='utf-8')
+
+        # ── Capability scaffolding ────────────────────────────────────────
+        # Always generate addon.py (blueprint stub) when any integration cap selected
+        integration_caps = {'web_ui', 'rest_api', 'echo_hook', 'rbac', 'settings_page'}
+        need_addon = bool(set(capabilities) & integration_caps)
+
+        if need_addon or 'web_ui' in capabilities or 'rest_api' in capabilities:
+            bp_routes = ''
+            if 'web_ui' in capabilities:
+                (extract_dir / 'templates').mkdir(exist_ok=True)
+                bp_routes += f'''
+@bp.route('/')
+def index():
+    return render_template_string(open(Path(__file__).parent / 'templates' / 'index.html').read())
+'''
+                (extract_dir / 'templates' / 'index.html').write_text(f'''<!DOCTYPE html>
+<html>
+<head><title>{module_name}</title></head>
+<body style="background:#1a1a1a;color:#e0e0e0;font-family:sans-serif;padding:40px;">
+<h1>🧩 {module_name}</h1>
+<p>{description or 'Custom module UI — edit templates/index.html'}</p>
+</body>
+</html>
+''', encoding='utf-8')
+            if 'rest_api' in capabilities:
+                bp_routes += f'''
+@bp.route('/api/status', methods=['GET'])
+def api_status():
+    return jsonify({{'module': '{module_name}', 'status': 'ok'}})
+
+@bp.route('/api/action', methods=['POST'])
+def api_action():
+    payload = request.get_json() or {{}}
+    # TODO: implement action logic
+    return jsonify({{'success': True, 'payload': payload}})
+'''
+            rbac_import = ''
+            rbac_check = ''
+            if 'rbac' in capabilities:
+                rbac_import = '\nfrom functools import wraps'
+                rbac_check = '''
+
+def require_role(*roles):
+    """Decorator: require the current user to have one of the given roles."""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            from flask import session, abort
+            user_role = session.get('role', 'guest')
+            if user_role not in roles:
+                abort(403)
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+'''
+            echo_hook_code = ''
+            if 'echo_hook' in capabilities:
+                echo_hook_code = f'''
+
+def register_echo_hook(chatbot):
+    """Register an intent handler with the Echo chatbot."""
+    def handle_intent(message, context=None):
+        # TODO: detect and handle intents
+        if '{module_name.lower()}' in message.lower():
+            return f'Module {module_name} received: {{message}}'
+        return None
+    try:
+        chatbot.register_plugin('{module_name}', handle_intent)
+    except Exception:
+        pass
+'''
+            settings_code = ''
+            if 'settings_page' in capabilities:
+                settings_code = f'''
+
+_settings_defaults = {{
+    'enabled': True,
+    # add more default settings here
+}}
+
+@bp.route('/settings', methods=['GET', 'POST'])
+def settings():
+    import json as _json
+    settings_file = Path(__file__).parent / 'settings.json'
+    cfg = dict(_settings_defaults)
+    if settings_file.exists():
+        try:
+            cfg.update(_json.loads(settings_file.read_text()))
+        except Exception:
+            pass
+    if request.method == 'POST':
+        for k in _settings_defaults:
+            val = request.form.get(k, '')
+            cfg[k] = val
+        settings_file.write_text(_json.dumps(cfg, indent=2), encoding='utf-8')
+    html = """<h2>⚙️ Settings</h2><form method=post>"""
+    for k, v in cfg.items():
+        html += f'<label>{{k}}: <input name="{{k}}" value="{{v}}"></label><br>'
+    html += '<button type=submit>Save</button></form>'
+    return html
+'''
+            (extract_dir / 'addon.py').write_text(f'''"""addon.py — MasterChief Blueprint for {module_name}"""
+from flask import Blueprint, jsonify, request, render_template_string, session, abort
+from pathlib import Path{rbac_import}
+
+bp = Blueprint('{module_name}', __name__, url_prefix='/modules/{module_name}'){rbac_check}{echo_hook_code}{settings_code}{bp_routes}
+
+def init(app):
+    """Called by MasterChief to register this module."""
+    app.register_blueprint(bp){"\n    register_echo_hook(app.extensions.get('chatbot')" + ")" if 'echo_hook' in capabilities else ""}
+    print(f'Module {module_name} registered at /modules/{module_name}')
+''', encoding='utf-8')
+
+        if 'background_jobs' in capabilities:
+            (extract_dir / 'jobs.py').write_text(f'''"""Background job runner for {module_name}"""
+import threading
+import time
+
+_jobs = {{}}
+
+def start_job(job_id, func, *args):
+    """Run func(*args) in a daemon thread, tracked by job_id."""
+    def _wrapped():
+        _jobs[job_id] = {{'status': 'running', 'result': None}}
+        try:
+            result = func(*args)
+            _jobs[job_id] = {{'status': 'done', 'result': result}}
+        except Exception as e:
+            _jobs[job_id] = {{'status': 'error', 'result': str(e)}}
+    t = threading.Thread(target=_wrapped, daemon=True)
+    t.start()
+    return job_id
+
+def get_job(job_id):
+    return _jobs.get(job_id, {{'status': 'not_found'}})
+
+def list_jobs():
+    return dict(_jobs)
+''', encoding='utf-8')
+
+        if 'scheduled_task' in capabilities:
+            (extract_dir / 'scheduler.py').write_text(f'''"""Scheduler for {module_name} — uses a background thread."""
+import threading
+import time
+
+_stop_event = threading.Event()
+
+def _task_loop(interval_seconds=60):
+    while not _stop_event.wait(interval_seconds):
+        try:
+            run_task()
+        except Exception as e:
+            print(f"[{module_name}] Scheduled task error: {{e}}")
+
+def run_task():
+    """TODO: implement your scheduled logic here."""
+    print(f"[{module_name}] tick")
+
+def start_scheduler(interval_seconds=60):
+    """Start the background scheduler. Call from addon.py init()."""
+    _stop_event.clear()
+    t = threading.Thread(target=_task_loop, args=(interval_seconds,), daemon=True)
+    t.start()
+    return t
+
+def stop_scheduler():
+    _stop_event.set()
+''', encoding='utf-8')
+
+        if 'sqlite' in capabilities:
+            (extract_dir / 'db.py').write_text(f'''"""SQLite helper for {module_name}"""
+import sqlite3
+from pathlib import Path
+
+DB_PATH = Path(__file__).parent / 'data.db'
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS entries (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    key     TEXT NOT NULL,
+    value   TEXT,
+    created TEXT DEFAULT (datetime('now'))
+);
+"""
+
+def get_db():
+    """Return a new SQLite connection to this module\'s database."""
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    """Create tables if they don\'t exist."""
+    with get_db() as conn:
+        conn.executescript(SCHEMA)
+
+def set_value(key, value):
+    with get_db() as conn:
+        conn.execute('INSERT OR REPLACE INTO entries (key, value) VALUES (?, ?)', (key, str(value)))
+
+def get_value(key, default=None):
+    with get_db() as conn:
+        row = conn.execute('SELECT value FROM entries WHERE key=? ORDER BY id DESC LIMIT 1', (key,)).fetchone()
+    return row['value'] if row else default
+
+# Auto-init on import
+try:
+    init_db()
+except Exception:
+    pass
+''', encoding='utf-8')
+            # Write db_config.json so DB Manager can discover this module
+            import json as _json_w
+            (extract_dir / 'db_config.json').write_text(_json_w.dumps({
+                'module': module_name,
+                'db_file': 'data.db',
+                'tables': ['entries']
+            }, indent=2), encoding='utf-8')
+
+        # ── Auto-load registration ────────────────────────────────────────────
+        if auto_load:
+            autoload_file = app.config['UPLOAD_FOLDER'] / 'modules_autoload.json'
+            try:
+                if autoload_file.exists():
+                    autoload_list = json.loads(autoload_file.read_text(encoding='utf-8'))
+                else:
+                    autoload_list = []
+                if module_name not in autoload_list:
+                    autoload_list.append(module_name)
+                autoload_file.write_text(json.dumps(autoload_list, indent=2), encoding='utf-8')
+            except Exception as _ae:
+                app.logger.warning(f'Could not update modules_autoload.json: {_ae}')
 
         # Store module info
         module_info = {
@@ -8465,7 +8790,9 @@ Edit files directly through the web interface or upload additional files as need
             'installed_at': datetime.now().isoformat(),
             'type': module_type,
             'description': description,
-            'is_blank_module': True
+            'is_blank_module': True,
+            'capabilities': capabilities,
+            'auto_load': auto_load
         }
 
         # Save module info
@@ -8787,16 +9114,29 @@ def addons_load(addon_name):
 
         elif project_info['has_php']:
 
-            # Handle PHP web application
-            # Determine primary type for display
+            # Handle PHP web application — locate/download PHP then launch server
             primary_type = 'PHP'
             if project_info['has_nodejs']:
                 primary_type = 'Node.js/PHP'
             elif len([k for k in ['has_java', 'has_csharp', 'has_cpp', 'has_go', 'has_rust'] if project_info.get(k)]) > 0:
                 primary_type = 'PHP/Multi-language'
-            
-            flash(f'PHP web application {addon_name} is ready! Access via /addons/modules/{addon_name}/','info')
-            flash(f'Type: {primary_type} - Frameworks: {", ".join(project_info["frameworks"]) if project_info["frameworks"] else "None detected"}','info')
+
+            try:
+                _find_php()  # locates or auto-downloads PHP 8.3 — raises RuntimeError if it fails
+                result = launch_addon(addon_name, extract_dir)
+                if result.get('status') == 'started':
+                    flash(f'✅ PHP addon {addon_name} started (PID {result["pid"]}, port {result["port"]})', 'success')
+                    flash(f'🌐 Access at: /addons/modules/{addon_name}/app/', 'info')
+                elif result.get('status') == 'html':
+                    flash(f'🌐 PHP/HTML addon {addon_name} ready — open via /addons/modules/{addon_name}/', 'info')
+                else:
+                    flash(f'⚠️ PHP addon {addon_name}: {result.get("message", "unknown")}', 'warning')
+            except RuntimeError as _php_e:
+                flash(f'❌ PHP not available: {_php_e}', 'error')
+            except Exception as _php_e:
+                flash(f'❌ Failed to launch PHP addon {addon_name}: {_php_e}', 'error')
+
+            flash(f'Type: {primary_type} — Frameworks: {", ".join(project_info["frameworks"]) if project_info["frameworks"] else "None detected"}', 'info')
 
         else:
 
@@ -9003,7 +9343,17 @@ def addons_modules():
                         # Skip modules with access issues
                         continue
     
-    return render_addons_modules_page(installed_modules)
+    # Load pinned modules so the template can show pin state
+    ui_modules = {}
+    try:
+        ui_modules_file = app.config['UPLOAD_FOLDER'] / 'ui_modules.json'
+        if ui_modules_file.exists():
+            with open(ui_modules_file, 'r') as _f:
+                ui_modules = json.load(_f)
+    except Exception:
+        pass
+
+    return render_addons_modules_page(installed_modules, ui_modules=ui_modules)
 
 @app.route('/addons/modules/<module_name>/manager')
 def module_manager(module_name):
@@ -9026,7 +9376,7 @@ def module_manager(module_name):
                             modified = datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
                             files.append({
                                 'name': item.name,
-                                'path': str(item.relative_to(extract_dir)),
+                                'path': item.relative_to(extract_dir).as_posix(),
                                 'size': size,
                                 'modified': modified,
                                 'type': 'file',
@@ -9036,17 +9386,15 @@ def module_manager(module_name):
                             pass
                     elif item.is_dir():
                         try:
-                            # Add directory entry
                             files.append({
                                 'name': item.name,
-                                'path': str(item.relative_to(extract_dir)),
+                                'path': item.relative_to(extract_dir).as_posix(),
                                 'size': 0,
                                 'modified': datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
                                 'type': 'directory',
                                 'extension': ''
                             })
-                            # Recursively scan subdirectory
-                            scan_directory(item, str(item.relative_to(extract_dir)))
+                            scan_directory(item)
                         except:
                             pass
             except:
@@ -9515,24 +9863,40 @@ def addons_module_run_setup(module_name, setup_script):
             verbose_output.append(f'🌐 This appears to be a web-based installer')
             verbose_output.append(f'💡 Access it via: http://localhost:8080/addons/modules/{module_name}/web/{setup_script}')
 
-            # Try to start a PHP development server if possible
-            if (extract_dir / 'composer.json').exists() or (extract_dir / 'index.php').exists():
-                try:
-                    verbose_output.append('🚀 Attempting to start PHP development server...')
-                    # Check if we can run PHP
-                    php_check = subprocess.run(['php', '--version'], capture_output=True, text=True, timeout=10)
-                    if php_check.returncode == 0:
-                        verbose_output.append('✅ PHP is available on the system')
-                        flash(f'🌐 PHP setup script ready: Access {setup_script} via the web interface', 'info')
-                        flash(f'💡 PHP development server can be started if needed', 'info')
+            # Use _find_php() which will auto-download PHP 8.3 if not installed
+            try:
+                verbose_output.append('🔍 Locating PHP (will auto-download if needed)...')
+                php_bin = _find_php()
+                php_ver = subprocess.run([php_bin, '--version'], capture_output=True, text=True, timeout=10)
+                ver_line = php_ver.stdout.splitlines()[0] if php_ver.stdout else 'PHP'
+                verbose_output.append(f'✅ {ver_line}')
+
+                if (extract_dir / 'composer.json').exists() or (extract_dir / 'index.php').exists():
+                    # Actually execute the setup script with the located PHP binary
+                    php_result = subprocess.run(
+                        [php_bin, str(script_path)],
+                        capture_output=True, text=True,
+                        cwd=str(extract_dir), timeout=120
+                    )
+                    if php_result.returncode == 0:
+                        verbose_output.append('✅ PHP setup script ran successfully')
+                        if php_result.stdout.strip():
+                            verbose_output.append(f'Output: {php_result.stdout.strip()[:200]}')
+                        flash(f'✅ PHP setup script executed: {setup_script}', 'success')
                     else:
-                        verbose_output.append('❌ PHP not found on system')
-                        flash('❌ PHP is not installed on this system', 'error')
-                except:
-                    verbose_output.append('❌ Could not check PHP availability')
-                    flash('❌ Could not verify PHP installation', 'error')
-            else:
-                flash(f'ℹ️ PHP script detected but no web server setup found', 'info')
+                        err = php_result.stderr.strip()[:300] or php_result.stdout.strip()[:300]
+                        verbose_output.append(f'⚠️ PHP script exited {php_result.returncode}: {err}')
+                        flash(f'⚠️ PHP setup finished with errors (exit {php_result.returncode})', 'warning')
+                else:
+                    flash(f'ℹ️ PHP binary ready at: {php_bin}', 'info')
+                    flash(f'💡 Run manually if needed: php {setup_script}', 'info')
+
+            except RuntimeError as _php_err:
+                verbose_output.append(f'❌ {_php_err}')
+                flash(f'❌ PHP unavailable: {_php_err}', 'error')
+            except Exception as _php_err:
+                verbose_output.append(f'❌ PHP error: {_php_err}')
+                flash(f'❌ PHP setup failed: {_php_err}', 'error')
 
             # Show verbose output and return
             for msg in verbose_output[:5]:
@@ -10141,40 +10505,92 @@ def _find_php() -> str:
     if on_path:
         return on_path
 
-    # ── Auto-download PHP 8.3 NTS x64 for Windows ───────────────────────────
+    # ── Auto-download PHP for Windows ───────────────────────────────────────
     php_dir = Path(app.root_path) / 'php'
     php_dir.mkdir(exist_ok=True)
 
-    php_zip_url = 'https://windows.php.net/downloads/releases/php-8.3.17-nts-Win32-vs16-x64.zip'
-    # Fallback mirror
-    fallback_url = 'https://github.com/nicowillis/php-windows-builds/releases/download/8.3.17/php-8.3.17-nts-Win32-vs16-x64.zip'
+    # Try winget first (silent, most reliable on modern Windows)
+    try:
+        wg = subprocess.run(
+            ['winget', 'install', '--id', 'PHP.PHP', '--silent', '--accept-package-agreements', '--accept-source-agreements'],
+            capture_output=True, text=True, timeout=120
+        )
+        found = shutil.which('php')
+        if found:
+            return found
+    except Exception:
+        pass
 
-    def _download(url):
-        with urllib.request.urlopen(url, timeout=60) as resp:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp:
-                tmp.write(resp.read())
-                return tmp.name
+    # Try chocolatey
+    try:
+        choco = shutil.which('choco')
+        if choco:
+            subprocess.run([choco, 'install', 'php', '-y'], capture_output=True, text=True, timeout=120)
+            found = shutil.which('php')
+            if found:
+                return found
+    except Exception:
+        pass
+
+    # Manual ZIP download — try multiple version URLs
+    # PowerShell Invoke-WebRequest handles Windows HTTPS/redirects better than urllib
+    zip_candidates = [
+        'https://windows.php.net/downloads/releases/php-8.3.17-nts-Win32-vs16-x64.zip',
+        'https://windows.php.net/downloads/releases/php-8.3.16-nts-Win32-vs16-x64.zip',
+        'https://windows.php.net/downloads/releases/php-8.2.27-nts-Win32-vs16-x64.zip',
+        'https://windows.php.net/downloads/releases/php-8.1.31-nts-Win32-vs16-x64.zip',
+    ]
 
     tmp_zip = None
-    for url in (php_zip_url, fallback_url):
+    last_err = ''
+
+    for url in zip_candidates:
+        zip_dest = str(php_dir / 'php_download.zip')
+        # Try PowerShell first (handles TLS/redirects better on Windows)
         try:
-            tmp_zip = _download(url)
-            break
-        except Exception:
-            continue
+            ps_result = subprocess.run(
+                ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+                 f'[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; '
+                 f'Invoke-WebRequest -Uri "{url}" -OutFile "{zip_dest}" -UseBasicParsing'],
+                capture_output=True, text=True, timeout=120
+            )
+            if ps_result.returncode == 0 and Path(zip_dest).exists() and Path(zip_dest).stat().st_size > 100000:
+                tmp_zip = zip_dest
+                break
+            last_err = ps_result.stderr.strip() or ps_result.stdout.strip()
+        except Exception as _e:
+            last_err = str(_e)
+        # urllib fallback
+        try:
+            import ssl as _ssl
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            with urllib.request.urlopen(url, timeout=90, context=ctx) as resp:
+                data = resp.read()
+            if len(data) > 100000:
+                Path(zip_dest).write_bytes(data)
+                tmp_zip = zip_dest
+                break
+        except Exception as _e:
+            last_err = str(_e)
 
     if not tmp_zip:
         raise RuntimeError(
-            'PHP is not installed and could not be downloaded automatically. '
-            'Install PHP from https://windows.php.net/download/ and add it to PATH.'
+            f'PHP is not installed and auto-download failed ({last_err}). '
+            'Install PHP manually: winget install PHP.PHP  '
+            'or download from https://windows.php.net/download/ and add to PATH.'
         )
 
     try:
         with zipfile.ZipFile(tmp_zip) as zf:
             zf.extractall(php_dir)
-        Path(tmp_zip).unlink(missing_ok=True)
+        try:
+            Path(tmp_zip).unlink(missing_ok=True)
+        except Exception:
+            pass
     except Exception as e:
-        raise RuntimeError(f'Failed to extract PHP: {e}')
+        raise RuntimeError(f'Failed to extract PHP zip: {e}')
 
     # Copy php.ini-development → php.ini so extensions load correctly
     ini_dev = php_dir / 'php.ini-development'
@@ -10370,11 +10786,54 @@ runpy.run_path(r'{entry_file}', run_name='__main__')
 
 @app.route('/addons/modules/<module_name>/start', methods=['POST'])
 def addons_module_start(module_name):
-    """Start a module service by auto-detecting its entry point."""
+    """Start a module service.
+    
+    Strategy:
+    - If the module has addon.py with an init() function → load it as a Flask
+      Blueprint (no subprocess needed, routes are injected into this process).
+    - Otherwise → launch a subprocess and proxy to it.
+    """
     extract_dir = app.config['UPLOAD_FOLDER'] / 'extracted' / module_name
     if not extract_dir.exists():
         return jsonify({'error': f'Module not found: {module_name}'}), 404
 
+    # ── Blueprint / addon.py path ─────────────────────────────────────────────
+    addon_py = extract_dir / 'addon.py'
+    if addon_py.exists():
+        try:
+            import importlib.util as _ilu
+            spec = _ilu.spec_from_file_location(f'addon_{module_name}', str(addon_py))
+            if spec and spec.loader:
+                mod = _ilu.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                if hasattr(mod, 'init'):
+                    mod.init(app)
+                    # Record as a "blueprint" service so status checks work
+                    app.config.setdefault('running_services', {})[module_name] = {
+                        'type': 'blueprint',
+                        'entry_point': 'addon.py',
+                        'proxy_url': f'/modules/{module_name}/',
+                    }
+                    # Try to find what URL prefix the blueprint registered
+                    bp_url = f'/modules/{module_name}/'
+                    for bp_name, bp in app.blueprints.items():
+                        if bp_name == module_name or bp_name == f'addon_{module_name}':
+                            prefix = getattr(bp, 'url_prefix', None) or f'/{bp_name}'
+                            bp_url = prefix.rstrip('/') + '/'
+                            break
+                    app.config['running_services'][module_name]['proxy_url'] = bp_url
+                    return jsonify({
+                        'status': 'blueprint',
+                        'message': f'{module_name} loaded as Blueprint',
+                        'entry_point': 'addon.py',
+                        'proxy_url': bp_url,
+                    }), 200
+                else:
+                    return jsonify({'error': 'addon.py has no init() function'}), 400
+        except Exception as _e:
+            return jsonify({'error': f'Failed to load addon.py: {_e}'}), 500
+
+    # ── Subprocess path ───────────────────────────────────────────────────────
     # Check if already running
     running_services = app.config.get('running_services', {})
     svc = running_services.get(module_name)
@@ -10397,7 +10856,7 @@ def addons_module_start(module_name):
                         'url': result['url'], 'proxy_url': result['proxy_url'],
                         'entry_point': result['entry_point']}), 200
     elif result['status'] == 'no_entry_point':
-        return jsonify({'error': result['message']}), 400
+        return jsonify({'error': 'No runnable entry point found (no addon.py, main.py, index.js, index.php, or index.html)'}), 400
     else:
         return jsonify({'error': result['message']}), 500
 
@@ -10536,10 +10995,19 @@ def _proxy_starting(module_name, port, subpath):
 
 @app.route('/addons/modules/<module_name>/status')
 def addons_module_status(module_name):
-    """Return running status of an addon subprocess."""
+    """Return running status of an addon subprocess or blueprint."""
     svc = app.config.get('running_services', {}).get(module_name)
     if not svc:
         return jsonify({'status': 'stopped', 'pid': None, 'port': None})
+
+    # Blueprint modules have no subprocess — they're always "alive" if registered
+    if svc.get('type') == 'blueprint':
+        return jsonify({
+            'status': 'blueprint',
+            'entry_point': svc.get('entry_point'),
+            'proxy_url': svc.get('proxy_url'),
+        })
+
     proc = svc.get('process')
     alive = proc and proc.poll() is None
     return jsonify({
@@ -10730,7 +11198,7 @@ def module_files_api(module_name):
                             modified = datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
                             files.append({
                                 'name': item.name,
-                                'path': str(item.relative_to(extract_dir)),
+                                'path': item.relative_to(extract_dir).as_posix(),
                                 'size': size,
                                 'modified': modified,
                                 'type': 'file',
@@ -10742,13 +11210,13 @@ def module_files_api(module_name):
                         try:
                             files.append({
                                 'name': item.name,
-                                'path': str(item.relative_to(extract_dir)),
+                                'path': item.relative_to(extract_dir).as_posix(),
                                 'size': 0,
                                 'modified': datetime.fromtimestamp(item.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
                                 'type': 'directory',
                                 'extension': ''
                             })
-                            scan_directory(item, str(item.relative_to(extract_dir)))
+                            scan_directory(item)
                         except:
                             pass
             except:
@@ -10863,9 +11331,20 @@ def module_upload_api(module_name):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/addons/modules/<module_name>/api/ui_integration', methods=['POST'])
+@app.route('/addons/modules/<module_name>/api/ui_integration', methods=['GET', 'POST'])
 def module_ui_integration_api(module_name):
-    """API endpoint to add/remove module from main UI navigation"""
+    """API endpoint to add/remove/check module from main UI navigation"""
+    if request.method == 'GET':
+        try:
+            ui_modules_file = app.config['UPLOAD_FOLDER'] / 'ui_modules.json'
+            ui_modules = {}
+            if ui_modules_file.exists():
+                with open(ui_modules_file, 'r') as f:
+                    ui_modules = json.load(f)
+            in_ui = module_name in ui_modules
+            return jsonify({'in_ui': in_ui, 'url': ui_modules[module_name]['url'] if in_ui else None})
+        except Exception as e:
+            return jsonify({'in_ui': False, 'error': str(e)})
     try:
         action = request.json.get('action') if request.is_json else request.form.get('action')
         if action not in ['add', 'remove']:
@@ -10900,13 +11379,13 @@ def module_ui_integration_api(module_name):
                 for priority in priority_files:
                     for web_file in web_files:
                         if web_file.name.lower() == priority:
-                            main_file = str(web_file.relative_to(extract_dir))
+                            main_file = web_file.relative_to(extract_dir).as_posix()
                             break
                     if main_file:
                         break
                 
                 if not main_file and web_files:
-                    main_file = str(web_files[0].relative_to(extract_dir))
+                    main_file = web_files[0].relative_to(extract_dir).as_posix()
             
             ui_modules[module_name] = {
                 'name': module_name,
@@ -16176,19 +16655,11 @@ if __name__=='__main__':
 
     args=parser.parse_args()
 
-    print('DEBUG: Starting MasterChief...')
     print('='*70)
-
     print('MasterChief DevOps Platform')
-
     print('='*70)
-
-    print(f'Dashboard: http://localhost:{args.port}')
-
     if args.debug:
-
         print('⚠️  Running in DEBUG mode - Not for production!')
-
     print('='*70)
 
     # perform runtime chat initialization (load model if configured)
@@ -16201,14 +16672,61 @@ if __name__=='__main__':
 
         app.logger.exception('Startup chat initialization failed')
 
-    # Handle Windows console issues with Flask banner
+    # Auto-load addon modules registered for startup
     try:
-        app.run(host='0.0.0.0',port=args.port,debug=args.debug)
+        _autoload_file = Path(__file__).parent / 'data' / 'uploads' / 'modules_autoload.json'
+        if _autoload_file.exists():
+            import importlib.util as _ilu
+            _autoload_list = json.loads(_autoload_file.read_text(encoding='utf-8'))
+            for _mod_name in _autoload_list:
+                try:
+                    _addon_py = Path(__file__).parent / 'data' / 'uploads' / 'extracted' / _mod_name / 'addon.py'
+                    if _addon_py.exists():
+                        _spec = _ilu.spec_from_file_location(f'addon_{_mod_name}', str(_addon_py))
+                        if _spec and _spec.loader:
+                            _m = _ilu.module_from_spec(_spec)
+                            _spec.loader.exec_module(_m)
+                            if hasattr(_m, 'init'):
+                                _m.init(app)
+                                print(f'✅ Auto-loaded module: {_mod_name}')
+                except Exception as _e:
+                    print(f'⚠️  Failed to auto-load module {_mod_name}: {_e}')
+    except Exception:
+        pass
+
+    # Start server — auto-advance port if the default is already taken
+    import socket as _socket
+    _start_port = args.port
+    _port = _start_port
+    while True:
+        # Quick pre-check so we can print a friendly message
+        _sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        _sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+        try:
+            _sock.bind(('0.0.0.0', _port))
+            _sock.close()
+            break   # port is free
+        except OSError:
+            _sock.close()
+            if _port == _start_port:
+                print(f'⚠️  Port {_port} is already in use — trying next available port…')
+            _port += 1
+            if _port > _start_port + 20:
+                print(f'❌  Could not find a free port in range {_start_port}–{_port - 1}.')
+                print('   Close other MasterChief instances or specify --port <num>')
+                raise SystemExit(1)
+
+    if _port != _start_port:
+        print(f'✅  Using port {_port} instead (http://localhost:{_port})')
+    else:
+        print(f'Dashboard: http://localhost:{_port}')
+
+    try:
+        app.run(host='0.0.0.0', port=_port, debug=args.debug)
     except OSError as e:
         if 'Windows error 6' in str(e):
-            print(f"⚠️  Windows console error encountered, but server should be running on http://localhost:{args.port}")
+            print(f"⚠️  Windows console error encountered, but server should be running on http://localhost:{_port}")
             print("This is a known Windows console handle issue - the application is still functional.")
-            # Keep the process alive
             import time
             while True:
                 time.sleep(1)

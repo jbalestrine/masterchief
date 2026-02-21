@@ -1,0 +1,50 @@
+{
+  "name": "ci-cd-pipeline",
+  "display_name": "CI/CD Pipeline",
+  "description": "Continuous integration and deployment pipeline management",
+  "version": "1.0.0",
+  "enabled": false,
+  "dependencies": ["jenkinsapi", "gitlab", "github"],
+  "routes": [
+    {
+      "path": "/api/features/cicd/pipelines",
+      "method": "GET",
+      "description": "List pipelines"
+    },
+    {
+      "path": "/api/features/cicd/pipelines/{name}",
+      "method": "GET",
+      "description": "Get pipeline details"
+    },
+    {
+      "path": "/api/features/cicd/run",
+      "method": "POST",
+      "description": "Run pipeline"
+    },
+    {
+      "path": "/api/features/cicd/create",
+      "method": "POST",
+      "description": "Create pipeline"
+    }
+  ],
+  "scripts": [],
+  "ui_components": [
+    {
+      "type": "card",
+      "title": "CI/CD Pipelines",
+      "content": "Manage continuous integration and deployment",
+      "actions": [
+        {
+          "label": "View Pipelines",
+          "action": "navigate",
+          "url": "/features/cicd/pipelines"
+        },
+        {
+          "label": "Create Pipeline",
+          "action": "modal",
+          "modal": "cicd-create"
+        }
+      ]
+    }
+  ]
+}

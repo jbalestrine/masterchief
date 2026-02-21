@@ -1,0 +1,12 @@
+{
+  "name": "tfe-aks-demo",
+  "cloud": "azure",
+  "backend": null,
+  "provider_settings": {
+    "location": "eastus"
+  },
+  "variables": {
+    "location": "eastus"
+  },
+  "resources": null
+}

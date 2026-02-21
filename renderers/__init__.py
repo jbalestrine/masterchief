@@ -130,16 +130,19 @@ def render_resources_page():
     )
 
 
-def render_addons_modules_page(installed_modules):
+def render_addons_modules_page(installed_modules, ui_modules=None):
     """
     Render the addons modules management page.
     """
+    if ui_modules is None:
+        ui_modules = {}
     return render_template_string(
         HTML_TEMPLATE.replace('{% block content %}{% endblock %}',
                             ADDONS_MODULES_TEMPLATE.replace('{% extends "base.html" %}','')
                                                   .replace('{% block content %}','')
                                                   .replace('{% endblock %}','')),
         installed_modules=installed_modules,
+        ui_modules=ui_modules,
         request=request,
         get_flashed_messages=get_flashed_messages
     )

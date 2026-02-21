@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Integration - MasterChief</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a1a; color: #e0e0e0; line-height: 1.6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: #2d2d2d; padding: 20px; margin-bottom: 30px; border-bottom: 3px solid #4CAF50; border-radius: 8px; }
+        h1 { color: #4CAF50; font-size: 2.5em; margin-bottom: 10px; }
+        .subtitle { color: #888; font-size: 1.1em; }
+        .card { background: #2d2d2d; padding: 25px; border-radius: 10px; border-left: 4px solid #4CAF50; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        .card h3 { color: #4CAF50; margin-bottom: 15px; font-size: 1.4em; }
+        .btn { background: #4CAF50; color: #fff; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; transition: all 0.3s; }
+        .btn:hover { background: #45a049; transform: translateY(-2px); }
+        .btn-danger { background: #f44336; }
+        .btn-danger:hover { background: #da190b; }
+        .btn-info { background: #2196F3; }
+        .btn-info:hover { background: #0b7dda; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #4CAF50; font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 12px; background: #1a1a1a; border: 1px solid #3a3a3a; color: #e0e0e0; border-radius: 5px; font-size: 1em; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #4CAF50; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .status.success { background: #1b5e20; border-color: #4CAF50; color: #c8e6c9; }
+        .status.error { background: #b71c1c; border-color: #f44336; color: #ffcdd2; }
+        .status.info { background: #0d47a1; border-color: #2196F3; color: #bbdefb; }
+        .file-list { margin-top: 20px; }
+        .file-item { padding: 8px; border-bottom: 1px solid #3a3a3a; cursor: pointer; }
+        .file-item:hover { background: #333; }
+        .file-item.dir { color: #4CAF50; font-weight: bold; }
+        .file-item.file { color: #e0e0e0; }
+        .editor { width: 100%; height: 400px; background: #1a1a1a; border: 1px solid #3a3a3a; color: #e0e0e0; padding: 10px; font-family: 'Courier New', monospace; resize: vertical; }
+        .tabs { display: flex; margin-bottom: 20px; }
+        .tab-button { background: #252525; color: #888; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px 5px 0 0; }
+        .tab-button.active { background: #4CAF50; color: #fff; }
+        .tab-content { display: none; padding: 20px; background: #252525; border-radius: 0 5px 5px 5px; }
+        .tab-content.active { display: block; }
+        .breadcrumb { margin-bottom: 20px; color: #888; }
+        .breadcrumb a { color: #4CAF50; text-decoration: none; }
+        .breadcrumb a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GitHub Integration</h1>
+            <p class="subtitle">Clone repositories, browse files, and edit code</p>
+        </header>
+
+        <div class="card">
+            <h3>Repository Management</h3>
+            <div class="tabs">
+                <button class="tab-button active" onclick="switchTab('clone')">Clone Repository</button>
+                <button class="tab-button" onclick="switchTab('browse')">Browse Files</button>
+                <button class="tab-button" onclick="switchTab('remote')">Browse Remote Repo</button>
+                <button class="tab-button" onclick="switchTab('editor')">Code Editor</button>
+            </div>
+
+            <div id="clone-tab" class="tab-content active">
+                <form id="clone-form">
+                    <div class="form-group">
+                        <label for="repo-url">GitHub Repository URL</label>
+                        <input type="url" id="repo-url" placeholder="https://github.com/owner/repo.git" required>
+                    </div>
+                    <button type="submit" class="btn">Clone Repository</button>
+                </form>
+                <div id="clone-status"></div>
+            </div>
+
+            <div id="browse-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="repo-select">Select Cloned Repository</label>
+                    <select id="repo-select">
+                        <option value="">Choose a repository...</option>
+                    </select>
+                    <button onclick="loadRepos()" class="btn btn-info">Refresh</button>
+                </div>
+                <div id="file-browser">
+                    <div class="breadcrumb" id="breadcrumb">Root</div>
+                    <div class="file-list" id="file-list"></div>
+                </div>
+            </div>
+
+            <div id="remote-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="remote-repo-url">Custom Repository URL</label>
+                    <input type="url" id="remote-repo-url" placeholder="https://github.com/owner/repo.git">
+                    <button onclick="loadFromCustomURL()" class="btn btn-info">Load from URL</button>
+                </div>
+                <div class="form-group">
+                    <label for="remote-repo-select">Or Select Remote Repository</label>
+                    <select id="remote-repo-select">
+                        <option value="">Choose a repository...</option>
+                    </select>
+                    <button onclick="loadRemoteRepos()" class="btn btn-info">Load Repos</button>
+                </div>
+                <div id="remote-file-browser">
+                    <div class="breadcrumb" id="remote-breadcrumb">Root</div>
+                    <div class="file-list" id="remote-file-list"></div>
+                </div>
+            </div>
+
+            <div id="editor-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="file-content">File Content</label>
+                    <textarea id="file-content" class="editor" placeholder="Select a file to edit..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="save-filename">Save As (in data/scripts)</label>
+                    <input type="text" id="save-filename" placeholder="filename.py">
+                </div>
+                <button onclick="saveFile()" class="btn">Save to Scripts</button>
+                <div id="save-status"></div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>GitHub Repositories</h3>
+            <button onclick="loadGitHubRepos()" class="btn btn-info">Load My Repositories</button>
+            <div id="github-repos"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentRepo = '';
+        let currentPath = '';
+        let currentFile = '';
+        let currentRemoteRepo = { full_name: '' };
+        let currentRemotePath = '';
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            
+            // Show selected tab
+            document.getElementById(tabName + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('clone-status') || document.getElementById('save-status');
+            if (statusDiv) {
+                statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+                setTimeout(() => statusDiv.innerHTML = '', 5000);
+            }
+        }
+
+        document.getElementById('clone-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('repo-url').value;
+            
+            try {
+                const response = await fetch('/api/features/github/clone', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showStatus(result.message, 'success');
+                    loadRepos();
+                } else {
+                    showStatus(result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('Error cloning repository: ' + error.message, 'error');
+            }
+        });
+
+        async function loadRepos() {
+            try {
+                // This would need a new API endpoint to list cloned repos
+                // For now, we'll simulate
+                const select = document.getElementById('repo-select');
+                select.innerHTML = '<option value="">Choose a repository...</option>';
+                
+                // Add some example repos
+                const repos = ['masterchief', 'terraform-modules'];
+                repos.forEach(repo => {
+                    const option = document.createElement('option');
+                    option.value = repo;
+                    option.textContent = repo;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading repos:', error);
+            }
+        }
+
+        document.getElementById('repo-select').addEventListener('change', (e) => {
+            currentRepo = e.target.value;
+            currentPath = '';
+            if (currentRepo) {
+                loadFiles();
+            }
+        });
+
+        async function loadFiles() {
+            if (!currentRepo) return;
+            
+            try {
+                const response = await fetch(`/api/features/github/files/${currentRepo}?path=${encodeURIComponent(currentPath)}`);
+                const data = await response.json();
+                
+                const fileList = document.getElementById('file-list');
+                const breadcrumb = document.getElementById('breadcrumb');
+                
+                // Update breadcrumb
+                let breadcrumbHtml = '<a href="#" onclick="navigateTo(\'\')">Root</a>';
+                if (currentPath) {
+                    const parts = currentPath.split('/');
+                    let path = '';
+                    parts.forEach((part, index) => {
+                        path += (path ? '/' : '') + part;
+                        breadcrumbHtml += ` / <a href="#" onclick="navigateTo('${path}')">${part}</a>`;
+                    });
+                }
+                breadcrumb.innerHTML = breadcrumbHtml;
+                
+                // Clear file list
+                fileList.innerHTML = '';
+                
+                // Add files
+                data.files.forEach(file => {
+                    const div = document.createElement('div');
+                    div.className = 'file-item ' + (file.is_dir ? 'dir' : 'file');
+                    div.innerHTML = `
+                        <span>${file.is_dir ? '📁' : '📄'} ${file.name}</span>
+                        ${file.is_dir ? '' : `<small>(${formatSize(file.size)})</small>`}
+                    `;
+                    
+                    if (file.is_dir) {
+                        div.onclick = () => navigateTo(file.path);
+                    } else {
+                        div.onclick = () => loadFile(file.path);
+                    }
+                    
+                    fileList.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading files:', error);
+            }
+        }
+
+        function navigateTo(path) {
+            currentPath = path;
+            loadFiles();
+        }
+
+        async function loadFile(filePath) {
+            try {
+                const response = await fetch(`/api/features/github/file-content/${currentRepo}?file_path=${encodeURIComponent(filePath)}`);
+                const data = await response.json();
+                
+                document.getElementById('file-content').value = data.content;
+                document.getElementById('save-filename').value = filePath.split('/').pop();
+                currentFile = filePath;
+                
+                // Switch to editor tab
+                switchTab('editor');
+            } catch (error) {
+                console.error('Error loading file:', error);
+                showStatus('Error loading file: ' + error.message, 'error');
+            }
+        }
+
+        async function saveFile() {
+            const content = document.getElementById('file-content').value;
+            const filename = document.getElementById('save-filename').value;
+            
+            if (!filename) {
+                showStatus('Please enter a filename', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/features/github/save-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: content, filename: filename })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showStatus(result.message, 'success');
+                } else {
+                    showStatus(result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('Error saving file: ' + error.message, 'error');
+            }
+        }
+
+        async function loadGitHubRepos() {
+            try {
+                const response = await fetch('/api/features/github/repos');
+                const data = await response.json();
+                
+                const reposDiv = document.getElementById('github-repos');
+                reposDiv.innerHTML = '<h4>Your Repositories</h4>';
+                
+                if (data.repos && data.repos.length > 0) {
+                    data.repos.forEach(repo => {
+                        const div = document.createElement('div');
+                        div.className = 'file-item';
+                        div.innerHTML = `
+                            <strong>${repo.name}</strong> - ${repo.description || 'No description'}
+                            <br><small>⭐ ${repo.stars || 0} • ${repo.language || 'Unknown'}</small>
+                        `;
+                        reposDiv.appendChild(div);
+                    });
+                } else {
+                    reposDiv.innerHTML += '<p>No repositories found or GitHub not configured.</p>';
+                }
+            } catch (error) {
+                console.error('Error loading GitHub repos:', error);
+                document.getElementById('github-repos').innerHTML = '<p>Error loading repositories.</p>';
+            }
+        }
+
+        async function loadRemoteRepos() {
+            try {
+                const response = await fetch('/api/features/github/repos');
+                const data = await response.json();
+                
+                const select = document.getElementById('remote-repo-select');
+                select.innerHTML = '<option value="">Choose a repository...</option>';
+                
+                if (data.repos && data.repos.length > 0) {
+                    data.repos.forEach(repo => {
+                        const option = document.createElement('option');
+                        option.value = repo.full_name + '.git';
+                        option.textContent = repo.full_name + '.git';
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading remote repos:', error);
+            }
+        }
+
+        function loadFromCustomURL() {
+            const url = document.getElementById('remote-repo-url').value;
+            const match = url.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
+            if (!match) {
+                alert('Invalid GitHub URL. Please enter a URL like https://github.com/owner/repo');
+                return;
+            }
+            const owner = match[1];
+            const repo = match[2];
+            currentRemoteRepo = { full_name: `${owner}/${repo}.git` };
+            currentRemotePath = '';
+            loadRemoteFiles();
+        }
+
+        document.getElementById('remote-repo-select').addEventListener('change', (e) => {
+            const repoValue = e.target.value;
+            if (repoValue) {
+                currentRemoteRepo = { full_name: repoValue };
+                currentRemotePath = '';
+                loadRemoteFiles();
+            } else {
+                currentRemoteRepo = { full_name: '' };
+            }
+        });
+
+        async function loadRemoteFiles() {
+            if (!currentRemoteRepo.full_name) return;
+            
+            try {
+                const [owner, name] = currentRemoteRepo.full_name.split('/');
+                const response = await fetch(`/api/features/github/repos/${owner}/${name}/contents?path=${encodeURIComponent(currentRemotePath)}`);
+                const data = await response.json();
+                
+                const fileList = document.getElementById('remote-file-list');
+                const breadcrumb = document.getElementById('remote-breadcrumb');
+                
+                // Update breadcrumb
+                let breadcrumbHtml = '<a href="#" onclick="navigateRemoteTo(\'\')">Root</a>';
+                if (currentRemotePath) {
+                    const parts = currentRemotePath.split('/');
+                    let path = '';
+                    parts.forEach((part, index) => {
+                        path += (path ? '/' : '') + part;
+                        breadcrumbHtml += ` / <a href="#" onclick="navigateRemoteTo('${path}')">${part}</a>`;
+                    });
+                }
+                breadcrumb.innerHTML = breadcrumbHtml;
+                
+                // Clear file list
+                fileList.innerHTML = '';
+                
+                // Add files
+                data.contents.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'file-item ' + (item.type === 'dir' ? 'dir' : 'file');
+                    div.innerHTML = `
+                        <span>${item.type === 'dir' ? '📁' : '📄'} ${item.name}</span>
+                        ${item.type === 'file' ? `<small>(${formatSize(item.size)}) - ${item.last_modified}</small>` : ''}
+                    `;
+                    
+                    if (item.type === 'dir') {
+                        div.onclick = () => navigateRemoteTo(item.path);
+                    } else {
+                        div.onclick = () => loadRemoteFile(owner, name, item.path);
+                    }
+                    
+                    fileList.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Error loading remote files:', error);
+                document.getElementById('remote-file-list').innerHTML = '<div class="status error">Error loading files. Check if GitHub is configured.</div>';
+            }
+        }
+
+        function navigateRemoteTo(path) {
+            currentRemotePath = path;
+            loadRemoteFiles();
+        }
+
+        async function loadRemoteFile(owner, name, filePath) {
+            // Define allowed file extensions for source/text files
+            const allowedExtensions = ['py', 'txt', 'conf', 'json', 'yaml', 'yml', 'md', 'js', 'html', 'css', 'xml', 'sh', 'bat', 'ps1', 'ini', 'cfg', 'toml', 'lock', 'gitignore', 'dockerfile', 'makefile'];
+            
+            // Get file extension
+            const fileExtension = filePath.split('.').pop().toLowerCase();
+            
+            // Check if file extension is allowed
+            if (!allowedExtensions.includes(fileExtension)) {
+                showStatus('Cannot load binary or unsupported file type: .' + fileExtension + '. Only source/text files can be edited.', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/features/github/repos/${owner}/${name}/file-content?file_path=${encodeURIComponent(filePath)}`);
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to load file');
+                }
+                
+                document.getElementById('file-content').value = data.content;
+                document.getElementById('save-filename').value = filePath.split('/').pop();
+                currentFile = filePath;
+                
+                // Switch to editor tab
+                switchTab('editor');
+            } catch (error) {
+                console.error('Error loading remote file:', error);
+                showStatus('Error loading file: ' + error.message, 'error');
+            }
+        }
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

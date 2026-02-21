@@ -1,0 +1,6 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting psycopg2-binary
+  Using cached psycopg2_binary-2.9.11-cp314-cp314-win_amd64.whl.metadata (5.1 kB)
+Using cached psycopg2_binary-2.9.11-cp314-cp314-win_amd64.whl (2.8 MB)
+Installing collected packages: psycopg2-binary
+Successfully installed psycopg2-binary-2.9.11

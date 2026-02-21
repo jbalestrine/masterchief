@@ -1,0 +1,43 @@
+Warning: Authentication modules not available: No module named 'authlib'
+DEBUG: About to import feature manager
+DEBUG: Feature manager imported successfully
+SUCCESS: TF Wizard modules imported successfully
+INFO: Authentication modules not available - running without authentication
+SUCCESS: Setup wizard initialized successfully
+Initializing feature manager...
+FeatureManager.__init__ called
+Registering feature routes...
+DEBUG: Processing module rbac, enabled=True
+DEBUG: Calling register_rbac_module with kwargs={'db_path': 'data/rbac.json'}
+DEBUG: Loaded module rbac
+DEBUG: Processing module vault, enabled=True
+DEBUG: Calling register_vault_module with kwargs={'db_path': 'data/vault.json', 'key_path': 'data/vault.key', 'audit_path': 'data/vault_audit.json'}
+DEBUG: Registering vault module with db_path=data/vault.json
+DEBUG: Loaded module vault
+DEBUG: Processing module notification, enabled=True
+DEBUG: Calling register_notification_module with kwargs={'db_path': 'data/notifications.json', 'channels_path': 'data/notification_channels.json', 'rules_path': 'data/notification_rules.json'}
+DEBUG: Loaded module notification
+DEBUG: Processing module pipeline, enabled=True
+DEBUG: Calling register_pipeline_module with kwargs={'db_path': 'data/pipelines.json', 'runs_path': 'data/pipeline_runs.json'}
+DEBUG: Loaded module pipeline
+DEBUG: Processing module cloud, enabled=True
+DEBUG: Calling register_cloud_module with kwargs={'db_path': 'data/cloud_accounts.json'}
+DEBUG: Loaded module cloud
+DEBUG: Processing module memory, enabled=True
+DEBUG: Calling register_memory_module with kwargs={'memories_path': 'data/echo_memories.jsonl', 'index_path': 'data/echo_memory_index.json'}
+DEBUG: Loaded module memory
+DEBUG: Processing module marketplace, enabled=True
+DEBUG: Calling register_marketplace_module with kwargs={'db_path': 'data/marketplace.json'}
+DEBUG: Loaded module marketplace
+DEBUG: Processing module script, enabled=True
+DEBUG: Calling register_script_module with kwargs={}
+DEBUG: Loaded module script
+DEBUG: Registering TF Wizard routes
+DEBUG: Starting MasterChief...
+======================================================================
+MasterChief DevOps Platform
+======================================================================
+Dashboard: http://localhost:8080
+======================================================================
+ * Serving Flask app 'main'
+ * Debug mode: off

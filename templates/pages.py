@@ -448,8 +448,14 @@ ADDONS_MODULES_TEMPLATE = """{% extends "base.html" %}
 
 <p><strong>Modified:</strong> {{ module.modified }}</p>
 
-<div style="margin-top: 15px;">
+<div style="margin-top: 15px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
 <a href="/addons/modules/{{ module.name }}/manager" class="btn" style="background:#2196F3;">🗂️ Manage Files</a>
+{% if module.name in ui_modules %}
+<button id="pin-btn-{{ module.name }}" class="btn" style="background:#c62828;" onclick="unpinModule('{{ module.name }}')">📌 Unpin from Nav</button>
+{% else %}
+<button id="pin-btn-{{ module.name }}" class="btn" style="background:#4CAF50;" onclick="pinModule('{{ module.name }}')">📌 Pin to Nav</button>
+{% endif %}
+<span id="pin-status-{{ module.name }}" style="font-size:0.8em;"></span>
 </div>
 
 <div style="margin-top: 15px;">
@@ -624,17 +630,23 @@ function startService(moduleName) {
                 return;
             }
             const proxyUrl = data.proxy_url || data.url || null;
-            if (data.status === 'html') {
+            if (data.status === 'blueprint') {
+                _setStatus(moduleName,
+                    `<span style="color:#4CAF50">✅ Loaded as Blueprint (routes live in this server)</span><br>` +
+                    (proxyUrl ? `<a href="${proxyUrl}" target="_blank" style="color:#7B1FA2">🌐 Open App</a>` : ''));
+                if (proxyUrl) _showOpenBtn(moduleName, proxyUrl);
+            } else if (data.status === 'html') {
                 _setStatus(moduleName, `🌐 Static HTML app — <a href="${proxyUrl}" target="_blank">open in new tab</a>`);
                 _showOpenBtn(moduleName, proxyUrl);
             } else {
                 const portInfo = data.port ? ` on port <b>${data.port}</b>` : '';
                 const pidInfo  = data.pid  ? ` (PID ${data.pid})`          : '';
+                const appUrl = data.port ? `http://${window.location.hostname}:${data.port}` : proxyUrl;
                 _setStatus(moduleName,
                     `<span style="color:#4CAF50">✅ ${data.entry_point || 'App'} started${portInfo}${pidInfo}</span><br>` +
-                    (proxyUrl ? `<a href="${proxyUrl}" target="_blank" style="color:#7B1FA2">🌐 Open App</a>` : '') +
+                    (appUrl ? `<a href="${appUrl}" target="_blank" style="color:#7B1FA2">🌐 Open App</a>` : '') +
                     `<br><small style="color:#888">The app may take a few seconds to be ready.</small>`);
-                if (proxyUrl) _showOpenBtn(moduleName, proxyUrl);
+                if (appUrl) _showOpenBtn(moduleName, appUrl);
             }
         })
         .catch(e => _setStatus(moduleName, `<span style="color:#f44336">❌ ${e}</span>`));
@@ -655,11 +667,17 @@ function checkServiceStatus(moduleName) {
         .then(r => r.json())
         .then(data => {
             if (data.status === 'running') {
-                const proxyUrl = data.proxy_url || null;
+                const appUrl = data.port ? `http://${window.location.hostname}:${data.port}` : (data.proxy_url || null);
                 _setStatus(moduleName,
                     `<span style="color:#4CAF50">● Running</span> — ` +
                     `PID: <b>${data.pid}</b>, Port: <b>${data.port || 'N/A'}</b><br>` +
                     (data.entry_point ? `Entry: <code>${data.entry_point}</code><br>` : '') +
+                    (appUrl ? `<a href="${appUrl}" target="_blank" style="color:#7B1FA2">🌐 Open App</a>` : ''));
+                if (appUrl) _showOpenBtn(moduleName, appUrl);
+            } else if (data.status === 'blueprint') {
+                const proxyUrl = data.proxy_url || null;
+                _setStatus(moduleName,
+                    `<span style="color:#4CAF50">● Blueprint (live routes)</span><br>` +
                     (proxyUrl ? `<a href="${proxyUrl}" target="_blank" style="color:#7B1FA2">🌐 Open App</a>` : ''));
                 if (proxyUrl) _showOpenBtn(moduleName, proxyUrl);
             } else {
@@ -736,6 +754,56 @@ function deleteAllModules() {
             btn.disabled = false;
             btn.textContent = '🗑️ Delete All Modules';
         });
+}
+
+function pinModule(moduleName) {
+    const btn = document.getElementById('pin-btn-' + moduleName);
+    const status = document.getElementById('pin-status-' + moduleName);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Pinning…'; }
+    fetch(`/addons/modules/${moduleName}/api/ui_integration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'add' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            if (btn) { btn.textContent = '📌 Unpin from Nav'; btn.style.background = '#c62828'; btn.onclick = () => unpinModule(moduleName); btn.disabled = false; }
+            if (status) { status.textContent = '✅ Pinned!'; status.style.color = '#4CAF50'; }
+        } else {
+            if (btn) { btn.textContent = '📌 Pin to Nav'; btn.disabled = false; }
+            if (status) { status.textContent = '❌ ' + (data.error || 'Failed'); status.style.color = '#f44336'; }
+        }
+    })
+    .catch(e => {
+        if (btn) { btn.textContent = '📌 Pin to Nav'; btn.disabled = false; }
+        if (status) { status.textContent = '❌ ' + e; status.style.color = '#f44336'; }
+    });
+}
+
+function unpinModule(moduleName) {
+    const btn = document.getElementById('pin-btn-' + moduleName);
+    const status = document.getElementById('pin-status-' + moduleName);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Unpinning…'; }
+    fetch(`/addons/modules/${moduleName}/api/ui_integration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            if (btn) { btn.textContent = '📌 Pin to Nav'; btn.style.background = '#4CAF50'; btn.onclick = () => pinModule(moduleName); btn.disabled = false; }
+            if (status) { status.textContent = '✅ Unpinned'; status.style.color = '#888'; }
+        } else {
+            if (btn) { btn.textContent = '📌 Unpin from Nav'; btn.disabled = false; }
+            if (status) { status.textContent = '❌ ' + (data.error || 'Failed'); status.style.color = '#f44336'; }
+        }
+    })
+    .catch(e => {
+        if (btn) { btn.textContent = '📌 Unpin from Nav'; btn.disabled = false; }
+        if (status) { status.textContent = '❌ ' + e; status.style.color = '#f44336'; }
+    });
 }
 
 </script>
@@ -877,19 +945,34 @@ value="es">Español</option></select></label>
 
 <h4 id="editorTitle">Editing: <span id="currentFile"></span></h4>
 
-<div>
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
 
 <button class="btn" onclick="saveFile()" style="background:#4CAF50;">💾 Save</button>
 
-<button class="btn btn-danger" onclick="deleteFile()" onclick="return confirm('Delete this file?')">🗑️ Delete</button>
+<button class="btn" onclick="saveAndReload()" style="background:#00897B;">💾🔄 Save &amp; Reload</button>
+
+<button class="btn btn-danger" onclick="deleteFile()">🗑️ Delete</button>
 
 <button class="btn" onclick="closeEditor()">❌ Close</button>
 
-</div>
+<button class="btn" onclick="toggleSnippets()" style="background:#7B1FA2;">✂️ Snippets</button>
+
+<span id="saveStatus" style="font-size:0.85em;margin-left:8px;"></span>
 
 </div>
 
-<textarea id="fileEditor" style="width: 100%; height: 400px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; padding: 10px; font-family: 'Courier New', monospace; font-size: 14px; resize: vertical;"></textarea>
+</div>
+
+<div style="display:flex;gap:12px;">
+
+<div id="snippetsPanel" style="display:none;width:240px;flex-shrink:0;background:#1a1a1a;border:1px solid #444;border-radius:6px;padding:10px;overflow-y:auto;max-height:420px;">
+<h5 style="color:#9C27B0;margin:0 0 10px 0;">✂️ Snippets</h5>
+<div id="snippetList"></div>
+</div>
+
+<textarea id="fileEditor" style="flex:1;height:420px;background:#1a1a1a;color:#e0e0e0;border:1px solid #3a3a3a;border-radius:5px;padding:10px;font-family:'Courier New',monospace;font-size:14px;resize:vertical;"></textarea>
+
+</div>
 
 </div>
 
@@ -1090,6 +1173,9 @@ function saveFile() {
     if (!currentFile) return;
     
     const content = document.getElementById('fileEditor').value;
+    const statusEl = document.getElementById('saveStatus');
+    statusEl.textContent = 'Saving…';
+    statusEl.style.color = '#FFA726';
     
     fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(currentFile)}`, {
         method: 'POST',
@@ -1099,12 +1185,49 @@ function saveFile() {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            alert('File saved successfully!');
+            statusEl.textContent = '✅ Saved';
+            statusEl.style.color = '#4CAF50';
+            setTimeout(() => { statusEl.textContent = ''; }, 3000);
         } else {
-            alert('Error saving file: ' + (data.error || 'Unknown error'));
+            statusEl.textContent = '❌ ' + (data.error || 'Save failed');
+            statusEl.style.color = '#f44336';
         }
     })
-    .catch(e => alert('Error: ' + e));
+    .catch(e => {
+        statusEl.textContent = '❌ ' + e;
+        statusEl.style.color = '#f44336';
+    });
+}
+
+function saveAndReload() {
+    if (!currentFile) return;
+    const content = document.getElementById('fileEditor').value;
+    const statusEl = document.getElementById('saveStatus');
+    statusEl.textContent = 'Saving…';
+    statusEl.style.color = '#FFA726';
+
+    fetch(`/addons/modules/${currentModule}/api/file?path=${encodeURIComponent(currentFile)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: content })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) throw new Error(data.error || 'Save failed');
+        statusEl.textContent = 'Reloading…';
+        statusEl.style.color = '#FFA726';
+        return fetch(`/addons/load/${currentModule}`);
+    })
+    .then(r => r.json())
+    .then(d => {
+        statusEl.textContent = d.success ? '✅ Saved & reloaded' : '⚠️ Saved, reload: ' + (d.error || d.message || '');
+        statusEl.style.color = d.success ? '#4CAF50' : '#FFA726';
+        setTimeout(() => { statusEl.textContent = ''; }, 4000);
+    })
+    .catch(e => {
+        statusEl.textContent = '❌ ' + e;
+        statusEl.style.color = '#f44336';
+    });
 }
 
 function deleteFile() {
@@ -1132,6 +1255,58 @@ function closeEditor() {
     document.getElementById('editorContainer').style.display = 'none';
     currentFile = null;
     document.getElementById('fileEditor').value = '';
+    document.getElementById('saveStatus').textContent = '';
+}
+
+const SNIPPETS = [
+    { label: 'Flask route (GET)', ext: ['.py'], code: "@bp.route('/path', methods=['GET'])\\ndef my_route():\\n    return jsonify({'status': 'ok'})\\n" },
+    { label: 'Flask route (POST)', ext: ['.py'], code: "@bp.route('/path', methods=['POST'])\\ndef my_post():\\n    data = request.get_json() or {}\\n    return jsonify({'received': data})\\n" },
+    { label: 'SQLite get_db()', ext: ['.py'], code: 'from db import get_db\\n\\nwith get_db() as conn:\\n    rows = conn.execute("SELECT * FROM entries").fetchall()\\n' },
+    { label: 'Background thread', ext: ['.py'], code: 'import threading\\n\\ndef run_in_bg(func, *args):\\n    t = threading.Thread(target=func, args=args, daemon=True)\\n    t.start()\\n    return t\\n' },
+    { label: 'init(app) Blueprint', ext: ['.py'], code: 'def init(app):\\n    app.register_blueprint(bp)\\n    print(f"Module registered")\\n' },
+    { label: 'HTML page skeleton', ext: ['.html'], code: '<!DOCTYPE html>\\n<html>\\n<head><meta charset="utf-8"><title>Page</title></head>\\n<body style="background:#1a1a1a;color:#e0e0e0;padding:40px;">\\n<h1>Title</h1>\\n<p>Content</p>\\n</body>\\n</html>\\n' },
+    { label: 'fetch() POST JSON', ext: ['.js', '.html'], code: "fetch('/api/action', {\\n    method: 'POST',\\n    headers: {'Content-Type': 'application/json'},\\n    body: JSON.stringify({key: 'value'})\\n}).then(r => r.json()).then(d => console.log(d));\\n" },
+    { label: 'JSON config read', ext: ['.py'], code: 'import json\\nfrom pathlib import Path\\n\\nconfig_file = Path(__file__).parent / "config.json"\\nif config_file.exists():\\n    config = json.loads(config_file.read_text())\\nelse:\\n    config = {}\\n' },
+    { label: 'Scheduled task stub', ext: ['.py'], code: 'from scheduler import start_scheduler\\n\\ndef init(app):\\n    app.register_blueprint(bp)\\n    start_scheduler(interval_seconds=300)\\n' },
+    { label: 'RBAC @require_role', ext: ['.py'], code: "@bp.route('/admin')\\n@require_role('admin', 'superadmin')\\ndef admin_page():\\n    return 'Admin only'\\n" },
+];
+
+function toggleSnippets() {
+    const panel = document.getElementById('snippetsPanel');
+    if (panel.style.display === 'none') {
+        renderSnippets();
+        panel.style.display = 'block';
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+function renderSnippets() {
+    const ext = currentFile ? '.' + currentFile.split('.').pop().toLowerCase() : '';
+    const list = document.getElementById('snippetList');
+    list.innerHTML = '';
+    SNIPPETS.forEach(s => {
+        if (s.ext.length && ext && !s.ext.includes(ext) && ext !== '.') return;
+        const btn = document.createElement('button');
+        btn.textContent = s.label;
+        btn.title = s.code;
+        btn.style.cssText = 'display:block;width:100%;text-align:left;background:#2a1a3a;color:#e0e0e0;border:1px solid #9C27B0;border-radius:4px;padding:6px 8px;margin:4px 0;cursor:pointer;font-size:0.8em;';
+        btn.onmouseenter = () => btn.style.background = '#4a2a5a';
+        btn.onmouseleave = () => btn.style.background = '#2a1a3a';
+        btn.onclick = () => insertSnippet(s.code);
+        list.appendChild(btn);
+    });
+    if (!list.children.length) list.innerHTML = '<p style="color:#888;font-size:0.8em;">No snippets for this file type.</p>';
+}
+
+function insertSnippet(code) {
+    const ta = document.getElementById('fileEditor');
+    const start = ta.selectionStart;
+    const before = ta.value.substring(0, start);
+    const after = ta.value.substring(ta.selectionEnd);
+    ta.value = before + code + after;
+    ta.selectionStart = ta.selectionEnd = start + code.length;
+    ta.focus();
 }
 
 function createNewFile() {
@@ -1261,19 +1436,22 @@ function toggleUIIntegration(action) {
 }
 
 function checkUIIntegration() {
-    // Check if module is in UI by looking at the navigation
-    // This is a simple check - in a real app you'd have an API endpoint
-    const navLinks = document.querySelectorAll('nav a');
-    let isInUI = false;
-    
-    navLinks.forEach(link => {
-        if (link.href.includes(`/addons/modules/${currentModule}`)) {
-            isInUI = true;
-        }
-    });
-    
-    document.getElementById('addToUI').style.display = isInUI ? 'none' : 'inline-block';
-    document.getElementById('removeFromUI').style.display = isInUI ? 'inline-block' : 'none';
+    fetch(`/addons/modules/${currentModule}/api/ui_integration`)
+        .then(r => r.json())
+        .then(data => {
+            const isInUI = data.in_ui === true;
+            document.getElementById('addToUI').style.display = isInUI ? 'none' : 'inline-block';
+            document.getElementById('removeFromUI').style.display = isInUI ? 'inline-block' : 'none';
+            if (isInUI && data.url) {
+                let statusDiv = document.getElementById('uiStatus');
+                statusDiv.innerHTML = '✅ Pinned to nav — <a href="' + data.url + '" target="_blank" style="color:#4CAF50;">Open</a>';
+                statusDiv.style.color = 'green';
+            }
+        })
+        .catch(() => {
+            document.getElementById('addToUI').style.display = 'inline-block';
+            document.getElementById('removeFromUI').style.display = 'none';
+        });
 }
 
 function refreshFiles() {

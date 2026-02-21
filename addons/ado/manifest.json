@@ -1,0 +1,7 @@
+{
+  "name": "ado",
+  "version": "0.1.0",
+  "description": "Azure DevOps integration addon (thin wrapper). Requires Azure CLI and az devops extension.",
+  "requires": ["az"],
+  "notes": "Place any addon assets here. Enable via /api/addons/enable?name=ado when ready."
+}

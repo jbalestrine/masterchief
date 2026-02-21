@@ -1,0 +1,26 @@
+{
+  "core_features": {
+    "masterchief_code_ui": false,
+    "web_ide": true,
+    "caf_generator": true,
+    "echo_chat": true
+  },
+  "development_tools": {
+    "github_integration": true,
+    "azure_integration": false,
+    "cloud_dashboard": true,
+    "pipelines": true
+  },
+  "system_management": {
+    "rbac": true,
+    "notifications": true,
+    "marketplace": true,
+    "app_management": true
+  },
+  "advanced_features": {
+    "echo_memory": true,
+    "scenario_bot": true,
+    "irc_bridge": false,
+    "data_ingestion": true
+  }
+}

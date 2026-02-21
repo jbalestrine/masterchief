@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Management - MasterChief</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid #4CAF50;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .feature-card {
+            background: rgba(45, 45, 45, 0.9);
+            border: 1px solid #555;
+            border-radius: 10px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .feature-card:hover {
+            border-color: #4CAF50;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+            transform: translateY(-2px);
+        }
+        .feature-card.enabled {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+        .feature-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .feature-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .feature-toggle {
+            position: relative;
+            width: 50px;
+            height: 24px;
+        }
+        .feature-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #4CAF50;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        .feature-description {
+            color: #ccc;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .feature-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #888;
+        }
+        .feature-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+        .btn-primary { background: #4CAF50; color: white; }
+        .btn-primary:hover { background: #45a049; }
+        .btn-secondary { background: #2196F3; color: white; }
+        .btn-secondary:hover { background: #0b7dda; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn-danger:hover { background: #da190b; }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+        }
+        .modal-content {
+            background: #2d2d2d;
+            margin: 5% auto;
+            padding: 30px;
+            border: 1px solid #555;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-title {
+            color: #4CAF50;
+            font-size: 1.5em;
+        }
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover { color: #4CAF50; }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #555;
+            border-radius: 5px;
+            color: #e0e0e0;
+            font-size: 1em;
+        }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        .code-editor {
+            font-family: 'Courier New', monospace;
+            min-height: 300px;
+            resize: vertical;
+        }
+        .feature-templates {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(45, 45, 45, 0.9);
+            border-radius: 10px;
+            border: 1px solid #555;
+        }
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .template-card {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid #4CAF50;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .template-card:hover {
+            background: rgba(76, 175, 80, 0.2);
+            transform: translateY(-2px);
+        }
+        .template-title {
+            font-weight: bold;
+            color: #4CAF50;
+            margin-bottom: 5px;
+        }
+        .template-description {
+            font-size: 0.9em;
+            color: #ccc;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+        }
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+        .alert-success {
+            background: rgba(76, 175, 80, 0.1);
+            border-color: #4CAF50;
+            color: #c8e6c9;
+        }
+        .alert-error {
+            background: rgba(244, 67, 54, 0.1);
+            border-color: #f44336;
+            color: #ffcdd2;
+        }
+        .feature-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-enabled {
+            background: #4CAF50;
+            color: white;
+        }
+        .status-disabled {
+            background: #666;
+            color: white;
+        }
+        .github-tabs, .script-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #555;
+        }
+        .tab-button {
+            background: none;
+            border: none;
+            color: #e0e0e0;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .tab-button.active {
+            color: #4CAF50;
+            border-bottom-color: #4CAF50;
+        }
+        .tab-button:hover {
+            color: #4CAF50;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .repos-list, .scripts-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #555;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .repo-item, .script-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #444;
+            transition: background 0.3s ease;
+        }
+        .repo-item:hover, .script-item:hover {
+            background: rgba(76, 175, 80, 0.1);
+        }
+        .repo-item:last-child, .script-item:last-child {
+            border-bottom: none;
+        }
+        .repo-info, .script-info {
+            flex: 1;
+        }
+        .repo-info strong, .script-info strong {
+            color: #4CAF50;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .repo-info p, .script-info p {
+            color: #ccc;
+            margin: 5px 0;
+            font-size: 0.9em;
+        }
+        .repo-info small, .script-info small {
+            color: #888;
+            font-size: 0.8em;
+        }
+        .form-help {
+            color: #888;
+            font-size: 0.8em;
+            margin-top: 5px;
+            display: block;
+        }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Feature Management</h1>
+            <p>Dynamic feature loading and management system for MasterChief Platform</p>
+        </div>
+
+        <div id="alerts"></div>
+
+        <div class="features-grid" id="features-grid">
+            <div class="loading">Loading features...</div>
+        </div>
+
+        <div class="feature-templates">
+            <h2>📦 Create New Feature</h2>
+            <p>Use templates, load from GitHub, or create from scripts:</p>
+
+            <div class="template-grid" id="template-grid">
+                <div class="template-card" data-template="azure-service">
+                    <div class="template-title">Azure Service Integration</div>
+                    <div class="template-description">Integrate Azure services like VMs, storage, databases</div>
+                </div>
+                <div class="template-card" data-template="authentication">
+                    <div class="template-title">Authentication Provider</div>
+                    <div class="template-description">Add OAuth, OKTA, or custom authentication</div>
+                </div>
+                <div class="template-card" data-template="ci-cd">
+                    <div class="template-title">CI/CD Pipeline</div>
+                    <div class="template-description">Add continuous integration and deployment</div>
+                </div>
+                <div class="template-card" data-template="github-integration">
+                    <div class="template-title">GitHub Integration</div>
+                    <div class="template-description">Connect to GitHub repos and manage resources</div>
+                </div>
+                <div class="template-card" data-template="cloud-management">
+                    <div class="template-title">Cloud Management</div>
+                    <div class="template-description">Multi-cloud management and monitoring</div>
+                </div>
+                <div class="template-card" data-template="github-load">
+                    <div class="template-title">Load from GitHub</div>
+                    <div class="template-description">Import a feature from a GitHub repository</div>
+                </div>
+                <div class="template-card" data-template="script-load">
+                    <div class="template-title">Load from Script</div>
+                    <div class="template-description">Create feature from Python, PowerShell, or other scripts</div>
+                </div>
+                <div class="template-card" data-template="custom">
+                    <div class="template-title">Custom Feature</div>
+                    <div class="template-description">Create a completely custom feature</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature Creation Modal -->
+    <div id="feature-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Create New Feature</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+
+            <form id="feature-form">
+                <div class="form-group">
+                    <label for="feature-name">Feature Name *</label>
+                    <input type="text" id="feature-name" name="name" required placeholder="e.g., azure-vm-manager">
+                </div>
+
+                <div class="form-group">
+                    <label for="feature-display-name">Display Name *</label>
+                    <input type="text" id="feature-display-name" name="display_name" required placeholder="e.g., Azure VM Manager">
+                </div>
+
+                <div class="form-group">
+                    <label for="feature-description">Description</label>
+                    <textarea id="feature-description" name="description" rows="3" placeholder="Describe what this feature does..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="feature-dependencies">Dependencies (comma-separated)</label>
+                    <input type="text" id="feature-dependencies" name="dependencies" placeholder="e.g., azure-identity, requests">
+                </div>
+
+                <div class="form-group">
+                    <label for="handler-code">Handler Code (Python)</label>
+                    <textarea id="handler-code" name="handler_code" class="code-editor" placeholder="def register_routes(app):
+    @app.route('/api/my-feature')
+    def my_feature():
+        return {'message': 'Hello from my feature!'}
+
+def register_ui(app):
+    # Register UI components here
+    pass"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Create Feature</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    <!-- GitHub Load Modal -->
+    <div id="github-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Load Feature from GitHub</h2>
+                <span class="close" onclick="closeGithubModal()">&times;</span>
+            </div>
+
+            <div class="github-tabs">
+                <button class="tab-button active" onclick="switchGithubTab('url')">Repository URL</button>
+                <button class="tab-button" onclick="switchGithubTab('browse')">Browse Repos</button>
+                <button class="tab-button" onclick="switchGithubTab('search')">Search GitHub</button>
+            </div>
+
+            <!-- URL Tab -->
+            <div id="github-url-tab" class="tab-content active">
+                <form id="github-form">
+                    <div class="form-group">
+                        <label for="github-url">GitHub Repository URL *</label>
+                        <input type="url" id="github-url" name="repo_url" required placeholder="https://github.com/owner/repo">
+                        <small class="form-help">Enter a GitHub repository URL to load a feature from</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="github-feature-name">Feature Name (optional)</label>
+                        <input type="text" id="github-feature-name" name="feature_name" placeholder="Leave blank to use repo name">
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Load from GitHub</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeGithubModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Browse Tab -->
+            <div id="github-browse-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="github-user">GitHub Username/Organization</label>
+                    <input type="text" id="github-user" placeholder="e.g., microsoft, facebook">
+                    <button type="button" class="btn btn-sm" onclick="loadUserRepos()">Load Repos</button>
+                </div>
+
+                <div id="github-repos-list" class="repos-list">
+                    <div class="repo-item" style="display: none;">
+                        <div class="repo-info">
+                            <strong>repo-name</strong>
+                            <p>repo-description</p>
+                            <small>⭐ stars • language</small>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="selectRepo('owner/repo')">Select</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="browse-feature-name">Feature Name (optional)</label>
+                    <input type="text" id="browse-feature-name" name="feature_name" placeholder="Leave blank to use repo name">
+                </div>
+
+                <div class="form-group">
+                    <button type="button" class="btn btn-primary" onclick="loadFromSelectedRepo()">Load Selected Repo</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeGithubModal()">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Search Tab -->
+            <div id="github-search-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="github-search">Search GitHub Repositories</label>
+                    <input type="text" id="github-search" placeholder="Search for repositories...">
+                    <button type="button" class="btn btn-sm" onclick="searchGithubRepos()">Search</button>
+                </div>
+
+                <div id="github-search-results" class="repos-list">
+                    <!-- Search results will be populated here -->
+                </div>
+
+                <div class="form-group">
+                    <label for="search-feature-name">Feature Name (optional)</label>
+                    <input type="text" id="search-feature-name" name="feature_name" placeholder="Leave blank to use repo name">
+                </div>
+
+                <div class="form-group">
+                    <button type="button" class="btn btn-primary" onclick="loadFromSelectedRepo()">Load Selected Repo</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeGithubModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Load Modal -->
+    <div id="script-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Create Feature from Script</h2>
+                <span class="close" onclick="closeScriptModal()">&times;</span>
+            </div>
+
+            <div class="script-tabs">
+                <button class="tab-button active" onclick="switchScriptTab('local')">Local File</button>
+                <button class="tab-button" onclick="switchScriptTab('url')">From URL</button>
+                <button class="tab-button" onclick="switchScriptTab('repo')">From Repository</button>
+            </div>
+
+            <!-- Local File Tab -->
+            <div id="script-local-tab" class="tab-content active">
+                <form id="script-form">
+                    <div class="form-group">
+                        <label for="script-file">Script File *</label>
+                        <input type="file" id="script-file" name="script_file" accept=".py,.ps1,.sh,.php,.json">
+                        <small class="form-help">Select a script file from your local machine</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="script-type">Script Type</label>
+                        <select id="script-type" name="script_type">
+                            <option value="auto">Auto-detect</option>
+                            <option value="python">Python (.py)</option>
+                            <option value="powershell">PowerShell (.ps1)</option>
+                            <option value="bash">Bash (.sh)</option>
+                            <option value="php">PHP (.php)</option>
+                            <option value="json">JSON Config (.json)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="script-feature-name">Feature Name *</label>
+                        <input type="text" id="script-feature-name" name="feature_name" required placeholder="e.g., my-custom-feature">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="script-display-name">Display Name *</label>
+                        <input type="text" id="script-display-name" name="display_name" required placeholder="e.g., My Custom Feature">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="script-description">Description</label>
+                        <textarea id="script-description" name="description" rows="3" placeholder="Describe what this feature does..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Create from Script</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeScriptModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- URL Tab -->
+            <div id="script-url-tab" class="tab-content">
+                <form id="script-url-form">
+                    <div class="form-group">
+                        <label for="script-url">Script URL *</label>
+                        <input type="url" id="script-url" name="script_url" required placeholder="https://example.com/script.py">
+                        <small class="form-help">Enter a direct URL to a script file</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="url-script-type">Script Type</label>
+                        <select id="url-script-type" name="script_type">
+                            <option value="auto">Auto-detect from URL</option>
+                            <option value="python">Python (.py)</option>
+                            <option value="powershell">PowerShell (.ps1)</option>
+                            <option value="bash">Bash (.sh)</option>
+                            <option value="php">PHP (.php)</option>
+                            <option value="json">JSON Config (.json)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="url-feature-name">Feature Name *</label>
+                        <input type="text" id="url-feature-name" name="feature_name" required placeholder="e.g., my-custom-feature">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="url-display-name">Display Name *</label>
+                        <input type="text" id="url-display-name" name="display_name" required placeholder="e.g., My Custom Feature">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="url-description">Description</label>
+                        <textarea id="url-description" name="description" rows="3" placeholder="Describe what this feature does..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Load from URL</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeScriptModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Repository Tab -->
+            <div id="script-repo-tab" class="tab-content">
+                <div class="form-group">
+                    <label for="repo-url">GitHub Repository URL *</label>
+                    <input type="url" id="repo-url" name="repo_url" placeholder="https://github.com/owner/repo">
+                    <button type="button" class="btn btn-sm" onclick="loadRepoScripts()">Load Scripts</button>
+                </div>
+
+                <div id="repo-scripts-list" class="scripts-list">
+                    <div class="script-item" style="display: none;">
+                        <div class="script-info">
+                            <strong>script-name.py</strong>
+                            <p>path/to/script.py</p>
+                            <small>Size: 1.2KB • Last modified: 2024-01-01</small>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="selectScript('path/to/script.py')">Select</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="repo-script-type">Script Type</label>
+                    <select id="repo-script-type" name="script_type">
+                        <option value="auto">Auto-detect</option>
+                        <option value="python">Python (.py)</option>
+                        <option value="powershell">PowerShell (.ps1)</option>
+                        <option value="bash">Bash (.sh)</option>
+                        <option value="php">PHP (.php)</option>
+                        <option value="json">JSON Config (.json)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="repo-feature-name">Feature Name *</label>
+                    <input type="text" id="repo-feature-name" name="feature_name" required placeholder="e.g., my-custom-feature">
+                </div>
+
+                <div class="form-group">
+                    <label for="repo-display-name">Display Name *</label>
+                    <input type="text" id="repo-display-name" name="display_name" required placeholder="e.g., My Custom Feature">
+                </div>
+
+                <div class="form-group">
+                    <label for="repo-description">Description</label>
+                    <textarea id="repo-description" name="description" rows="3" placeholder="Describe what this feature does..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <button type="button" class="btn btn-primary" onclick="loadFromSelectedScript()">Load Selected Script</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeScriptModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+        let features = [];
+        let templates = {
+            'azure-service': {
+                name: 'azure-service-integration',
+                display_name: 'Azure Service Integration',
+                description: 'Integrate with Azure services for cloud resource management',
+                dependencies: ['azure-identity', 'azure-mgmt-compute', 'azure-mgmt-storage'],
+                handler_code: `def register_routes(app):
+    @app.route('/api/azure/services')
+    def azure_services():
+        return {'services': ['vm', 'storage', 'database']}
+
+    @app.route('/api/azure/deploy-vm', methods=['POST'])
+    def deploy_vm():
+        data = request.get_json()
+        # VM deployment logic here
+        return {'status': 'VM deployment initiated'}
+
+def register_ui(app):
+    # Add Azure service UI components
+    pass`
+            },
+            'authentication': {
+                name: 'auth-provider',
+                display_name: 'Authentication Provider',
+                description: 'Add OAuth, OKTA, or custom authentication methods',
+                dependencies: ['requests-oauthlib', 'okta', 'flask-oauthlib'],
+                handler_code: `def register_routes(app):
+    @app.route('/api/auth/login')
+    def auth_login():
+        return {'providers': ['oauth', 'okta', 'custom']}
+
+    @app.route('/api/auth/callback')
+    def auth_callback():
+        # Handle authentication callback
+        return {'status': 'authenticated'}
+
+def register_ui(app):
+    # Add authentication UI components
+    pass`
+            },
+            'ci-cd': {
+                name: 'ci-cd-pipeline',
+                display_name: 'CI/CD Pipeline',
+                description: 'Continuous integration and deployment pipeline management',
+                dependencies: ['jenkinsapi', 'gitlab', 'github'],
+                handler_code: `def register_routes(app):
+    @app.route('/api/cicd/pipelines')
+    def get_pipelines():
+        return {'pipelines': []}
+
+    @app.route('/api/cicd/deploy', methods=['POST'])
+    def deploy():
+        data = request.get_json()
+        # Deployif (template === 'github-load') {
+                    openGithubModal();
+                } else if (template === 'script-load') {
+                    openScriptModal();
+                } else {
+                    loadTemplate(template);
+                }
+        return {'status': 'deployment started'}
+
+
+        // GitHub form submission
+        document.getElementById('github-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            loadFromGithub();
+        });
+
+        // Script form submission
+        document.getElementById('script-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            createFromScript();
+        });
+def register_ui(app):
+    # Add CI/CD UI components
+    pass`
+            },
+            'github-integration': {
+                name: 'github-integration',
+                display_name: 'GitHub Integration',
+                description: 'Connect to GitHub repositories and manage resources',
+                dependencies: ['PyGitHub', 'requests'],
+                handler_code: `def register_routes(app):
+    @app.route('/api/github/repos')
+    def github_repos():
+        return {'repos': []}
+
+    @app.route('/api/github/clone', methods=['POST'])
+    def clone_repo():
+        data = request.get_json()
+        # Clone repository logic
+        return {'status': 'repository cloned'}
+
+def register_ui(app):
+    # Add GitHub UI components
+    pass`
+            },
+            'cloud-management': {
+                name: 'cloud-management',
+                display_name: 'Cloud Management',
+                description: 'Multi-cloud resource management and monitoring',
+                dependencies: ['boto3', 'azure-identity', 'google-cloud'],
+                handler_code: `def register_routes(app):
+    @app.route('/api/cloud/resources')
+    def cloud_resources():
+        return {'providers': ['aws', 'azure', 'gcp']}
+
+    @app.route('/api/cloud/monitor')
+    def cloud_monitor():
+        # Monitoring logic here
+        return {'status': 'monitoring active'}
+
+def register_ui(app):
+    # Add cloud management UI components
+    pass`
+            },
+            'custom': {
+                name: 'custom-feature',
+                display_name: 'Custom Feature',
+                description: 'Create a completely custom feature',
+                dependencies: [],
+                handler_code: `def register_routes(app):
+    @app.route('/api/custom')
+    def custom_endpoint():
+        return {'message': 'Custom feature endpoint'}
+
+def register_ui(app):
+    # Add custom UI components
+    pass`
+            }
+        };
+
+        // Load features on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFeatures();
+        });
+
+        // Template selection
+        document.getElementById('template-grid').addEventListener('click', function(e) {
+            console.log('Template grid clicked', e.target);
+            if (e.target.closest('.template-card')) {
+                const templateCard = e.target.closest('.template-card');
+                const template = templateCard.dataset.template;
+                console.log('Template selected:', template);
+                loadTemplate(template);
+            }
+        });
+
+        // Form submission
+        document.getElementById('feature-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            createFeature();
+        });
+
+        document.getElementById('github-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            loadFromGithub();
+        });
+
+        document.getElementById('script-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            createFromScript();
+        });
+
+        document.getElementById('script-url-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            loadFromUrl();
+        });
+
+        async function loadFeatures() {
+            try {
+                const response = await fetch('/api/features');
+                const data = await response.json();
+
+                features = data.features || [];
+                renderFeatures();
+            } catch (error) {
+                showAlert('Error loading features: ' + error.message, 'error');
+            }
+        }
+
+        function renderFeatures() {
+            const grid = document.getElementById('features-grid');
+
+            if (features.length === 0) {
+                grid.innerHTML = '<div class="feature-card"><p>No features available. Create your first feature!</p></div>';
+                return;
+            }
+
+            grid.innerHTML = features.map(feature => `
+                <div class="feature-card ${feature.enabled ? 'enabled' : ''}">
+                    <div class="feature-status ${feature.enabled ? 'status-enabled' : 'status-disabled'}">
+                        ${feature.enabled ? 'Enabled' : 'Disabled'}
+                    </div>
+                    <div class="feature-header">
+                        <div class="feature-title">${feature.display_name}</div>
+                        <label class="feature-toggle">
+                            <input type="checkbox" ${feature.enabled ? 'checked' : ''} onchange="toggleFeature('${feature.name}', this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="feature-description">${feature.description}</div>
+                    <div class="feature-meta">
+                        <span>Version: ${feature.version}</span>
+                        <span>Deps: ${feature.dependencies.length}</span>
+                    </div>
+                    ${feature.ui_components && feature.ui_components.length > 0 ? `
+                    <div class="feature-actions">
+                        ${feature.ui_components.map(component => 
+                            component.actions ? component.actions.map(action => 
+                                action.action === 'navigate' ? 
+                                    `<button class="btn btn-primary" onclick="window.location.href='${action.url}'">${action.label}</button>` :
+                                action.action === 'modal' ?
+                                    `<button class="btn btn-primary" onclick="openModal('${action.modal}')">${action.label}</button>` :
+                                `<button class="btn btn-primary" onclick="runFeatureAction('${feature.name}', '${action.label}')">${action.label}</button>`
+                            ).join('') : ''
+                        ).join('')}
+                    </div>
+                    ` : ''}
+                    <div class="feature-actions">
+                        <button class="btn btn-secondary" onclick="editFeature('${feature.name}')">Edit</button>
+                        <button class="btn btn-danger" onclick="deleteFeature('${feature.name}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadTemplate(templateName) {
+            console.log('Loading template:', templateName);
+            if (templateName === 'github-load') {
+                console.log('Calling openGithubModal');
+                openGithubModal();
+                return;
+            } else if (templateName === 'script-load') {
+                openScriptModal();
+                return;
+            }
+
+            const template = templates[templateName];
+            if (!template) return;
+
+            document.getElementById('feature-name').value = template.name;
+            document.getElementById('feature-display-name').value = template.display_name;
+            document.getElementById('feature-description').value = template.description;
+            document.getElementById('feature-dependencies').value = template.dependencies.join(', ');
+            document.getElementById('handler-code').value = template.handler_code;
+
+            document.getElementById('feature-modal').style.display = 'block';
+        }
+
+        async function createFeature() {
+            const formData = new FormData(document.getElementById('feature-form'));
+            const data = {
+                name: formData.get('name'),
+                display_name: formData.get('display_name'),
+                description: formData.get('description'),
+                dependencies: formData.get('dependencies').split(',').map(d => d.trim()).filter(d => d),
+                handler_code: formData.get('handler_code')
+            };
+
+            try {
+                const response = await fetch('/api/features/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Feature created successfully!', 'success');
+                    closeModal();
+                    loadFeatures();
+                } else {
+                    showAlert('Error creating feature: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating feature: ' + error.message, 'error');
+            }
+        }
+
+        async function toggleFeature(featureName, enabled) {
+            try {
+                const response = await fetch(\`/api/features/\${featureName}/toggle\`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert(\`Feature \${enabled ? 'enabled' : 'disabled'} successfully!\`, 'success');
+                    loadFeatures();
+                } else {
+                    showAlert('Error toggling feature: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error toggling feature: ' + error.message, 'error');
+            }
+        }
+
+        function editFeature(featureName) {
+            // TODO: Implement feature editing
+            showAlert('Feature editing not yet implemented', 'error');
+        }
+
+        function deleteFeature(featureName) {
+            if (confirm(\`Are you sure you want to delete the feature "\${featureName}"?\`)) {
+                // TODO: Implement feature deletion
+                showAlert('Feature deletion not yet implemented', 'error');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('feature-modal').style.display = 'none';
+            document.getElementById('feature-form').reset();
+        }
+
+        function openGithubModal() {
+            console.log('Opening GitHub modal');
+            document.getElementById('github-modal').style.display = 'block';
+        }
+
+        function closeGithubModal() {
+            document.getElementById('github-modal').style.display = 'none';
+        }
+
+        async function loadFromGithub() {
+            const formData = new FormData(document.getElementById('github-form'));
+            const url = formData.get('github-url');
+
+            if (!url) {
+                showAlert('Please enter a GitHub repository URL', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/features/github/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showAlert('Feature loaded from GitHub successfully', 'success');
+                    closeGithubModal();
+                    loadFeatures(); // Refresh the features list
+                } else {
+                    showAlert(result.error || 'Failed to load from GitHub', 'error');
+                }
+            } catch (error) {
+                showAlert('Error loading from GitHub: ' + error.message, 'error');
+            }
+        }
+
+        function openScriptModal() {
+            document.getElementById('script-modal').style.display = 'block';
+        }
+
+        function closeScriptModal() {
+            document.getElementById('script-modal').style.display = 'none';
+        }
+
+        async function createFromScript() {
+            const formData = new FormData(document.getElementById('script-form'));
+            const scriptContent = formData.get('script-content');
+
+            if (!scriptContent) {
+                showAlert('Please enter script content', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/features/script/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: scriptContent })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showAlert('Feature created from script successfully', 'success');
+                    closeScriptModal();
+                    loadFeatures(); // Refresh the features list
+                } else {
+                    showAlert(result.error || 'Failed to create from script', 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating from script: ' + error.message, 'error');
+            }
+        }
+
+        function showAlert(message, type) {
+            const alerts = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = \`alert alert-\${type}\`;
+            alert.textContent = message;
+
+            alerts.appendChild(alert);
+
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // Tab switching functions
+        function switchGithubTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(`github-${tabName}-tab`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function switchScriptTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('#script-modal .tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('#script-modal .tab-button').forEach(btn => btn.classList.remove('active'));
+
+            // Show selected tab
+            document.getElementById(`script-${tabName}-tab`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // GitHub browsing functions
+        async function loadUserRepos() {
+            const username = document.getElementById('github-user').value.trim();
+            if (!username) {
+                showAlert('Please enter a GitHub username or organization', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/features/github/user/${username}/repos`);
+                const data = await response.json();
+
+                if (data.repos && data.repos.length > 0) {
+                    displayRepos(data.repos);
+                } else {
+                    showAlert('No repositories found for this user/organization', 'warning');
+                }
+            } catch (error) {
+                showAlert('Error loading repositories: ' + error.message, 'error');
+            }
+        }
+
+        async function searchGithubRepos() {
+            const query = document.getElementById('github-search').value.trim();
+            if (!query) {
+                showAlert('Please enter a search term', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/features/github/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (data.repos && data.repos.length > 0) {
+                    displayRepos(data.repos);
+                } else {
+                    showAlert('No repositories found matching your search', 'warning');
+                }
+            } catch (error) {
+                showAlert('Error searching repositories: ' + error.message, 'error');
+            }
+        }
+
+        function displayRepos(repos) {
+            const container = document.getElementById('github-repos-list') || document.getElementById('github-search-results');
+            container.innerHTML = '';
+
+            repos.forEach(repo => {
+                const repoItem = document.createElement('div');
+                repoItem.className = 'repo-item';
+                repoItem.innerHTML = `
+                    <div class="repo-info">
+                        <strong>${repo.name}</strong>
+                        <p>${repo.description || 'No description available'}</p>
+                        <small>⭐ ${repo.stargazers_count || 0} • ${repo.language || 'Unknown'}</small>
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="selectRepo('${repo.full_name}')">Select</button>
+                `;
+                container.appendChild(repoItem);
+            });
+        }
+
+        let selectedRepo = null;
+
+        function selectRepo(fullName) {
+            selectedRepo = fullName;
+            // Highlight selected repo
+            document.querySelectorAll('.repo-item').forEach(item => {
+                item.style.background = 'transparent';
+            });
+            event.target.closest('.repo-item').style.background = 'rgba(76, 175, 80, 0.2)';
+        }
+
+        async function loadFromSelectedRepo() {
+            if (!selectedRepo) {
+                showAlert('Please select a repository first', 'error');
+                return;
+            }
+
+            const featureName = document.getElementById('browse-feature-name').value ||
+                               document.getElementById('search-feature-name').value;
+
+            const data = {
+                repo_url: `https://github.com/${selectedRepo}`,
+                feature_name: featureName || null
+            };
+
+            try {
+                const response = await fetch('/api/features/load-github', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Feature loaded from GitHub successfully!', 'success');
+                    closeGithubModal();
+                    loadFeatures();
+                } else {
+                    showAlert('Error loading from GitHub: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error loading from GitHub: ' + error.message, 'error');
+            }
+        }
+
+        // Script loading functions
+        async function loadFromUrl() {
+            const formData = new FormData(document.getElementById('script-url-form'));
+            const data = {
+                script_url: formData.get('script_url'),
+                script_type: formData.get('script_type'),
+                feature_name: formData.get('feature_name'),
+                display_name: formData.get('display_name'),
+                description: formData.get('description')
+            };
+
+            try {
+                const response = await fetch('/api/features/create-from-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Feature created from URL successfully!', 'success');
+                    closeScriptModal();
+                    loadFeatures();
+                } else {
+                    showAlert('Error creating from URL: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating from URL: ' + error.message, 'error');
+            }
+        }
+
+        async function loadRepoScripts() {
+            const repoUrl = document.getElementById('repo-url').value.trim();
+            if (!repoUrl) {
+                showAlert('Please enter a repository URL', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/features/github/repo-scripts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ repo_url: repoUrl })
+                });
+
+                const data = await response.json();
+
+                if (data.scripts && data.scripts.length > 0) {
+                    displayScripts(data.scripts);
+                } else {
+                    showAlert('No script files found in this repository', 'warning');
+                }
+            } catch (error) {
+                showAlert('Error loading repository scripts: ' + error.message, 'error');
+            }
+        }
+
+        function displayScripts(scripts) {
+            const container = document.getElementById('repo-scripts-list');
+            container.innerHTML = '';
+
+            scripts.forEach(script => {
+                const scriptItem = document.createElement('div');
+                scriptItem.className = 'script-item';
+                scriptItem.innerHTML = `
+                    <div class="script-info">
+                        <strong>${script.name}</strong>
+                        <p>${script.path}</p>
+                        <small>Size: ${script.size} • Last modified: ${script.last_modified}</small>
+                    </div>
+                    <button class="btn btn-sm btn-primary" onclick="selectScript('${script.path}')">Select</button>
+                `;
+                container.appendChild(scriptItem);
+            });
+        }
+
+        let selectedScript = null;
+
+        function selectScript(scriptPath) {
+            selectedScript = scriptPath;
+            // Highlight selected script
+            document.querySelectorAll('.script-item').forEach(item => {
+                item.style.background = 'transparent';
+            });
+            event.target.closest('.script-item').style.background = 'rgba(76, 175, 80, 0.2)';
+        }
+
+        async function loadFromSelectedScript() {
+            if (!selectedScript) {
+                showAlert('Please select a script first', 'error');
+                return;
+            }
+
+            const repoUrl = document.getElementById('repo-url').value;
+            const scriptType = document.getElementById('repo-script-type').value;
+            const featureName = document.getElementById('repo-feature-name').value;
+            const displayName = document.getElementById('repo-display-name').value;
+            const description = document.getElementById('repo-description').value;
+
+            const data = {
+                repo_url: repoUrl,
+                script_path: selectedScript,
+                script_type: scriptType,
+                feature_name: featureName,
+                display_name: displayName,
+                description: description
+            };
+
+            try {
+                const response = await fetch('/api/features/create-from-repo-script', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('Feature created from repository script successfully!', 'success');
+                    closeScriptModal();
+                    loadFeatures();
+                } else {
+                    showAlert('Error creating from repository script: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showAlert('Error creating from repository script: ' + error.message, 'error');
+            }
+        }
+
+        function runFeatureAction(featureName, actionLabel) {
+            // Generic function for feature-specific actions
+            showAlert(`Running ${actionLabel} for ${featureName}...`, 'info');
+            // TODO: Implement specific actions based on actionLabel
+        }
+
+        function openModal(modalId) {
+            // Generic modal opener
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'block';
+            } else {
+                showAlert(`Modal ${modalId} not found`, 'error');
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('feature-modal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html></content>
+<parameter name="filePath">c:\Users\Echo\masterchief\features\templates\feature_manager.html
