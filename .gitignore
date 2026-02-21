@@ -169,3 +169,6 @@ backups/
 venv/
 data/
 data/backups/
+
+# Windows NUL device artifact
+nul
