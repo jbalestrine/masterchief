@@ -16735,6 +16735,59 @@ def sys_api_services():
         return jsonify({'error': str(exc), 'services': []}), 500
 
 
+# ── Orphan Sweep routes ──────────────────────────────────────
+
+@app.route('/sys/api/orphan-sweep/start', methods=['POST'])
+def sys_orphan_sweep_start():
+    """Begin an orphan sweep.
+    Body JSON: {orphan_paths: [...], health_urls: [...], dry_run: bool}
+    """
+    try:
+        import sys_diagnostics as _sd
+        body         = request.get_json(force=True, silent=True) or {}
+        orphan_paths = body.get('orphan_paths', [])
+        default_url  = f'http://127.0.0.1:{app.config.get("MC_PORT", 8080)}/'
+        health_urls  = body.get('health_urls') or [default_url]
+        dry_run      = bool(body.get('dry_run', False))
+        if not orphan_paths:
+            return jsonify({'error': 'No orphan_paths provided'}), 400
+        started = _sd.start_sweep(orphan_paths, health_urls, dry_run)
+        if not started:
+            return jsonify({'error': 'A sweep is already running'}), 409
+        return jsonify({'status': 'started', 'files': len(orphan_paths), 'dry_run': dry_run})
+    except Exception as exc:
+        app.logger.exception('orphan_sweep_start error')
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/sys/api/orphan-sweep/stream')
+def sys_orphan_sweep_stream():
+    """SSE stream — yields real-time sweep events as JSON lines."""
+    import sys_diagnostics as _sd
+
+    def _generate():
+        yield 'data: {"type":"connected"}\n\n'
+        yield from _sd.sweep_events(timeout=600)
+
+    return app.response_class(
+        _generate(),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control':     'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection':        'keep-alive',
+        },
+    )
+
+
+@app.route('/sys/api/orphan-sweep/abort', methods=['POST'])
+def sys_orphan_sweep_abort():
+    """Ask a running sweep to stop after its current file."""
+    import sys_diagnostics as _sd
+    _sd.abort_sweep()
+    return jsonify({'status': 'abort requested'})
+
+
 if __name__=='__main__':
 
     import argparse

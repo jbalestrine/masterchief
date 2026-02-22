@@ -623,3 +623,208 @@ def get_cached_scan(force: bool = False) -> Dict[str, Any]:
         _cache_result = result
         _cache_ts = time.time()
     return result
+
+
+# ─────────────────────────────────────────────────────────────
+#  Orphan Sweep  (incremental safe cleanup)
+# ─────────────────────────────────────────────────────────────
+import queue   as _queue
+import shutil  as _shutil
+import urllib.request as _urlreq
+import urllib.error   as _urlerr
+
+ARCHIVE_DIR = WORKSPACE / 'backups' / 'archived'
+
+# Sweep state  (only one sweep runs at a time)
+_sweep_lock    = _threading.Lock()
+_sweep_queue:  _queue.Queue = _queue.Queue()
+_sweep_active: bool = False
+_sweep_abort:  bool = False
+
+
+def _health_check(urls: List[str], timeout: float = 8.0):
+    """Hit every URL in *urls*.  Returns (True, 'OK') or (False, reason)."""
+    for url in urls:
+        try:
+            req = _urlreq.Request(url, headers={'User-Agent': 'MCHealthCheck/1.0'})
+            with _urlreq.urlopen(req, timeout=timeout) as resp:
+                if resp.status >= 400:
+                    return False, f'{url} → HTTP {resp.status}'
+        except _urlerr.HTTPError as exc:
+            return False, f'{url} → HTTP {exc.code}'
+        except Exception as exc:
+            return False, f'{url} → {exc}'
+    return True, 'OK'
+
+
+def _emit(event_type: str, **kwargs):
+    """Push a typed event dict onto the sweep queue."""
+    _sweep_queue.put({'type': event_type, 'ts': round(time.time(), 3), **kwargs})
+
+
+def run_orphan_sweep(
+    orphan_paths: List[str],
+    health_urls:  List[str],
+    dry_run:      bool = False,
+) -> None:
+    """
+    Background-thread worker for the orphan sweep.
+
+    Phase 1 — Backup all orphan files to ARCHIVE_DIR (safety net).
+    Phase 2 — Move each file out one at a time.
+              Hit health_urls; on any failure: restore the file, mark skipped.
+              Log every outcome via SSE events.
+    """
+    global _sweep_active, _sweep_abort, _cache_ts
+
+    results: Dict[str, List] = {'archived': [], 'skipped': [], 'errors': []}
+    total = len(orphan_paths)
+    _emit('start', total=total, dry_run=dry_run, health_urls=health_urls)
+
+    # ── Phase 1: backup ───────────────────────────────────────
+    _emit('phase', phase='backup', message=f'Backing up {total} files to backups/archived/ …')
+    if not dry_run:
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+
+    for rel in orphan_paths:
+        src  = WORKSPACE / rel
+        slug = rel.replace('/', '_').replace('\\', '_')
+        dest = ARCHIVE_DIR / slug
+        if dry_run:
+            _emit('backup', file=rel, dest=f'backups/archived/{slug}', dry_run=True)
+        else:
+            try:
+                if src.exists():
+                    _shutil.copy2(str(src), str(dest))
+                    _emit('backup', file=rel, dest=f'backups/archived/{slug}')
+                else:
+                    _emit('backup_skip', file=rel, reason='not found')
+            except Exception as exc:
+                _emit('backup_error', file=rel, error=str(exc))
+                results['errors'].append({'file': rel, 'error': f'backup failed: {exc}'})
+
+    # ── Phase 2: incremental sweep ────────────────────────────
+    _emit('phase', phase='sweep', message='Starting incremental sweep…')
+
+    for i, rel in enumerate(orphan_paths):
+        if _sweep_abort:
+            _emit('aborted', completed=i, total=total, results=results)
+            break
+
+        src = WORKSPACE / rel
+        if not src.exists():
+            _emit('skip', file=rel, reason='already missing', index=i + 1, total=total)
+            results['skipped'].append(rel)
+            continue
+
+        _emit('moving', file=rel, index=i + 1, total=total)
+
+        # ── Dry-run path ──────────────────────────────────────
+        if dry_run:
+            ok, msg = _health_check(health_urls)
+            action  = 'would-archive' if ok else 'would-skip'
+            _emit('result', file=rel, action=action, health_ok=ok,
+                  health_msg=msg, index=i + 1, total=total)
+            (results['archived'] if ok else results['skipped']).append(rel)
+            continue
+
+        # ── Live path ─────────────────────────────────────────
+        slug     = rel.replace('/', '_').replace('\\', '_')
+        tmp_dest = ARCHIVE_DIR / ('_sweep_' + slug)
+
+        try:
+            _shutil.move(str(src), str(tmp_dest))
+        except Exception as exc:
+            _emit('error', file=rel, error=str(exc), index=i + 1, total=total)
+            results['errors'].append({'file': rel, 'error': str(exc)})
+            continue
+
+        time.sleep(0.6)   # let any reload/settle settle
+
+        ok, health_msg = _health_check(health_urls)
+
+        if ok:
+            # Promote to final archive name (backup copy already exists from phase 1)
+            final = ARCHIVE_DIR / slug
+            try:
+                if not final.exists():
+                    tmp_dest.rename(final)
+                else:
+                    tmp_dest.unlink(missing_ok=True)   # backup copy is the keeper
+            except Exception:
+                pass
+            _emit('result', file=rel, action='archived', health_ok=True,
+                  health_msg=health_msg, index=i + 1, total=total)
+            results['archived'].append(rel)
+            # Invalidate scan cache so next /sys/api/scan reflects reality
+            with _cache_lock:
+                _cache_ts = 0.0
+        else:
+            # Restore: try moving tmp back first, fall back to backup copy
+            restored = False
+            try:
+                _shutil.move(str(tmp_dest), str(src))
+                restored = True
+            except Exception:
+                backup = ARCHIVE_DIR / slug
+                try:
+                    _shutil.copy2(str(backup), str(src))
+                    restored = True
+                except Exception:
+                    pass
+            _emit('result', file=rel, action='restored', health_ok=False,
+                  health_msg=health_msg, restored=restored, index=i + 1, total=total)
+            results['skipped'].append(rel)
+
+    _emit('done', results=results, total=total)
+
+    with _sweep_lock:
+        _sweep_active = False
+
+
+def start_sweep(
+    orphan_paths: List[str],
+    health_urls:  List[str],
+    dry_run:      bool = False,
+) -> bool:
+    """Kick off a sweep in a daemon thread.  Returns False if one is already running."""
+    global _sweep_active, _sweep_abort
+    with _sweep_lock:
+        if _sweep_active:
+            return False
+        _sweep_active = True
+        _sweep_abort  = False
+    # Drain stale events
+    while not _sweep_queue.empty():
+        try:
+            _sweep_queue.get_nowait()
+        except _queue.Empty:
+            break
+    _threading.Thread(
+        target=run_orphan_sweep, args=(orphan_paths, health_urls, dry_run),
+        daemon=True, name='orphan-sweep',
+    ).start()
+    return True
+
+
+def abort_sweep():
+    """Signal the running sweep to stop after the current file."""
+    global _sweep_abort
+    _sweep_abort = True
+
+
+def sweep_events(timeout: float = 600.0):
+    """Generator that yields SSE-formatted lines from the sweep queue."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            event = _sweep_queue.get(timeout=1.0)
+            yield f"data: {json.dumps(event)}\n\n"
+            if event.get('type') in ('done', 'aborted'):
+                break
+        except _queue.Empty:
+            yield 'data: {"type":"heartbeat"}\n\n'
+
+
+def is_sweep_running() -> bool:
+    return _sweep_active

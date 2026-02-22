@@ -244,6 +244,40 @@ td.link:hover{text-decoration:underline}
 /* ── Resize handle ───────────────────────────────────────── */
 .resize-handle{width:4px;cursor:col-resize;background:transparent;flex-shrink:0}
 .resize-handle:hover{background:var(--accent)55}
+
+/* ── Sweep Modal ─────────────────────────────────────────── */
+#sweep-modal{position:fixed;inset:0;background:#0d111799;z-index:300;
+  display:none;align-items:flex-start;justify-content:center;padding-top:60px}
+#sweep-modal.visible{display:flex}
+#sweep-box{background:var(--bg1);border:1px solid var(--border);border-radius:10px;
+  width:680px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;
+  box-shadow:0 20px 60px #00000088}
+.sweep-header{padding:14px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px}
+.sweep-header h3{flex:1;font-size:14px;font-weight:600}
+.sweep-body{padding:16px 18px;overflow-y:auto;flex:1}
+.sweep-field{margin-bottom:14px}
+.sweep-field label{display:block;font-size:11px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px}
+.sweep-field textarea,.sweep-field input[type=text]{width:100%;background:var(--bg3);
+  border:1px solid var(--border);color:var(--text);border-radius:5px;
+  padding:6px 10px;font-size:12px;outline:none;font-family:inherit}
+.sweep-field textarea{resize:vertical;min-height:70px}
+.sweep-field textarea:focus,.sweep-field input:focus{border-color:var(--accent)}
+.sweep-check{display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer}
+.sweep-footer{padding:12px 18px;border-top:1px solid var(--border);
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#sweep-log{background:var(--bg0);border:1px solid var(--border);border-radius:5px;
+  padding:10px 12px;font-size:11px;font-family:'Cascadia Code','Fira Code',monospace;
+  max-height:240px;overflow-y:auto;min-height:60px;display:none}
+.log-archived{color:var(--green)}.log-restored{color:var(--yellow)}
+.log-skip{color:var(--muted)}.log-error{color:var(--red)}
+.log-phase{color:var(--blue);font-weight:600}.log-backup{color:var(--muted)}
+.log-heartbeat{display:none}
+.sweep-progress{height:4px;background:var(--bg3);border-radius:2px;
+  margin-bottom:10px;overflow:hidden;display:none}
+.sweep-progress-bar{height:100%;background:var(--accent);border-radius:2px;
+  transition:width .3s;width:0}
 </style>
 </head>
 <body>
@@ -381,6 +415,7 @@ td.link:hover{text-decoration:underline}
           <input type="text" id="files-filter" placeholder="Filter files…" oninput="filterFiles(this.value)">
           <div class="spacer"></div>
           <span style="font-size:11px;color:var(--muted)" id="files-count"></span>
+          <button class="header-btn" onclick="openSweepModal()" style="padding:4px 11px;font-size:11px">🧹 Orphan Sweep</button>
         </div>
         <div class="tbl-wrap">
           <table id="files-table">
@@ -445,6 +480,44 @@ td.link:hover{text-decoration:underline}
         💡 <span id="sug-count">0</span> Suggestions <span id="sug-arrow">▶</span>
       </div>
       <div id="insp-sug-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Sweep Modal -->
+<div id="sweep-modal">
+  <div id="sweep-box">
+    <div class="sweep-header">
+      <span>🧹</span>
+      <h3>Orphan File Sweep</h3>
+      <button class="header-btn" onclick="closeSweepModal()" style="padding:3px 10px;font-size:11px">✕ Close</button>
+    </div>
+    <div class="sweep-body">
+      <div class="sweep-field">
+        <label>Health Check URLs — one per line (all must return 2xx)</label>
+        <textarea id="sweep-health-urls" placeholder="http://localhost:8080/&#10;http://localhost:8080/sys/diagnostics"></textarea>
+      </div>
+      <div class="sweep-field">
+        <label style="margin-bottom:8px">Options</label>
+        <label class="sweep-check">
+          <input type="checkbox" id="sweep-dry-run" checked>
+          Dry-run — preview what would happen without moving any files
+        </label>
+      </div>
+      <div class="sweep-field">
+        <label>Orphan files queued (<span id="sweep-count">0</span>)</label>
+        <div id="sweep-file-list" style="font-size:11px;color:var(--muted);max-height:100px;overflow-y:auto;
+          background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:6px 10px"></div>
+      </div>
+      <div class="sweep-progress" id="sweep-progress"><div class="sweep-progress-bar" id="sweep-bar"></div></div>
+      <div id="sweep-log"></div>
+    </div>
+    <div class="sweep-footer">
+      <button class="header-btn primary" id="sweep-start-btn" onclick="startSweep()">▶ Run Sweep</button>
+      <button class="header-btn" id="sweep-abort-btn" onclick="abortSweep()" style="display:none">⏹ Abort</button>
+      <span id="sweep-status" style="font-size:11px;color:var(--muted)"></span>
+      <div style="flex:1"></div>
+      <span id="sweep-summary" style="font-size:11px;color:var(--muted)"></span>
     </div>
   </div>
 </div>
@@ -1194,6 +1267,165 @@ function showOverlay(msg) {
 function hideOverlay() {
   document.getElementById('scan-overlay').classList.remove('visible');
 }
+
+// ════════════════════════════════════════════════════════════
+//  Orphan Sweep
+// ════════════════════════════════════════════════════════════
+let _sweepEvtSource = null;
+let _sweepTotal     = 0;
+let _sweepDone      = 0;
+
+function _orphanFiles() {
+  return (_data ? (_data.files || []) : [])
+    .filter(f => f.status === 'orphan')
+    .map(f => f.rel_path);
+}
+
+function openSweepModal() {
+  if (!_data) { alert('Run a scan first (⟳ Scan Workspace).'); return; }
+  const orphans = _orphanFiles();
+  document.getElementById('sweep-count').textContent = orphans.length;
+  document.getElementById('sweep-file-list').innerHTML =
+    orphans.length
+      ? orphans.map(p => `<div style="padding:1px 0">${p}</div>`).join('')
+      : '<em>No orphan files detected in last scan.</em>';
+
+  const base = `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':'+window.location.port : ''}`;
+  document.getElementById('sweep-health-urls').value = `${base}/\n${base}/sys/diagnostics`;
+
+  const log = document.getElementById('sweep-log');
+  log.style.display = 'none'; log.innerHTML = '';
+  document.getElementById('sweep-progress').style.display = 'none';
+  document.getElementById('sweep-bar').style.width   = '0';
+  document.getElementById('sweep-status').textContent  = '';
+  document.getElementById('sweep-summary').textContent = '';
+  document.getElementById('sweep-start-btn').style.display = '';
+  document.getElementById('sweep-abort-btn').style.display = 'none';
+  document.getElementById('sweep-modal').classList.add('visible');
+}
+
+function closeSweepModal() {
+  if (_sweepEvtSource) { _sweepEvtSource.close(); _sweepEvtSource = null; }
+  document.getElementById('sweep-modal').classList.remove('visible');
+}
+
+function _logLine(cls, text) {
+  const el = document.getElementById('sweep-log');
+  const d  = document.createElement('div');
+  d.className = 'log-'+cls; d.textContent = text;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function startSweep() {
+  const orphans = _orphanFiles();
+  if (!orphans.length) { alert('No orphan files found.'); return; }
+
+  const healthUrls = document.getElementById('sweep-health-urls').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  if (!healthUrls.length) { alert('Enter at least one health-check URL.'); return; }
+
+  const dryRun = document.getElementById('sweep-dry-run').checked;
+
+  const log = document.getElementById('sweep-log');
+  log.innerHTML = ''; log.style.display = 'block';
+  document.getElementById('sweep-progress').style.display = 'block';
+  document.getElementById('sweep-start-btn').style.display  = 'none';
+  document.getElementById('sweep-abort-btn').style.display  = '';
+  document.getElementById('sweep-status').textContent = dryRun ? 'Dry-run…' : 'Sweeping…';
+  document.getElementById('sweep-summary').textContent = '';
+  _sweepTotal = orphans.length; _sweepDone = 0;
+
+  // Open SSE first to avoid missing early events
+  if (_sweepEvtSource) _sweepEvtSource.close();
+  _sweepEvtSource = new EventSource('/sys/api/orphan-sweep/stream');
+  _sweepEvtSource.onmessage = e => _handleSweepEvent(JSON.parse(e.data));
+  _sweepEvtSource.onerror   = () => { _logLine('error','⚠ Stream disconnected'); };
+
+  const resp = await fetch('/sys/api/orphan-sweep/start', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ orphan_paths:orphans, health_urls:healthUrls, dry_run:dryRun }),
+  });
+  if (!resp.ok) {
+    const d = await resp.json();
+    _logLine('error', 'Failed to start: ' + (d.error || resp.status));
+    document.getElementById('sweep-start-btn').style.display = '';
+    document.getElementById('sweep-abort-btn').style.display = 'none';
+    if (_sweepEvtSource) { _sweepEvtSource.close(); _sweepEvtSource = null; }
+  }
+}
+
+function _handleSweepEvent(ev) {
+  switch (ev.type) {
+    case 'connected': break;
+    case 'heartbeat': break;
+    case 'start':
+      _logLine('phase', `▶ Sweep started — ${ev.total} file(s)${ev.dry_run?' (DRY RUN)':''}`);
+      break;
+    case 'phase':
+      _logLine('phase', `── ${ev.message}`);
+      break;
+    case 'backup':
+      _logLine('backup', `  📦 ${ev.file} → ${ev.dest}${ev.dry_run?' (dry)':''}`);
+      break;
+    case 'backup_error':
+      _logLine('error', `  ❌ Backup failed: ${ev.file} — ${ev.error}`);
+      break;
+    case 'moving':
+      _logLine('backup', `  ↳ [${ev.index}/${ev.total}] Moving ${ev.file}…`);
+      break;
+    case 'result': {
+      const icon = ev.action === 'archived'     ? '✅ archived'
+                 : ev.action === 'would-archive' ? '✅ (dry) archived'
+                 : ev.action === 'restored'      ? '⚠ restored'
+                 : '⚠ (dry) skip';
+      const restore = ev.action === 'restored' ? ` | restore:${ev.restored?'ok':'FAILED'}` : '';
+      _logLine(ev.health_ok ? 'archived' : 'restored',
+        `  ${icon} — ${ev.file} | ${ev.health_msg}${restore}`);
+      _sweepDone++;
+      const pct = Math.round((_sweepDone / _sweepTotal) * 100);
+      document.getElementById('sweep-bar').style.width   = pct + '%';
+      document.getElementById('sweep-status').textContent = `${_sweepDone}/${_sweepTotal}`;
+      break;
+    }
+    case 'skip':
+      _logLine('skip', `  ⏭ ${ev.file} (${ev.reason})`);
+      break;
+    case 'error':
+      _logLine('error', `  ❌ ${ev.file} — ${ev.error}`);
+      break;
+    case 'aborted':
+      _logLine('error', `⏹ Aborted after ${ev.completed} files`);
+      _finishSweep(ev);
+      break;
+    case 'done':
+      _logLine('phase', '✔ Sweep complete');
+      _finishSweep(ev);
+      if (ev.results && !document.getElementById('sweep-dry-run').checked) startScan();
+      break;
+  }
+}
+
+function _finishSweep(ev) {
+  if (_sweepEvtSource) { _sweepEvtSource.close(); _sweepEvtSource = null; }
+  document.getElementById('sweep-start-btn').style.display = '';
+  document.getElementById('sweep-abort-btn').style.display = 'none';
+  document.getElementById('sweep-status').textContent = '';
+  if (ev.results) {
+    const r = ev.results;
+    document.getElementById('sweep-summary').textContent =
+      `✅ ${r.archived.length} archived  ⚠ ${r.skipped.length} skipped  ❌ ${r.errors.length} errors`;
+  }
+}
+
+async function abortSweep() {
+  await fetch('/sys/api/orphan-sweep/abort', {method:'POST'});
+  _logLine('error', '⏹ Abort requested…');
+}
+
+document.addEventListener('click', e => {
+  if (e.target.id === 'sweep-modal') closeSweepModal();
+});
 </script>
 </body>
 </html>
