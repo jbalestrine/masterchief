@@ -510,11 +510,25 @@ def scan_workspace() -> Dict[str, Any]:
                     local_imported.add(_rel(candidate))
 
     # Set file statuses
+    # Directories that contain runtime-loaded modules (dynamic imports, managers, plugins)
+    # — never mark files inside these as orphans via static analysis alone.
+    PROTECTED_DIRS = {
+        'managers', 'blueprints', 'features', 'utils', 'tf_wizard', 'echo',
+        'templates', 'addons', 'scripts', 'handlers', 'modules', 'plugins',
+        'services', 'integrations', 'middleware', 'models', 'migrations',
+        'tasks', 'workers', 'api', 'auth',
+    }
+
     active_set = {'main.py'} | local_imported
     for f in all_files:
         r   = f['rel_path']
         ext = f['ext']
-        if r in active_set:
+        # Any file whose first path component is a protected dir is treated as active
+        first_dir = r.split('/')[0] if '/' in r else ''
+        in_protected = first_dir in PROTECTED_DIRS
+        # Any __init__.py is always active
+        is_init = f['name'] == '__init__.py'
+        if r in active_set or in_protected or is_init:
             f['status'] = 'active'
         elif ext in TEMPLATE_EXT:
             f['status'] = 'template'
