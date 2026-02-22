@@ -1327,6 +1327,19 @@ async function startSweep() {
 
   const dryRun = document.getElementById('sweep-dry-run').checked;
 
+  // Require explicit confirmation for live runs
+  if (!dryRun) {
+    const ok = confirm(
+      `⚠️ LIVE RUN — this will move ${orphans.length} file(s) out of the workspace.\n\n` +
+      `A backup copy is made first, but files in dynamically-loaded directories ` +
+      `(managers/, blueprints/, features/, etc.) may still be needed at runtime.\n\n` +
+      `Run a dry-run first to verify. Continue with live run?`
+    );
+    if (!ok) return;
+  }
+
+  const dryRun = document.getElementById('sweep-dry-run').checked;
+
   const log = document.getElementById('sweep-log');
   log.innerHTML = ''; log.style.display = 'block';
   document.getElementById('sweep-progress').style.display = 'block';
