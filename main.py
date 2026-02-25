@@ -16846,6 +16846,9 @@ def sys_scm_status():
         if not line:
             continue
         xy, fname = line[:2], line[3:]
+        # Skip Claude's internal worktree directories (nested repos, not user files)
+        if fname.startswith('.claude/'):
+            continue
         if xy[0] not in (' ', '?'):
             staged.append({'status': xy[0], 'file': fname})
         if xy[1] != ' ':
@@ -16871,13 +16874,22 @@ def sys_scm_commit():
         return (r.stdout + r.stderr).strip(), r.returncode
     if files:
         for f in files:
-            out, rc = _run(['git', 'add', '--', f])
+            # Normalize path separators for Windows
+            f_norm = f.replace('\\', '/')
+            out, rc = _run(['git', 'add', '--', f_norm])
             if rc != 0:
-                return jsonify({'ok': False, 'error': 'Stage failed: ' + out}), 500
+                return jsonify({'ok': False, 'error': 'Stage failed for ' + f_norm + ': ' + out}), 500
     else:
         out, rc = _run(['git', 'add', '-A'])
         if rc != 0:
             return jsonify({'ok': False, 'error': 'Stage all failed: ' + out}), 500
+    # Verify something is actually staged before committing
+    staged_check, _ = _run(['git', 'diff', '--cached', '--name-only'])
+    if not staged_check.strip():
+        return jsonify({'ok': False,
+                        'error': 'Nothing to commit — no staged changes detected. '
+                                 'The selected files may already be clean or cannot be staged '
+                                 '(e.g. nested git repositories).'}), 400
     out, rc = _run(['git', 'commit', '-m', message])
     if rc != 0:
         return jsonify({'ok': False, 'error': out}), 500
