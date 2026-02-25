@@ -1420,8 +1420,6 @@ async function startSweep() {
     if (!ok) return;
   }
 
-  const dryRun = document.getElementById('sweep-dry-run').checked;
-
   const log = document.getElementById('sweep-log');
   log.innerHTML = ''; log.style.display = 'block';
   document.getElementById('sweep-progress').style.display = 'block';
