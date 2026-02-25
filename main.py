@@ -16788,6 +16788,125 @@ def sys_orphan_sweep_abort():
     return jsonify({'status': 'abort requested'})
 
 
+@app.route('/sys/api/export-active')
+def sys_export_active():
+    """ZIP download of all active app files as identified by the code scanner."""
+    import io, zipfile, datetime
+    import sys_diagnostics as _sd
+    try:
+        data = _sd.get_cached_scan()
+        active_rel = {f['rel_path'] for f in data.get('files', []) if f.get('status') == 'active'}
+        always_include = {
+            'main.py', 'requirements.txt', 'config.yml', 'Dockerfile',
+            'docker-compose.yml', '.gitignore', 'README.md', 'CHANGELOG.md',
+            'setup.py', 'pytest.ini', 'MANIFEST.in',
+        }
+        workspace = Path(app.root_path)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for rel in sorted(active_rel | always_include):
+                fpath = workspace / rel
+                if fpath.exists() and fpath.is_file():
+                    zf.write(fpath, rel)
+        buf.seek(0)
+        ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        return send_file(buf, as_attachment=True,
+                         download_name=f'masterchief_active_{ts}.zip',
+                         mimetype='application/zip')
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/sys/scm')
+def sys_scm():
+    """Source control manager — git status, commit, push, pull."""
+    try:
+        from templates.scm import SCM_TEMPLATE
+        return render_template_string(SCM_TEMPLATE)
+    except Exception as exc:
+        return f'<pre style="color:red">SCM load error: {exc}</pre>', 500
+
+
+@app.route('/sys/api/scm/status')
+def sys_scm_status():
+    """Return current git status, branch, and last 20 commits."""
+    import subprocess
+    def _run(cmd):
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True,
+                               cwd=app.root_path, timeout=10)
+            return r.stdout.strip(), r.returncode
+        except Exception as ex:
+            return str(ex), 1
+    branch, _  = _run(['git', 'branch', '--show-current'])
+    status_out, _ = _run(['git', 'status', '--porcelain'])
+    log_out,    _ = _run(['git', 'log', '--oneline', '-20'])
+    staged, unstaged = [], []
+    for line in status_out.splitlines():
+        if not line:
+            continue
+        xy, fname = line[:2], line[3:]
+        if xy[0] not in (' ', '?'):
+            staged.append({'status': xy[0], 'file': fname})
+        if xy[1] != ' ':
+            unstaged.append({'status': xy[1] if xy[1] != '?' else '?', 'file': fname})
+    commits = []
+    for line in log_out.splitlines():
+        parts = line.split(' ', 1)
+        commits.append({'hash': parts[0], 'message': parts[1] if len(parts) > 1 else ''})
+    return jsonify({'branch': branch, 'staged': staged, 'unstaged': unstaged, 'commits': commits})
+
+
+@app.route('/sys/api/scm/commit', methods=['POST'])
+def sys_scm_commit():
+    """Stage selected files and create a commit."""
+    import subprocess
+    data = request.get_json(silent=True) or {}
+    message = (data.get('message') or '').strip()
+    files   = data.get('files') or []
+    if not message:
+        return jsonify({'ok': False, 'error': 'Commit message required'}), 400
+    def _run(cmd):
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=app.root_path, timeout=30)
+        return (r.stdout + r.stderr).strip(), r.returncode
+    if files:
+        for f in files:
+            out, rc = _run(['git', 'add', '--', f])
+            if rc != 0:
+                return jsonify({'ok': False, 'error': 'Stage failed: ' + out}), 500
+    else:
+        out, rc = _run(['git', 'add', '-A'])
+        if rc != 0:
+            return jsonify({'ok': False, 'error': 'Stage all failed: ' + out}), 500
+    out, rc = _run(['git', 'commit', '-m', message])
+    if rc != 0:
+        return jsonify({'ok': False, 'error': out}), 500
+    return jsonify({'ok': True, 'output': out})
+
+
+@app.route('/sys/api/scm/push', methods=['POST'])
+def sys_scm_push():
+    """Push current branch to origin."""
+    import subprocess
+    br = subprocess.run(['git', 'branch', '--show-current'],
+                        capture_output=True, text=True, cwd=app.root_path)
+    branch = br.stdout.strip() or 'main'
+    r = subprocess.run(['git', 'push', 'origin', branch],
+                        capture_output=True, text=True, cwd=app.root_path, timeout=60)
+    output = (r.stdout + '\n' + r.stderr).strip()
+    return jsonify({'ok': r.returncode == 0, 'output': output})
+
+
+@app.route('/sys/api/scm/pull', methods=['POST'])
+def sys_scm_pull():
+    """Pull latest from remote."""
+    import subprocess
+    r = subprocess.run(['git', 'pull'],
+                        capture_output=True, text=True, cwd=app.root_path, timeout=60)
+    output = (r.stdout + '\n' + r.stderr).strip()
+    return jsonify({'ok': r.returncode == 0, 'output': output})
+
+
 if __name__=='__main__':
 
     import argparse
