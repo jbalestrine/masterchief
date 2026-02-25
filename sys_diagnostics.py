@@ -21,6 +21,8 @@ SKIP_DIRS: Set[str] = {
     'eggs', '.eggs', '.tox', 'htmlcov', '.mypy_cache', '.ruff_cache',
     'site-packages', 'lib', 'lib64', 'Lib', 'Scripts', 'bin',
     'include', 'Include', 'share',
+    # noise: uploaded addon archives, backups, old experiments
+    'data', 'backups', 'platform.bak', 'webapp', 'irc_flask_superapp_final', 'mc_platform',
 }
 
 PYTHON_EXT   = '.py'
