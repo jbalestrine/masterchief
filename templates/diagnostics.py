@@ -588,25 +588,37 @@ function setupResizeHandle() {
 // ════════════════════════════════════════════════════════════
 async function startScan() {
   showOverlay('Scanning workspace…');
+  const statusEl = document.getElementById('scan-status');
   try {
     const res = await fetch('/sys/api/scan');
     _data = await res.json();
-    if (_data.error) { hideOverlay(); alert('Scan error: ' + _data.error); return; }
+    if (_data.error) {
+      hideOverlay();
+      if (statusEl) statusEl.textContent = '⚠ Scan error: ' + _data.error;
+      return;
+    }
     applyData(_data);
   } catch(e) {
     hideOverlay();
-    alert('Failed to contact /sys/api/scan: ' + e);
+    if (statusEl) statusEl.textContent = '⚠ ' + e;
+    console.error('startScan error:', e);
   }
 }
 
 function applyData(data) {
-  updateSummaryChips(data.summary);
-  renderFileTree(data.file_tree);
-  renderRoutes(data.routes || []);
-  renderFiles(data.files || []);
-  renderIssues(data.issues || []);
-  buildGraph(data.graph || {nodes:[],edges:[]});
-  updateStatusBar(data.summary);
+  try { updateSummaryChips(data.summary); } catch(e) { console.error('updateSummaryChips', e); }
+  try { renderFileTree(data.file_tree); } catch(e) { console.error('renderFileTree', e); }
+  try { renderRoutes(data.routes || []); } catch(e) { console.error('renderRoutes', e); }
+  try { renderFiles(data.files || []); } catch(e) { console.error('renderFiles', e); }
+  try { renderIssues(data.issues || []); } catch(e) { console.error('renderIssues', e); }
+  try {
+    buildGraph(data.graph || {nodes:[],edges:[]});
+  } catch(e) {
+    console.warn('Graph render skipped (D3 unavailable?):', e);
+    const gp = document.getElementById('graph-panel');
+    if (gp) gp.innerHTML = '<div style="padding:24px;color:var(--muted);text-align:center">⚠ Graph unavailable (D3 failed to load — check network)</div>';
+  }
+  try { updateStatusBar(data.summary); } catch(e) { console.error('updateStatusBar', e); }
   document.getElementById('scan-status').textContent =
     `Last scan: ${new Date().toLocaleTimeString()} (${data.scan_time}s)`;
   document.getElementById('sb-scan-time').textContent = `Scan: ${data.scan_time}s`;
@@ -928,6 +940,7 @@ function _nodeColor(d) {
 }
 
 function buildGraph(graphData) {
+  if (typeof d3 === 'undefined') throw new Error('D3 not loaded');
   _graphData = graphData;
   _renderGraph();
 }
