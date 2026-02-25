@@ -742,86 +742,137 @@ function toggleTree() {
 //  Routes table
 // ════════════════════════════════════════════════════════════
 let _routes = [];
+let _routeView = [];
+const _PAGE = 200;
+
 function renderRoutes(routes) {
   _routes = routes;
+  _routeView = routes;
   document.getElementById('routes-count').textContent = `${routes.length} routes`;
-  _renderRoutesTable(routes);
+  _renderRoutesTable(0);
 }
 
-function _renderRoutesTable(routes) {
-  const tbody = document.getElementById('routes-tbody');
+function _routeRow(r, i) {
   const AUTH_HINTS = ['login_required','require_auth','jwt_required','token_required','auth_required'];
-  tbody.innerHTML = routes.map(r => {
-    const methods = (r.methods || ['GET']).map(m =>
-      `<span class="pill pill-${m.toLowerCase()}">${m}</span>`).join(' ');
-    const hasAuth = AUTH_HINTS.some(a =>
-      (r.decorators || []).some(d => d.includes(a)) ||
-      (r.calls || []).includes(a));
-    const authBadge = hasAuth
-      ? '<span style="color:var(--green)">✓</span>'
-      : '<span style="color:var(--red)">✗</span>';
-    const calls = (r.calls || []).slice(0,3).join(', ') + ((r.calls||[]).length > 3 ? '…' : '');
-    return `<tr class="clickable" onclick="inspectRoute(${JSON.stringify(r).replace(/"/g,'&quot;')})">
-      <td>${methods}</td>
-      <td class="mono">${r.path || ''}</td>
-      <td class="mono link">${r.handler || ''}</td>
-      <td class="mono" style="color:var(--blue)">${(r.file||'').split('/').pop()}</td>
-      <td style="color:var(--muted)">${r.line || ''}</td>
-      <td class="mono" style="color:var(--muted);font-size:10px">${calls}</td>
-      <td style="text-align:center">${authBadge}</td>
-    </tr>`;
-  }).join('');
+  const methods = (r.methods || ['GET']).map(m =>
+    `<span class="pill pill-${m.toLowerCase()}">${m}</span>`).join(' ');
+  const hasAuth = AUTH_HINTS.some(a =>
+    (r.decorators || []).some(d => d.includes(a)) ||
+    (r.calls || []).includes(a));
+  const authBadge = hasAuth
+    ? '<span style="color:var(--green)">✓</span>'
+    : '<span style="color:var(--red)">✗</span>';
+  const calls = (r.calls || []).slice(0,3).join(', ') + ((r.calls||[]).length > 3 ? '…' : '');
+  return `<tr class="clickable" onclick="inspectRoute(_routeView[${i}])">
+    <td>${methods}</td>
+    <td class="mono">${r.path || ''}</td>
+    <td class="mono link">${r.handler || ''}</td>
+    <td class="mono" style="color:var(--blue)">${(r.file||'').split('/').pop()}</td>
+    <td style="color:var(--muted)">${r.line || ''}</td>
+    <td class="mono" style="color:var(--muted);font-size:10px">${calls}</td>
+    <td style="text-align:center">${authBadge}</td>
+  </tr>`;
 }
+
+function _renderRoutesTable(offset) {
+  const tbody = document.getElementById('routes-tbody');
+  const chunk = _routeView.slice(offset, offset + _PAGE);
+  const newRows = chunk.map((r, j) => _routeRow(r, offset + j)).join('');
+  if (offset === 0) {
+    const rem = _routeView.length - chunk.length;
+    const moreBtn = rem > 0
+      ? `<tr id="routes-more-row"><td colspan="7" style="text-align:center;padding:8px">
+          <button class="header-btn" onclick="_loadMoreRoutes(${offset + _PAGE})">Load ${Math.min(rem,_PAGE)} more (${rem} remaining)</button></td></tr>`
+      : '';
+    tbody.innerHTML = newRows + moreBtn;
+  } else {
+    const moreRow = document.getElementById('routes-more-row');
+    if (moreRow) moreRow.remove();
+    const rem = _routeView.length - (offset + chunk.length);
+    const moreBtn = rem > 0
+      ? `<tr id="routes-more-row"><td colspan="7" style="text-align:center;padding:8px">
+          <button class="header-btn" onclick="_loadMoreRoutes(${offset + _PAGE})">Load ${Math.min(rem,_PAGE)} more (${rem} remaining)</button></td></tr>`
+      : '';
+    tbody.insertAdjacentHTML('beforeend', newRows + moreBtn);
+  }
+}
+
+function _loadMoreRoutes(offset) { _renderRoutesTable(offset); }
 
 function filterRoutes(q) {
   q = q.toLowerCase();
-  const filtered = q ? _routes.filter(r =>
+  _routeView = q ? _routes.filter(r =>
     (r.path||'').toLowerCase().includes(q) ||
     (r.handler||'').toLowerCase().includes(q) ||
     (r.methods||[]).some(m => m.toLowerCase().includes(q))
   ) : _routes;
-  document.getElementById('routes-count').textContent = `${filtered.length} of ${_routes.length}`;
-  _renderRoutesTable(filtered);
+  document.getElementById('routes-count').textContent = `${_routeView.length} of ${_routes.length}`;
+  _renderRoutesTable(0);
 }
 
 // ════════════════════════════════════════════════════════════
 //  Files table
 // ════════════════════════════════════════════════════════════
 let _files = [];
+let _fileView = [];
+
 function renderFiles(files) {
   _files = files;
+  _fileView = files;
   document.getElementById('files-count').textContent = `${files.length} Python files`;
-  _renderFilesTable(files);
+  _renderFilesTable(0);
 }
 
-function _renderFilesTable(files) {
-  const tbody = document.getElementById('files-tbody');
-  tbody.innerHTML = files.map(f => {
-    const sz = f.size > 1024*1024
-      ? (f.size/1024/1024).toFixed(1)+'MB'
-      : f.size > 1024 ? (f.size/1024).toFixed(0)+'KB' : f.size+'B';
-    const stpill = f.status === 'active'
-      ? '<span class="pill pill-active">active</span>'
-      : f.has_error
-      ? '<span class="pill pill-error">error</span>'
-      : '<span class="pill pill-orphan">orphan</span>';
-    return `<tr class="clickable" onclick="inspectFile('${f.rel_path}',0)">
-      <td class="mono link">${f.rel_path}</td>
-      <td style="color:var(--muted);text-align:right">${f.lines.toLocaleString()}</td>
-      <td style="text-align:center">${f.routes > 0 ? `<span style="color:var(--node-route)">${f.routes}</span>` : '<span style="color:var(--muted)">0</span>'}</td>
-      <td style="text-align:center">${f.functions > 0 ? `<span style="color:var(--node-fn)">${f.functions}</span>` : '<span style="color:var(--muted)">0</span>'}</td>
-      <td style="text-align:center;color:var(--muted)">${f.imports}</td>
-      <td style="text-align:right;color:var(--muted)">${sz}</td>
-      <td>${stpill}</td>
-    </tr>`;
-  }).join('');
+function _fileRow(f) {
+  const sz = f.size > 1024*1024
+    ? (f.size/1024/1024).toFixed(1)+'MB'
+    : f.size > 1024 ? (f.size/1024).toFixed(0)+'KB' : f.size+'B';
+  const stpill = f.status === 'active'
+    ? '<span class="pill pill-active">active</span>'
+    : f.has_error
+    ? '<span class="pill pill-error">error</span>'
+    : '<span class="pill pill-orphan">orphan</span>';
+  return `<tr class="clickable" onclick="inspectFile('${f.rel_path}',0)">
+    <td class="mono link">${f.rel_path}</td>
+    <td style="color:var(--muted);text-align:right">${f.lines.toLocaleString()}</td>
+    <td style="text-align:center">${f.routes > 0 ? `<span style="color:var(--node-route)">${f.routes}</span>` : '<span style="color:var(--muted)">0</span>'}</td>
+    <td style="text-align:center">${f.functions > 0 ? `<span style="color:var(--node-fn)">${f.functions}</span>` : '<span style="color:var(--muted)">0</span>'}</td>
+    <td style="text-align:center;color:var(--muted)">${f.imports}</td>
+    <td style="text-align:right;color:var(--muted)">${sz}</td>
+    <td>${stpill}</td>
+  </tr>`;
 }
+
+function _renderFilesTable(offset) {
+  const tbody = document.getElementById('files-tbody');
+  const chunk = _fileView.slice(offset, offset + _PAGE);
+  const newRows = chunk.map(f => _fileRow(f)).join('');
+  if (offset === 0) {
+    const rem = _fileView.length - chunk.length;
+    const moreBtn = rem > 0
+      ? `<tr id="files-more-row"><td colspan="7" style="text-align:center;padding:8px">
+          <button class="header-btn" onclick="_loadMoreFiles(${offset + _PAGE})">Load ${Math.min(rem,_PAGE)} more (${rem} remaining)</button></td></tr>`
+      : '';
+    tbody.innerHTML = newRows + moreBtn;
+  } else {
+    const moreRow = document.getElementById('files-more-row');
+    if (moreRow) moreRow.remove();
+    const rem = _fileView.length - (offset + chunk.length);
+    const moreBtn = rem > 0
+      ? `<tr id="files-more-row"><td colspan="7" style="text-align:center;padding:8px">
+          <button class="header-btn" onclick="_loadMoreFiles(${offset + _PAGE})">Load ${Math.min(rem,_PAGE)} more (${rem} remaining)</button></td></tr>`
+      : '';
+    tbody.insertAdjacentHTML('beforeend', newRows + moreBtn);
+  }
+}
+
+function _loadMoreFiles(offset) { _renderFilesTable(offset); }
 
 function filterFiles(q) {
   q = q.toLowerCase();
-  const filtered = q ? _files.filter(f => f.rel_path.toLowerCase().includes(q)) : _files;
-  document.getElementById('files-count').textContent = `${filtered.length} of ${_files.length}`;
-  _renderFilesTable(filtered);
+  _fileView = q ? _files.filter(f => f.rel_path.toLowerCase().includes(q)) : _files;
+  document.getElementById('files-count').textContent = `${_fileView.length} of ${_files.length}`;
+  _renderFilesTable(0);
 }
 
 function sortTable(which, col) {
@@ -829,17 +880,17 @@ function sortTable(which, col) {
   _sortStates[key] = !_sortStates[key];
   const asc = _sortStates[key];
   if (which === 'routes') {
-    _routes.sort((a,b) => {
+    _routeView.sort((a,b) => {
       const av = a[col]||'', bv = b[col]||'';
       return asc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
-    _renderRoutesTable(_routes);
+    _renderRoutesTable(0);
   } else {
-    _files.sort((a,b) => {
+    _fileView.sort((a,b) => {
       const av = a[col]||0, bv = b[col]||0;
       return asc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
-    _renderFilesTable(_files);
+    _renderFilesTable(0);
   }
 }
 
@@ -847,19 +898,23 @@ function sortTable(which, col) {
 //  Issues
 // ════════════════════════════════════════════════════════════
 let _issues = [];
+let _issueView = [];
+
 function renderIssues(issues) {
   _issues = issues;
-  _renderIssuesList(issues);
+  _issueView = issues;
+  _renderIssuesList(0);
 }
 
-function _renderIssuesList(issues) {
+function _renderIssuesList(offset) {
   const el = document.getElementById('issues-list');
-  document.getElementById('issues-count').textContent = `${issues.length} issues`;
-  if (!issues.length) {
+  document.getElementById('issues-count').textContent = `${_issueView.length} issues`;
+  if (!_issueView.length) {
     el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">✅ No issues found</div>';
     return;
   }
-  el.innerHTML = issues.map(i => {
+  const chunk = _issueView.slice(offset, offset + _PAGE);
+  const newHtml = chunk.map(i => {
     const sevClass = `sev-${i.severity}`;
     const meta = [i.file, i.line ? `line ${i.line}` : ''].filter(Boolean).join(' · ');
     return `<div class="issue-row" onclick="inspectFile('${i.file}',${i.line||0})">
@@ -871,14 +926,28 @@ function _renderIssuesList(issues) {
       </div>
     </div>`;
   }).join('');
+  const rem = _issueView.length - (offset + chunk.length);
+  const moreBtn = rem > 0
+    ? `<div id="issues-more-row" style="text-align:center;padding:8px">
+        <button class="header-btn" onclick="_loadMoreIssues(${offset + _PAGE})">Load ${Math.min(rem,_PAGE)} more (${rem} remaining)</button></div>`
+    : '';
+  if (offset === 0) {
+    el.innerHTML = newHtml + moreBtn;
+  } else {
+    const moreRow = document.getElementById('issues-more-row');
+    if (moreRow) moreRow.remove();
+    el.insertAdjacentHTML('beforeend', newHtml + moreBtn);
+  }
 }
+
+function _loadMoreIssues(offset) { _renderIssuesList(offset); }
 
 function filterIssues(q) {
   q = (document.getElementById('issues-filter')?.value || '').toLowerCase();
   const showErr  = document.getElementById('sev-error')?.checked ?? true;
   const showWarn = document.getElementById('sev-warning')?.checked ?? true;
   const showInfo = document.getElementById('sev-info')?.checked ?? true;
-  const filtered = _issues.filter(i => {
+  _issueView = _issues.filter(i => {
     if (i.severity === 'error'   && !showErr)  return false;
     if (i.severity === 'warning' && !showWarn) return false;
     if (i.severity === 'info'    && !showInfo) return false;
@@ -886,7 +955,7 @@ function filterIssues(q) {
     return (i.message||'').toLowerCase().includes(q) ||
            (i.file||'').toLowerCase().includes(q);
   });
-  _renderIssuesList(filtered);
+  _renderIssuesList(0);
 }
 
 // ════════════════════════════════════════════════════════════
