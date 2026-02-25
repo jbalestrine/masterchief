@@ -1,3 +1,9 @@
+# Large model / binary files — do not track in git
+models/*.gguf
+models/*.bin
+models/*.safetensors
+*.gguf
+Files_and_folders.csv
 # Python
 __pycache__/
 *.py[cod]
