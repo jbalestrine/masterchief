@@ -81,6 +81,7 @@ code{color:#4CAF50;}
 <a href="/modules" class="{{ 'active' if request.path=='/modules' else '' }}">⚙️ Modules</a>
 <a href="/addons/modules" class="{{ 'active' if '/addons/modules' in request.path else '' }}">🧩 Addon Modules</a>
 <a href="/sys/diagnostics" class="{{ 'active' if '/sys/diagnostics' in request.path else '' }}">🔬 Diagnostics</a>
+<a href="/sys/scm" class="{{ 'active' if '/sys/scm' in request.path else '' }}">🗂 SCM</a>
 <a href="/echo-train" class="{{ 'active' if '/echo-train' in request.path else '' }}">Training</a>
 {% if ui_modules is defined %}{% for _mod_name, _mod in ui_modules.items() %}<a href="{{ _mod.url }}" class="{{ 'active' if _mod.url in request.path else '' }}" title="Addon Module: {{ _mod_name }}">{{ _mod.icon }} {{ _mod_name }}</a>
 {% endfor %}{% endif %}
