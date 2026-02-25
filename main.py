@@ -16847,7 +16847,7 @@ def sys_scm_status():
             continue
         xy, fname = line[:2], line[3:]
         # Skip Claude's internal worktree directories (nested repos, not user files)
-        if fname.startswith('.claude/'):
+        if fname.startswith('.claude/') or fname.startswith('claude/') or '/.claude/' in fname:
             continue
         if xy[0] not in (' ', '?'):
             staged.append({'status': xy[0], 'file': fname})
