@@ -32,7 +32,8 @@ sub init()
     m.loaded      = false
     buildChrome()
     m.task = CreateObject("roSGNode", "M3UTask")
-    m.task.observeField("result", "onResult")
+    m.task.observeField("groupsJson", "onData")
+    m.task.observeField("error",      "onError")
 end sub
 
 sub buildChrome()
@@ -94,31 +95,32 @@ function load(args as Dynamic)
     m.task.url = m.m3uUrl
 end function
 
-sub onResult()
-    raw = m.task.result
-    if raw = invalid
-        m.statusLbl.text  = "No response"
+sub onError()
+    msg = m.task.error
+    if msg = "" then return
+    m.statusLbl.text  = "Error: " + msg
+    m.statusLbl.color = m.cRed
+end sub
+
+sub onData()
+    gj = m.task.groupsJson
+    cj = m.task.channelsJson
+    if gj = "" then return
+    groups   = ParseJson(gj)
+    channels = ParseJson(cj)
+    if groups = invalid or channels = invalid
+        m.statusLbl.text  = "Parse error"
         m.statusLbl.color = m.cRed
         return
     end if
-    if raw.doesExist("error")
-        m.statusLbl.text  = "Error: " + raw.error
-        m.statusLbl.color = m.cRed
-        return
-    end if
-    if not raw.doesExist("_isM3U")
-        m.statusLbl.text  = "Bad response format"
-        m.statusLbl.color = m.cRed
-        return
-    end if
-    m.allChannels = raw._channels
-    m.groups      = raw._groups
+    m.allChannels = channels
+    m.groups      = groups
     m.groupIdx    = 0
     m.groupOffset = 0
     m.loaded      = true
     total = m.allChannels.count()
     gc    = m.groups.count()
-    m.statusLbl.text  = str(total).trim() + " ch  |  " + str(gc).trim() + " groups   </> pane  OK play  * reload"
+    m.statusLbl.text  = stri(total).trim() + " ch  |  " + stri(gc).trim() + " groups   </> pane  OK play  * reload"
     m.statusLbl.color = m.cGreen
     filterGroup()
     renderGroups()
@@ -136,7 +138,7 @@ sub filterGroup()
         if chGroup = "" then chGroup = "Uncategorized"
         if chGroup = g then m.filtered.push(ch)
     end for
-    m.countLbl.text = str(m.filtered.count()).trim() + " ch"
+    m.countLbl.text = stri(m.filtered.count()).trim() + " ch"
 end sub
 
 sub renderGroups()
@@ -213,7 +215,7 @@ sub renderStreams()
         end if
         numLbl = m.streamList.createChild("Label")
         numLbl.translation = [10, y + 10]
-        numLbl.text  = str(i + 1).trim()
+        numLbl.text  = stri(i + 1).trim()
         numLbl.font  = "font:SmallSystemFont"
         numLbl.color = m.cSub
         numLbl.width = 52
@@ -230,7 +232,7 @@ sub renderStreams()
     if m.filtered.count() > m.maxRows
         hint = m.streamList.createChild("Label")
         hint.translation = [10, y + 6]
-        hint.text  = "^v scroll  (" + str(m.filtered.count()).trim() + " total)"
+        hint.text  = "^v scroll  (" + stri(m.filtered.count()).trim() + " total)"
         hint.font  = "font:SmallSystemFont"
         hint.color = m.cSub
     end if
@@ -270,6 +272,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.loaded = false
             m.statusLbl.text  = "Reloading..."
             m.statusLbl.color = m.cSub
+            m.task.groupsJson = ""
             m.task.url = ""
             m.task.url = m.m3uUrl
             return true
