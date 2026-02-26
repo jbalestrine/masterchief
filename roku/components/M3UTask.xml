@@ -99,16 +99,12 @@ end function
 
 ' Find position of last comma in a string (1-based)
 function findLastComma(s as String) as Integer
-    pos = -1
     i = Len(s)
     while i > 0
-        if Mid(s, i, 1) = ","
-            pos = i
-            exit while
-        end if
+        if Mid(s, i, 1) = "," then return i
         i = i - 1
     end while
-    return pos
+    return -1
 end function
 
 ' Extract a quoted attribute value: attr="value" or attr='value'
