@@ -32,7 +32,7 @@
 
             titleLbl = m.top.createChild("Label")
             titleLbl.translation = [52, 18]
-            titleLbl.text  = "🔔  NOTIFICATIONS"
+            titleLbl.text  = "[!]  NOTIFICATIONS"
             titleLbl.font  = "font:MediumBoldSystemFont"
             titleLbl.color = "0xE6EDF3FF"
 
