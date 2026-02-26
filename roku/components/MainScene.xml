@@ -288,6 +288,8 @@ end sub
 sub onTick()
     m.tickCount = m.tickCount + 1
     updateClock()
+    ' Re-assert scene focus every tick so API task callbacks can't steal it
+    if not m.isPlaying then m.top.setFocus(true)
     ' skip auto-refresh for IPTV tab (heavy) and when video is playing
     if m.tickCount mod m.refreshSecs = 0 and not m.isPlaying and m.activeTab < 5
         m.panels[m.activeTab].callFunc("load", {})
