@@ -237,6 +237,15 @@ app.config['VAULT_AUDIT_DB'] = _data_dir / 'vault_audit.json'
 app.config['MODULES_CONFIG'] = _data_dir / 'modules.json'
 app.config['RBAC_ENABLED'] = True
 
+# Image generation config
+app.config['IMAGE_PROVIDER'] = os.environ.get('IMAGE_PROVIDER', 'local')
+app.config['IMAGE_RATE_LIMIT_PER_MIN'] = int(os.environ.get('IMAGE_RATE_LIMIT_PER_MIN', '6'))
+app.config['IMAGE_CACHE_TTL'] = int(os.environ.get('IMAGE_CACHE_TTL', '86400'))
+
+# In-memory image state (cache, rate-limiting, async job tracker)
+IMAGE_CACHE = {}   # cache_key -> {'path': str, 'ts': float}
+IMAGE_RATE  = {}   # rl_key   -> [timestamps]
+IMAGE_JOBS  = {}   # job_id   -> {'status', 'progress', 'path', 'error'}
 
 
 ENABLED_MODULES = load_enabled_modules()
