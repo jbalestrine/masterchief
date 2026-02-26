@@ -8,7 +8,7 @@
         <function name="load" />
     </interface>
     <script type="text/brightscript"><![CDATA[
-        CONST BASE_URL = "http://127.0.0.1:8080"
+        CONST BASE_URL = "http://10.0.0.159:8080"
 
         sub init()
             buildChrome()
