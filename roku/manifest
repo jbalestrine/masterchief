@@ -2,10 +2,10 @@ title=MasterChief DevOps
 subtitle=Your DevOps Platform on TV
 major_version=1
 minor_version=0
-build_version=3
+build_version=4
 
 type=appl
-rsg_version=1.1
+rsg_version=1.2
 
 mm_icon_focus_hd=pkg:/images/icon_focus_hd.png
 mm_icon_side_hd=pkg:/images/icon_side_hd.png
