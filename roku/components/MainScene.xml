@@ -6,6 +6,8 @@
       translation="[0, 0]"
       width="1280"
       height="720"
+      focusable="true"
+      uri=""
     />
   </children>
 </component>

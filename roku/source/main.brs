@@ -9,6 +9,7 @@ sub Main(args as Dynamic)
     ' Set the URL after scene is shown
     wv = scene.findNode("webView")
     if wv <> invalid
+        wv.setFocus(true)
         wv.uri = "http://ciacpu.myddns.me:8080/"
     end if
 
