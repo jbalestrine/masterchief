@@ -125,6 +125,8 @@ end sub
 function load(args as Dynamic)
     if m.loaded then return invalid
     m.statusLbl.text = "*  Loading playlist..."
+    ' Clear URL first so onChange fires even if we reload the same URL
+    m.task.url = ""
     m.task.url = m.m3uUrl
 end function
 
@@ -334,6 +336,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.loaded = false
             m.statusLbl.text = "*  Reloading..."
             m.statusLbl.color = m.cSub
+            m.task.url = ""
             m.task.url = m.m3uUrl
             return true
         end if
@@ -379,6 +382,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.loaded = false
             m.statusLbl.text = "*  Reloading..."
             m.statusLbl.color = m.cSub
+            m.task.url = ""
             m.task.url = m.m3uUrl
             return true
         end if

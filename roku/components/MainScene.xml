@@ -271,6 +271,8 @@ sub showPanel(idx as Integer)
     end for
     m.activeTab = idx
     m.panels[idx].callFunc("load", {})
+    ' always re-acquire focus on the scene so left/right keep working
+    m.top.setFocus(true)
 end sub
 
 ' -- timer (clock + auto-refresh) ------------------------------------------

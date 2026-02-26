@@ -54,14 +54,20 @@ end sub
 ' -- M3U parser --------------------------------------------------------------
 ' Handles #EXTM3U, #EXTINF lines and stream URLs.
 ' Returns array of {name, url, group, logo, tvgId}
+' Caps at 5000 channels to protect against huge playlists.
 function parseM3U(raw as String) as Object
     channels = []
     current = invalid
+    maxChannels = 5000
 
     lines = raw.Tokenize(chr(10))
 
     for each rawLine in lines
-        line = rawLine.trim()
+        if channels.count() >= maxChannels then exit for
+        ' strip CR so \r\n line endings don't corrupt names/URLs
+        line = rawLine
+        if Right(line, 1) = chr(13) then line = Left(line, Len(line) - 1)
+        line = line.trim()
         if line = ""
             ' skip blank
         else if Left(line, 7) = "#EXTINF"
