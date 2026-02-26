@@ -7,9 +7,9 @@
         <function name="load" />
     </interface>
     <script type="text/brightscript"><![CDATA[
-        CONST BASE_URL = "http://10.0.0.159:8080"
 
         sub init()
+            m.baseUrl = "http://10.0.0.159:8080"
             m.scrollOffset = 0
             m.items = []
             buildChrome()
@@ -64,7 +64,7 @@
 
         function load(args as Dynamic)
             m.statusLbl.text = "*  Fetching..."
-            m.task.url = BASE_URL + "/api/cloud/accounts"
+            m.task.url = m.baseUrl + "/api/cloud/accounts"
         end function
 
         sub onResult()

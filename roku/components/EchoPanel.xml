@@ -8,9 +8,9 @@
         <function name="load" />
     </interface>
     <script type="text/brightscript"><![CDATA[
-        CONST BASE_URL = "http://10.0.0.159:8080"
 
         sub init()
+            m.baseUrl = "http://10.0.0.159:8080"
             buildChrome()
             m.statusTask = createObject("roSGNode", "ApiTask")
             m.statusTask.observeField("result", "onStatusResult")
@@ -96,7 +96,7 @@
 
         function load(args as Dynamic)
             m.statusLbl.text = "*  Fetching..."
-            m.statusTask.url = BASE_URL + "/api/echo/status"
+            m.statusTask.url = m.baseUrl + "/api/echo/status"
         end function
 
         sub onStatusResult()

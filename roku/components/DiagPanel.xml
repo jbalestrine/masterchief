@@ -8,9 +8,9 @@
         <function name="load" />
     </interface>
     <script type="text/brightscript"><![CDATA[
-        CONST BASE_URL = "http://10.0.0.159:8080"
 
         sub init()
+            m.baseUrl = "http://10.0.0.159:8080"
             buildChrome()
             m.task = createObject("roSGNode", "ApiTask")
             m.task.observeField("result", "onResult")
@@ -100,7 +100,7 @@
 
         function load(args as Dynamic)
             m.statusLbl.text = "*  Fetching..."
-            m.task.url = BASE_URL + "/sys/diagnostics"
+            m.task.url = m.baseUrl + "/sys/diagnostics"
         end function
 
         sub onResult()
@@ -110,7 +110,7 @@
                 if data <> invalid then errMsg = data.error
                 m.statusLbl.text = "X " + errMsg
                 ' fallback: try the scan API
-                m.task.url = BASE_URL + "/api/diagnostics"
+                m.task.url = m.baseUrl + "/api/diagnostics"
                 return
             end if
 
