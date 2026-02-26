@@ -1,0 +1,61 @@
+' ============================================================
+'  panelUtils.brs — shared helpers included by all panels
+' ============================================================
+
+' colour palette (must match MainScene)
+CONST PU_BG        = "0x0D1117FF"
+CONST PU_CARD      = "0x161B22FF"
+CONST PU_BORDER    = "0x30363DFF"
+CONST PU_TEXT      = "0xE6EDF3FF"
+CONST PU_SUBTEXT   = "0x8B949EFF"
+CONST PU_GREEN     = "0x3FB950FF"
+CONST PU_RED       = "0xF85149FF"
+CONST PU_YELLOW    = "0xD29922FF"
+CONST PU_BLUE      = "0x58A6FFFF"
+
+CONST PANEL_W = 1280
+CONST PANEL_H = 596    ' 720 - 124 (header+tabs)
+CONST PAD     = 36
+
+' Map a status string to a colour
+function statusColor(s as String) as String
+    sl = LCase(s)
+    if sl = "running" or sl = "active" or sl = "healthy" or sl = "ok" or sl = "success" or sl = "passed"
+        return PU_GREEN
+    else if sl = "failed" or sl = "error" or sl = "unhealthy" or sl = "critical"
+        return PU_RED
+    else if sl = "pending" or sl = "queued" or sl = "warning" or sl = "degraded"
+        return PU_YELLOW
+    else
+        return PU_SUBTEXT
+    end if
+end function
+
+' Safely get a string from an assocarray
+function safeStr(aa as Dynamic, key as String, fallback = "" as String) as String
+    if type(aa) = "roAssociativeArray" and aa.doesExist(key)
+        v = aa[key]
+        if v = invalid then return fallback
+        if type(v) = "roString" or type(v) = "String" then return v
+        return str(v).trim()
+    end if
+    return fallback
+end function
+
+' Format epoch seconds as HH:MM MM/DD
+function formatTs(ts as Dynamic) as String
+    if ts = invalid or ts = "" then return ""
+    n = val(str(ts).trim())
+    if n <= 0 then return str(ts).trim()
+    dt = CreateObject("roDateTime")
+    dt.FromISO8601String(str(n))
+    dt.ToLocalTime()
+    return RightPad(dt.GetHours()) + ":" + RightPad(dt.GetMinutes()) + " " + _
+           str(dt.GetMonth()).trim() + "/" + str(dt.GetDayOfMonth()).trim()
+end function
+
+function RightPad(n as Integer) as String
+    s = str(n).trim()
+    if len(s) = 1 then s = "0" + s
+    return s
+end function
