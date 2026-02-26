@@ -7,10 +7,8 @@
         <function name="load" />
     </interface>
     <script type="text/brightscript"><![CDATA[
-        ' -- config ---------------------------------------------------
-        CONST BASE_URL = "http://10.0.0.159:8080"
-
         sub init()
+            m.baseUrl = "http://10.0.0.159:8080"
             m.scrollOffset = 0
             m.items = []
             buildChrome()
@@ -84,7 +82,7 @@
         ' -- load (called by MainScene) --------------------------------
         function load(args as Dynamic)
             m.statusLbl.text = "*  Fetching..."
-            m.task.url = BASE_URL + "/api/pipelines"
+            m.task.url = m.baseUrl + "/api/pipelines"
         end function
 
         ' -- data handler ---------------------------------------------

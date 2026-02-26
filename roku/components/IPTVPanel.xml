@@ -9,26 +9,20 @@
         <field id="selectedChannel" type="assocarray" />
     </interface>
     <script type="text/brightscript"><![CDATA[
-
-' -- Playlist URL -------------------------------------------------------------
-CONST M3U_URL = "http://1tv41.icu:8080/get.php?username=3022207888&password=leonmatthews60@gmail.com&type=m3u"
-
-CONST ROW_H    = 40
-CONST MAX_ROWS = 12
-CONST LEFT_W   = 280   ' group sidebar width
-CONST RIGHT_X  = LEFT_W + 8
-
-' colours
-CONST C_BG      = "0x0D1117FF"
-CONST C_CARD    = "0x161B22FF"
-CONST C_SEL     = "0x238636FF"
-CONST C_TEXT    = "0xE6EDF3FF"
-CONST C_SUB     = "0x8B949EFF"
-CONST C_BORDER  = "0x30363DFF"
-CONST C_BLUE    = "0x58A6FFFF"
-CONST C_YELLOW  = "0xD29922FF"
-
 sub init()
+    m.m3uUrl  = "http://1tv41.icu:8080/get.php?username=3022207888&password=leonmatthews60@gmail.com&type=m3u"
+    m.rowH    = 40
+    m.maxRows = 12
+    m.leftW   = 280
+    m.rightX  = 288
+    m.cBg     = "0x0D1117FF"
+    m.cCard   = "0x161B22FF"
+    m.cSel    = "0x238636FF"
+    m.cText   = "0xE6EDF3FF"
+    m.cSub    = "0x8B949EFF"
+    m.cBorder = "0x30363DFF"
+    m.cBlue   = "0x58A6FFFF"
+    m.cYellow = "0xD29922FF"
     m.allChannels   = []
     m.groups        = ["All"]
     m.groupIdx      = 0
@@ -52,65 +46,65 @@ sub buildChrome()
     bg.translation = [0, 0]
     bg.width  = 1280
     bg.height = 596
-    bg.color  = C_BG
+    bg.color  = m.cBg
 
     ' title bar
     tb = m.top.createChild("Rectangle")
     tb.translation = [36, 12]
     tb.width  = 1208
     tb.height = 40
-    tb.color  = C_CARD
+    tb.color  = m.cCard
 
     titleLbl = m.top.createChild("Label")
     titleLbl.translation = [52, 19]
     titleLbl.text  = "[TV]  LIVE TV  -  IPTV PLAYER"
     titleLbl.font  = "font:MediumBoldSystemFont"
-    titleLbl.color = C_TEXT
+    titleLbl.color = m.cText
 
     m.statusLbl = m.top.createChild("Label")
     m.statusLbl.translation = [860, 23]
     m.statusLbl.text  = "Press OK to load playlist"
     m.statusLbl.font  = "font:SmallSystemFont"
-    m.statusLbl.color = C_SUB
+    m.statusLbl.color = m.cSub
     m.statusLbl.width = 380
 
     ' group sidebar
     sideBar = m.top.createChild("Rectangle")
     sideBar.translation = [36, 62]
-    sideBar.width  = LEFT_W
+    sideBar.width  = m.leftW
     sideBar.height = 520
-    sideBar.color  = C_CARD
+    sideBar.color  = m.cCard
 
     sideHdr = m.top.createChild("Label")
     sideHdr.translation = [48, 68]
     sideHdr.text  = "GROUPS"
     sideHdr.font  = "font:SmallBoldSystemFont"
-    sideHdr.color = C_BLUE
+    sideHdr.color = m.cBlue
 
     m.groupList = m.top.createChild("Group")
     m.groupList.translation = [36, 92]
 
     ' channel list area
     chArea = m.top.createChild("Rectangle")
-    chArea.translation = [RIGHT_X + 36, 62]
-    chArea.width  = 1280 - RIGHT_X - 72
+    chArea.translation = [m.rightX + 36, 62]
+    chArea.width  = 1280 - m.rightX - 72
     chArea.height = 520
-    chArea.color  = C_CARD
+    chArea.color  = m.cCard
 
     chHdr = m.top.createChild("Label")
-    chHdr.translation = [RIGHT_X + 52, 68]
+    chHdr.translation = [m.rightX + 52, 68]
     chHdr.text  = "CHANNELS"
     chHdr.font  = "font:SmallBoldSystemFont"
-    chHdr.color = C_BLUE
+    chHdr.color = m.cBlue
 
     m.chCountLbl = m.top.createChild("Label")
     m.chCountLbl.translation = [900, 68]
     m.chCountLbl.text  = ""
     m.chCountLbl.font  = "font:SmallSystemFont"
-    m.chCountLbl.color = C_SUB
+    m.chCountLbl.color = m.cSub
 
     m.chList = m.top.createChild("Group")
-    m.chList.translation = [RIGHT_X + 36, 92]
+    m.chList.translation = [m.rightX + 36, 92]
 
     ' now-playing bar at bottom
     npBg = m.top.createChild("Rectangle")
@@ -123,7 +117,7 @@ sub buildChrome()
     m.nowPlayingLbl.translation = [52, 569]
     m.nowPlayingLbl.text  = "<> Switch pane   ^v Navigate   OK = Play   * = Reload playlist"
     m.nowPlayingLbl.font  = "font:SmallSystemFont"
-    m.nowPlayingLbl.color = C_SUB
+    m.nowPlayingLbl.color = m.cSub
     m.nowPlayingLbl.width = 1160
 end sub
 
@@ -131,7 +125,7 @@ end sub
 function load(args as Dynamic)
     if m.loaded then return invalid
     m.statusLbl.text = "*  Loading playlist..."
-    m.task.url = M3U_URL
+    m.task.url = m.m3uUrl
 end function
 
 ' -- M3U task callbacks -------------------------------------------------------
@@ -149,7 +143,7 @@ sub onStatus()
         m.loaded = true
     else
         m.statusLbl.text = s
-        m.statusLbl.color = C_SUB
+        m.statusLbl.color = m.cSub
     end if
 end sub
 
@@ -193,19 +187,19 @@ sub renderGroups()
 
         rowBg = m.groupList.createChild("Rectangle")
         rowBg.translation = [0, y]
-        rowBg.width  = LEFT_W
-        rowBg.height = ROW_H - 2
-        if sel then rowBg.color = C_SEL else if active then rowBg.color = "0x21262DFF" else rowBg.color = C_BG
+        rowBg.width  = m.leftW
+        rowBg.height = m.rowH - 2
+        if sel then rowBg.color = m.cSel else if active then rowBg.color = "0x21262DFF" else rowBg.color = m.cBg
 
         lbl = m.groupList.createChild("Label")
         lbl.translation = [14, y + 10]
         lbl.text  = g
         lbl.font  = "font:SmallSystemFont"
-        if active then lbl.color = C_TEXT else lbl.color = C_SUB
-        lbl.width = LEFT_W - 20
+        if active then lbl.color = m.cText else lbl.color = m.cSub
+        lbl.width = m.leftW - 20
         lbl.truncateOnDelimiter = "..."
 
-        y = y + ROW_H
+        y = y + m.rowH
     end for
 
     if m.groups.count() > maxGroups
@@ -213,7 +207,7 @@ sub renderGroups()
         more.translation = [14, y + 6]
         more.text  = "..." + str(m.groups.count() - maxGroups).trim() + " more"
         more.font  = "font:SmallSystemFont"
-        more.color = C_SUB
+        more.color = m.cSub
     end if
 end sub
 
@@ -244,10 +238,10 @@ sub renderChannels()
     end while
 
     y = 0
-    endIdx = m.chOffset + MAX_ROWS - 1
+    endIdx = m.chOffset + m.maxRows - 1
     if endIdx >= m.filteredChs.count() then endIdx = m.filteredChs.count() - 1
 
-    chW = 1280 - RIGHT_X - 80
+    chW = 1280 - m.rightX - 80
 
     for i = m.chOffset to endIdx
         ch = m.filteredChs[i]
@@ -258,15 +252,15 @@ sub renderChannels()
         rowBg = m.chList.createChild("Rectangle")
         rowBg.translation = [0, y]
         rowBg.width  = chW
-        rowBg.height = ROW_H - 2
-        if sel then rowBg.color = C_SEL else if i mod 2 = 0 then rowBg.color = C_BG else rowBg.color = "0x161B22FF"
+        rowBg.height = m.rowH - 2
+        if sel then rowBg.color = m.cSel else if i mod 2 = 0 then rowBg.color = m.cBg else rowBg.color = "0x161B22FF"
 
         ' channel number
         numLbl = m.chList.createChild("Label")
         numLbl.translation = [10, y + 10]
         numLbl.text  = str(i + 1).trim()
         numLbl.font  = "font:SmallSystemFont"
-        numLbl.color = C_SUB
+        numLbl.color = m.cSub
         numLbl.width = 60
 
         ' channel name
@@ -274,7 +268,7 @@ sub renderChannels()
         nameLbl.translation = [74, y + 10]
         nameLbl.text  = ch.name
         nameLbl.font  = "font:SmallSystemFont"
-        if sel then nameLbl.color = "0xFFFFFFFF" else nameLbl.color = C_TEXT
+        if sel then nameLbl.color = "0xFFFFFFFF" else nameLbl.color = m.cText
         nameLbl.width = chW - 210
         nameLbl.truncateOnDelimiter = "..."
 
@@ -283,11 +277,11 @@ sub renderChannels()
         grpLbl.translation = [chW - 200, y + 10]
         grpLbl.text  = ch.group
         grpLbl.font  = "font:SmallSystemFont"
-        grpLbl.color = C_SUB
+        grpLbl.color = m.cSub
         grpLbl.width = 196
         grpLbl.truncateOnDelimiter = "..."
 
-        y = y + ROW_H
+        y = y + m.rowH
     end for
 
     if m.filteredChs.count() = 0
@@ -295,15 +289,15 @@ sub renderChannels()
         empty.translation = [14, 16]
         empty.text  = "No channels in this group."
         empty.font  = "font:SmallSystemFont"
-        empty.color = C_SUB
+        empty.color = m.cSub
     end if
 
-    if m.filteredChs.count() > MAX_ROWS
+    if m.filteredChs.count() > m.maxRows
         hint = m.chList.createChild("Label")
         hint.translation = [10, y + 6]
         hint.text  = "^v scroll - " + str(m.filteredChs.count()).trim() + " total"
         hint.font  = "font:SmallSystemFont"
-        hint.color = C_SUB
+        hint.color = m.cSub
     end if
 end sub
 
@@ -339,8 +333,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         else if key = "replay"   ' * = force reload
             m.loaded = false
             m.statusLbl.text = "*  Reloading..."
-            m.statusLbl.color = C_SUB
-            m.task.url = M3U_URL
+            m.statusLbl.color = m.cSub
+            m.task.url = m.m3uUrl
             return true
         end if
 
@@ -362,11 +356,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
 
         else if key = "down"
-            if m.chCursor < MAX_ROWS - 1 and (m.chOffset + m.chCursor) < m.filteredChs.count() - 1
+            if m.chCursor < m.maxRows - 1 and (m.chOffset + m.chCursor) < m.filteredChs.count() - 1
                 m.chCursor = m.chCursor + 1
-            else if m.chOffset + MAX_ROWS < m.filteredChs.count()
+            else if m.chOffset + m.maxRows < m.filteredChs.count()
                 m.chOffset = m.chOffset + 1
-                m.chCursor = MAX_ROWS - 1
+                m.chCursor = m.maxRows - 1
             end if
             renderChannels()
             return true
@@ -384,8 +378,8 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
         else if key = "replay"   ' * = reload
             m.loaded = false
             m.statusLbl.text = "*  Reloading..."
-            m.statusLbl.color = C_SUB
-            m.task.url = M3U_URL
+            m.statusLbl.color = m.cSub
+            m.task.url = m.m3uUrl
             return true
         end if
     end if
