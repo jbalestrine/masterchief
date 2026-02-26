@@ -106,7 +106,7 @@
             for i = m.scrollOffset to endIdx
                 item = m.items[i]
 
-                sep = m.top.createChild("Rectangle")
+                sep = m.rowGroup.createChild("Rectangle")
                 sep.translation = [36, y + rowH - 1]
                 sep.width  = 1208
                 sep.height = 1
@@ -117,16 +117,16 @@
                 src   = safeStr(item, "source",     safeStr(item, "service", safeStr(item, "channel", "-")))
                 ts    = safeStr(item, "created_at", safeStr(item, "timestamp", safeStr(item, "time", "")))
 
-                makeLbl(52,   y + 9, UCase(sev),  sevColor(sev), 140)
-                makeLbl(200,  y + 9, title,        "0xE6EDF3FF", 592)
-                makeLbl(800,  y + 9, src,          "0x8B949EFF", 212)
-                makeLbl(1020, y + 9, ts,           "0x8B949EFF", 212)
+                m_makeLbl(m.rowGroup, 52,   y + 9, UCase(sev),  sevColor(sev), 140)
+                m_makeLbl(m.rowGroup, 200,  y + 9, title,        "0xE6EDF3FF", 592)
+                m_makeLbl(m.rowGroup, 800,  y + 9, src,          "0x8B949EFF", 212)
+                m_makeLbl(m.rowGroup, 1020, y + 9, ts,           "0x8B949EFF", 212)
 
                 y = y + rowH
             end for
 
             if m.items.count() = 0
-                empty = m.top.createChild("Label")
+                empty = m.rowGroup.createChild("Label")
                 empty.translation = [52, 20]
                 empty.text  = "No notifications."
                 empty.font  = "font:SmallSystemFont"
@@ -134,7 +134,7 @@
             end if
 
             if m.items.count() > maxRows
-                hint = m.top.createChild("Label")
+                hint = m.rowGroup.createChild("Label")
                 hint.translation = [36, y + 4]
                 hint.text  = "▲ ▼ scroll  (" + str(m.items.count()).trim() + " total)"
                 hint.font  = "font:SmallSystemFont"
@@ -142,8 +142,8 @@
             end if
         end sub
 
-        sub makeLbl(x as Integer, y as Integer, text as String, color as String, w = 300 as Integer)
-            lbl = m.top.createChild("Label")
+        sub m_makeLbl(grp as Object, x as Integer, y as Integer, text as String, color as String, w = 300 as Integer)
+            lbl = grp.createChild("Label")
             lbl.translation = [x, y]
             lbl.text  = text
             lbl.font  = "font:SmallSystemFont"

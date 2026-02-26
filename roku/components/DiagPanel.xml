@@ -162,8 +162,8 @@
             if endIdx >= m.issues.count() then endIdx = m.issues.count() - 1
 
             if m.issues.count() = 0
-                empty = m.top.createChild("Label")
-                empty.translation = [52, 200]
+                empty = m.issueGroup.createChild("Label")
+                empty.translation = [52, 8]
                 empty.text  = "✓  No issues detected."
                 empty.font  = "font:SmallSystemFont"
                 empty.color = "0x3FB950FF"
@@ -173,8 +173,8 @@
             for i = m.issueOffset to endIdx
                 item = m.issues[i]
 
-                rowBg = m.top.createChild("Rectangle")
-                rowBg.translation = [36, 192 + y]
+                rowBg = m.issueGroup.createChild("Rectangle")
+                rowBg.translation = [36, y]
                 rowBg.width  = 1208
                 rowBg.height = rowH - 1
                 rowBg.color  = iif(i mod 2 = 0, "0x0D1117FF", "0x161B22FF")
@@ -190,24 +190,24 @@
                     file = safeStr(item, "file",     safeStr(item, "path",  ""))
                 end if
 
-                makeLbl(52,  192 + y + 9, msg,         "0xE6EDF3FF", 140)
-                makeLbl(200, 192 + y + 9, UCase(sev),  sevColor(sev), 192)
-                makeLbl(400, 192 + y + 9, file,        "0x8B949EFF", 840)
+                m_makeLbl(m.issueGroup, 52,  y + 9, msg,         "0xE6EDF3FF", 140)
+                m_makeLbl(m.issueGroup, 200, y + 9, UCase(sev),  sevColor(sev), 192)
+                m_makeLbl(m.issueGroup, 400, y + 9, file,        "0x8B949EFF", 840)
 
                 y = y + rowH
             end for
 
             if m.issues.count() > maxRows
-                hint = m.top.createChild("Label")
-                hint.translation = [36, 192 + y + 4]
+                hint = m.issueGroup.createChild("Label")
+                hint.translation = [36, y + 4]
                 hint.text  = "▲ ▼ scroll  (" + str(m.issues.count()).trim() + " issues)"
                 hint.font  = "font:SmallSystemFont"
                 hint.color = "0x8B949EFF"
             end if
         end sub
 
-        sub makeLbl(x as Integer, y as Integer, text as String, color as String, w = 300 as Integer)
-            lbl = m.top.createChild("Label")
+        sub m_makeLbl(grp as Object, x as Integer, y as Integer, text as String, color as String, w = 300 as Integer)
+            lbl = grp.createChild("Label")
             lbl.translation = [x, y]
             lbl.text  = text
             lbl.font  = "font:SmallSystemFont"

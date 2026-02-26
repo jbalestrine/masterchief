@@ -148,8 +148,8 @@
 
             y = 0
             ' Capabilities section
-            capsHdr = m.top.createChild("Label")
-            capsHdr.translation = [656, 58 + y]
+            capsHdr = m.capsGroup.createChild("Label")
+            capsHdr.translation = [0, y]
             capsHdr.text  = "ENABLED CAPABILITIES"
             capsHdr.font  = "font:SmallBoldSystemFont"
             capsHdr.color = "0x58A6FFFF"
@@ -161,16 +161,16 @@
 
             if type(caps) = "roArray" and caps.count() > 0
                 for each cap in caps
-                    cl = m.top.createChild("Label")
-                    cl.translation = [656, 58 + y]
+                    cl = m.capsGroup.createChild("Label")
+                    cl.translation = [0, y]
                     cl.text  = "  ✓  " + str(cap).trim()
                     cl.font  = "font:SmallSystemFont"
                     cl.color = "0x3FB950FF"
                     y = y + 26
                 end for
             else
-                nc = m.top.createChild("Label")
-                nc.translation = [656, 58 + y]
+                nc = m.capsGroup.createChild("Label")
+                nc.translation = [0, y]
                 nc.text  = "  No capability data"
                 nc.font  = "font:SmallSystemFont"
                 nc.color = "0x8B949EFF"
@@ -179,8 +179,8 @@
 
             ' Hooks / extensions section
             y = y + 12
-            hooksHdr = m.top.createChild("Label")
-            hooksHdr.translation = [656, 58 + y]
+            hooksHdr = m.capsGroup.createChild("Label")
+            hooksHdr.translation = [0, y]
             hooksHdr.text  = "ACTIVE HOOKS"
             hooksHdr.font  = "font:SmallBoldSystemFont"
             hooksHdr.color = "0x58A6FFFF"
@@ -192,16 +192,16 @@
 
             if type(hooks) = "roArray" and hooks.count() > 0
                 for each hook in hooks
-                    hl = m.top.createChild("Label")
-                    hl.translation = [656, 58 + y]
+                    hl = m.capsGroup.createChild("Label")
+                    hl.translation = [0, y]
                     hl.text  = "  ⚡ " + str(hook).trim()
                     hl.font  = "font:SmallSystemFont"
                     hl.color = "0xD29922FF"
                     y = y + 24
                 end for
             else
-                nh = m.top.createChild("Label")
-                nh.translation = [656, 58 + y]
+                nh = m.capsGroup.createChild("Label")
+                nh.translation = [0, y]
                 nh.text  = "  No active hooks"
                 nh.font  = "font:SmallSystemFont"
                 nh.color = "0x8B949EFF"

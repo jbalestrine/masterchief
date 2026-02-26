@@ -2,7 +2,11 @@ title=MasterChief DevOps
 subtitle=Your DevOps Platform on TV
 major_version=1
 minor_version=0
-build_version=00001
+build_version=1
+
+# Required: channel type and SceneGraph version
+type=appl
+rsg_version=1.1
 
 mm_icon_focus_hd=pkg:/images/icon_focus_hd.png
 mm_icon_side_hd=pkg:/images/icon_side_hd.png
@@ -11,3 +15,4 @@ splash_color=#0d1117
 splash_min_time=1500
 
 ui_resolutions=hd
+requires_audiometadata=0
