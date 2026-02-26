@@ -1,134 +1,107 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!--
-    M3UTask - fetches an M3U/M3U+ playlist URL and parses it into a channel array.
-    Fields:
-      url      (string)  - M3U URL to fetch
-      channels (array)   - parsed channel objects {name, url, group, logo, tvgId}
-      status   (string)  - "ok" | "error: ..."
--->
 <component name="M3UTask" extends="Task">
     <interface>
-        <field id="url"      type="string"  onChange="onUrlChange" />
-        <field id="channels" type="array"   />
-        <field id="status"   type="string"  />
+        <field id="url"    type="string"    onChange="onUrlChange" />
+        <field id="result" type="assocarray" />
     </interface>
     <script type="text/brightscript"><![CDATA[
 
-sub init()
-    m.top.functionName = "fetch"
-end sub
+        sub init()
+            m.top.functionName = "fetch"
+        end sub
 
-sub onUrlChange()
-    m.top.control = "run"
-end sub
+        sub onUrlChange()
+            m.top.control = "run"
+        end sub
 
-sub fetch()
-    url = m.top.url
-    if url = "" then return
+        sub fetch()
+            url = m.top.url
+            if url = "" then return
 
-    m.top.status = "Fetching playlist..."
+            http = CreateObject("roUrlTransfer")
+            http.SetUrl(url)
+            http.SetCertificatesFile("common:/certs/ca-bundle.crt")
+            http.InitClientCertificates()
+            http.AddHeader("User-Agent", "Roku/1.0")
 
-    http = CreateObject("roUrlTransfer")
-    http.SetUrl(url)
-    http.SetCertificatesFile("common:/certs/ca-bundle.crt")
-    http.InitClientCertificates()
-    http.AddHeader("User-Agent", "MasterChief-Roku/1.0")
-    http.EnablePeerVerification(false)
-    http.EnableHostVerification(false)
+            resp = http.GetToString()
+            code = http.GetResponseCode()
 
-    raw = http.GetToString()
-    code = http.GetResponseCode()
-
-    if code < 200 or code >= 300
-        m.top.status = "error: HTTP " + str(code).trim()
-        m.top.channels = []
-        return
-    end if
-
-    m.top.status = "Parsing M3U..."
-    channels = parseM3U(raw)
-    m.top.channels = channels
-    m.top.status = "ok:" + str(channels.count()).trim()
-end sub
-
-' -- M3U parser --------------------------------------------------------------
-' Handles #EXTM3U, #EXTINF lines and stream URLs.
-' Returns array of {name, url, group, logo, tvgId}
-' Caps at 5000 channels to protect against huge playlists.
-function parseM3U(raw as String) as Object
-    channels = []
-    current = invalid
-    maxChannels = 5000
-
-    lines = raw.Tokenize(chr(10))
-
-    for each rawLine in lines
-        if channels.count() >= maxChannels then exit for
-        ' strip CR so \r\n line endings don't corrupt names/URLs
-        line = rawLine
-        if Right(line, 1) = chr(13) then line = Left(line, Len(line) - 1)
-        line = line.trim()
-        if line = ""
-            ' skip blank
-        else if Left(line, 7) = "#EXTINF"
-            ' #EXTINF:-1 tvg-id="X" tvg-name="X" group-title="X" tvg-logo="X",Display Name
-            current = {name: "", url: "", group: "Uncategorized", logo: "", tvgId: ""}
-
-            ' extract display name (after last comma)
-            commaPos = findLastComma(line)
-            if commaPos > 0
-                current.name = Mid(line, commaPos + 2, Len(line)).trim()
+            if code < 200 or code >= 300
+                m.top.result = {error: "HTTP " + str(code).trim()}
+                return
             end if
 
-            ' extract tvg-name (override display name if present)
-            tvgName = extractAttr(line, "tvg-name")
-            if tvgName <> "" then current.name = tvgName
+            rs = CreateObject("roString")
+            rs.SetString(resp)
+            lines = rs.Tokenize(chr(10))
 
-            current.tvgId = extractAttr(line, "tvg-id")
-            current.group = extractAttr(line, "group-title")
-            if current.group = "" then current.group = "Uncategorized"
-            current.logo  = extractAttr(line, "tvg-logo")
+            channels   = []
+            groups     = []
+            groupsSeen = {}
+            maxCh      = 3000
+            extinf     = ""
 
-        else if Left(line, 1) = "#"
-            ' other directive - ignore
-        else if current <> invalid
-            ' this must be the stream URL
-            current.url = line
-            if current.name = "" then current.name = "Channel " + str(channels.count() + 1).trim()
-            channels.push(current)
-            current = invalid
-        end if
-    end for
+            for each rawLine in lines
+                if channels.count() >= maxCh then exit for
+                line = rawLine
+                if Right(line, 1) = chr(13)
+                    line = Left(line, Len(line) - 1)
+                end if
+                line = Trim(line)
+                if line <> ""
+                    if Left(line, 7) = "#EXTINF"
+                        extinf = line
+                    else if Left(line, 1) <> "#" and extinf <> ""
+                        ch     = parseExtinf(extinf)
+                        ch.url = line
+                        channels.push(ch)
+                        g = ch.group
+                        if g = "" then g = "Uncategorized"
+                        if not groupsSeen.doesExist(g)
+                            groupsSeen[g] = true
+                            groups.push(g)
+                        end if
+                        extinf = ""
+                    end if
+                end if
+            end for
 
-    return channels
-end function
+            m.top.result = {
+                _isM3U    : true,
+                _groups   : groups,
+                _channels : channels
+            }
+        end sub
 
-' Find position of last comma in a string (1-based)
-function findLastComma(s as String) as Integer
-    i = Len(s)
-    while i > 0
-        if Mid(s, i, 1) = "," then return i
-        i = i - 1
-    end while
-    return -1
-end function
+        function parseExtinf(line as String) as Object
+            ch = {name: "", group: "", logo: ""}
+            commaPos = 0
+            k = Len(line)
+            while k > 1
+                if Mid(line, k, 1) = ","
+                    commaPos = k
+                    k = 1
+                end if
+                k = k - 1
+            end while
+            if commaPos > 0
+                ch.name = Trim(Mid(line, commaPos + 1, Len(line) - commaPos))
+            end if
+            ch.group = extractAttr(line, "group-title")
+            ch.logo  = extractAttr(line, "tvg-logo")
+            return ch
+        end function
 
-' Extract a quoted attribute value: attr="value" or attr='value'
-function extractAttr(line as String, attrName as String) as String
-    needle = attrName + "="
-    startIdx = Instr(1, line, needle)
-    if startIdx = 0 then return ""
-
-    startIdx = startIdx + Len(needle)
-    quote = Mid(line, startIdx, 1)
-    if quote <> chr(34) and quote <> "'" then return ""
-
-    startIdx = startIdx + 1
-    endIdx = Instr(startIdx, line, quote)
-    if endIdx = 0 then return ""
-
-    return Mid(line, startIdx, endIdx - startIdx)
-end function
+        function extractAttr(line as String, attr as String) as String
+            needle = attr + "=" + chr(34)
+            pos = Instr(1, line, needle)
+            if pos = 0 then return ""
+            s = pos + Len(needle)
+            e = Instr(s, line, chr(34))
+            if e = 0 then return ""
+            return Mid(line, s, e - s)
+        end function
 
     ]]></script>
 </component>
