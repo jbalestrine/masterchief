@@ -178,3 +178,5 @@ data/backups/
 
 # Windows NUL device artifact
 nul
+
+.claude/
