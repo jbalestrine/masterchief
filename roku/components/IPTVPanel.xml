@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    IPTVPanel - browse M3U playlist channels by group, select to play.
-    Emits: m.top.selectedChannel = {name, url, group, logo} when OK pressed
+    IPTVPanel - Xtream Codes API browser.
+    Phase 1: fetch live categories (lightweight JSON ~KB)
+    Phase 2: on category select, fetch streams for that category only
+    Stream URL: apiBase/live/user/pass/{stream_id}.m3u8
 -->
 <component name="IPTVPanel" extends="Group">
     <interface>
@@ -9,12 +11,16 @@
         <field id="selectedChannel" type="assocarray" />
     </interface>
     <script type="text/brightscript"><![CDATA[
+
 sub init()
-    m.m3uUrl  = "http://1tv41.icu:8080/get.php?username=3022207888&password=leonmatthews60@gmail.com&type=m3u"
+    m.apiBase    = "http://1tv41.icu:8080/player_api.php?username=3022207888&password=leonmatthews60@gmail.com"
+    m.streamBase = "http://1tv41.icu:8080/live/3022207888/leonmatthews60@gmail.com"
+
     m.rowH    = 40
     m.maxRows = 12
     m.leftW   = 280
     m.rightX  = 288
+
     m.cBg     = "0x0D1117FF"
     m.cCard   = "0x161B22FF"
     m.cSel    = "0x238636FF"
@@ -22,26 +28,33 @@ sub init()
     m.cSub    = "0x8B949EFF"
     m.cBorder = "0x30363DFF"
     m.cBlue   = "0x58A6FFFF"
-    m.cYellow = "0xD29922FF"
-    m.allChannels   = []
-    m.groups        = ["All"]
-    m.groupIdx      = 0
-    m.filteredChs   = []
-    m.chOffset      = 0
-    m.chCursor      = 0
-    m.focusSide     = "group"   ' "group" or "channel"
-    m.loaded        = false
+    m.cGreen  = "0x3FB950FF"
+    m.cRed    = "0xF85149FF"
+
+    ' state
+    m.cats        = []        ' [{category_id, category_name}, ...]
+    m.catIdx      = 0
+    m.catOffset   = 0
+
+    m.streams     = []        ' [{name, stream_id, stream_icon}, ...]
+    m.streamOffset= 0
+    m.streamCursor= 0
+    m.focusSide   = "cat"     ' "cat" or "stream"
+    m.loaded      = false
+    m.loadingStreams = false
 
     buildChrome()
 
-    m.task = createObject("roSGNode", "M3UTask")
-    m.task.observeField("status",   "onStatus")
-    m.task.observeField("channels", "onChannels")
+    ' two ApiTask instances - one for categories, one for streams
+    m.catTask = createObject("roSGNode", "ApiTask")
+    m.catTask.observeField("result", "onCategories")
+
+    m.streamTask = createObject("roSGNode", "ApiTask")
+    m.streamTask.observeField("result", "onStreams")
 end sub
 
-' -- chrome ------------------------------------------------------------------
+' ---------------------------------------------------------------------------
 sub buildChrome()
-    ' background
     bg = m.top.createChild("Rectangle")
     bg.translation = [0, 0]
     bg.width  = 1280
@@ -57,333 +70,343 @@ sub buildChrome()
 
     titleLbl = m.top.createChild("Label")
     titleLbl.translation = [52, 19]
-    titleLbl.text  = "[TV]  LIVE TV  -  IPTV PLAYER"
+    titleLbl.text  = "[TV]  LIVE TV"
     titleLbl.font  = "font:MediumBoldSystemFont"
     titleLbl.color = m.cText
 
     m.statusLbl = m.top.createChild("Label")
-    m.statusLbl.translation = [860, 23]
-    m.statusLbl.text  = "Press OK to load playlist"
+    m.statusLbl.translation = [800, 23]
+    m.statusLbl.text  = "Press OK to load categories"
     m.statusLbl.font  = "font:SmallSystemFont"
     m.statusLbl.color = m.cSub
-    m.statusLbl.width = 380
+    m.statusLbl.width = 440
 
-    ' group sidebar
+    ' category sidebar
     sideBar = m.top.createChild("Rectangle")
     sideBar.translation = [36, 62]
     sideBar.width  = m.leftW
-    sideBar.height = 520
+    sideBar.height = 510
     sideBar.color  = m.cCard
 
     sideHdr = m.top.createChild("Label")
-    sideHdr.translation = [48, 68]
-    sideHdr.text  = "GROUPS"
+    sideHdr.translation = [52, 70]
+    sideHdr.text  = "CATEGORIES"
     sideHdr.font  = "font:SmallBoldSystemFont"
     sideHdr.color = m.cBlue
 
-    m.groupList = m.top.createChild("Group")
-    m.groupList.translation = [36, 92]
+    m.catList = m.top.createChild("Group")
+    m.catList.translation = [36, 94]
 
-    ' channel list area
+    ' stream area
     chArea = m.top.createChild("Rectangle")
     chArea.translation = [m.rightX + 36, 62]
     chArea.width  = 1280 - m.rightX - 72
-    chArea.height = 520
+    chArea.height = 510
     chArea.color  = m.cCard
 
     chHdr = m.top.createChild("Label")
-    chHdr.translation = [m.rightX + 52, 68]
+    chHdr.translation = [m.rightX + 52, 70]
     chHdr.text  = "CHANNELS"
     chHdr.font  = "font:SmallBoldSystemFont"
     chHdr.color = m.cBlue
 
-    m.chCountLbl = m.top.createChild("Label")
-    m.chCountLbl.translation = [900, 68]
-    m.chCountLbl.text  = ""
-    m.chCountLbl.font  = "font:SmallSystemFont"
-    m.chCountLbl.color = m.cSub
+    m.streamCountLbl = m.top.createChild("Label")
+    m.streamCountLbl.translation = [880, 70]
+    m.streamCountLbl.text  = ""
+    m.streamCountLbl.font  = "font:SmallSystemFont"
+    m.streamCountLbl.color = m.cSub
 
-    m.chList = m.top.createChild("Group")
-    m.chList.translation = [m.rightX + 36, 92]
+    m.streamList = m.top.createChild("Group")
+    m.streamList.translation = [m.rightX + 36, 94]
 
-    ' now-playing bar at bottom
-    npBg = m.top.createChild("Rectangle")
-    npBg.translation = [36, 566]
-    npBg.width  = 1208
-    npBg.height = 24
-    npBg.color  = "0x0D1117FF"
+    ' hint bar
+    hintBg = m.top.createChild("Rectangle")
+    hintBg.translation = [36, 558]
+    hintBg.width  = 1208
+    hintBg.height = 30
+    hintBg.color  = "0x0D1117FF"
 
-    m.nowPlayingLbl = m.top.createChild("Label")
-    m.nowPlayingLbl.translation = [52, 569]
-    m.nowPlayingLbl.text  = "<> Switch pane   ^v Navigate   OK = Play   * = Reload playlist"
-    m.nowPlayingLbl.font  = "font:SmallSystemFont"
-    m.nowPlayingLbl.color = m.cSub
-    m.nowPlayingLbl.width = 1160
+    m.hintLbl = m.top.createChild("Label")
+    m.hintLbl.translation = [52, 563]
+    m.hintLbl.text  = "<> Pane   ^v Navigate   OK = Select   * = Reload"
+    m.hintLbl.font  = "font:SmallSystemFont"
+    m.hintLbl.color = m.cSub
+    m.hintLbl.width = 1160
 end sub
 
-' -- load (called by MainScene) -----------------------------------------------
+' ---------------------------------------------------------------------------
 function load(args as Dynamic)
     if m.loaded then return invalid
-    m.statusLbl.text = "*  Loading playlist..."
-    ' Clear URL first so onChange fires even if we reload the same URL
-    m.task.url = ""
-    m.task.url = m.m3uUrl
+    m.statusLbl.text  = "Loading categories..."
+    m.statusLbl.color = m.cSub
+    m.catTask.url = ""
+    m.catTask.url = m.apiBase + "&action=get_live_categories"
 end function
 
-' -- M3U task callbacks -------------------------------------------------------
-sub onStatus()
-    s = m.task.status
-    if Left(s, 5) = "error"
-        m.statusLbl.text = "X " + s
-        m.statusLbl.color = "0xF85149FF"
-    else if Left(s, 2) = "ok"
-        parts = s.Tokenize(":")
-        count = "?"
-        if parts.count() >= 2 then count = parts[1].trim()
-        m.statusLbl.text = "OK  " + count + " channels loaded"
-        m.statusLbl.color = "0x3FB950FF"
-        m.loaded = true
-    else
-        m.statusLbl.text = s
-        m.statusLbl.color = m.cSub
+' ---------------------------------------------------------------------------
+sub onCategories()
+    raw = m.catTask.result
+    if raw = invalid
+        m.statusLbl.text  = "X No response from server"
+        m.statusLbl.color = m.cRed
+        return
     end if
+    ' unwrap array if ApiTask wrapped it
+    if raw.doesExist("_isArray")
+        data = raw._arr
+    else if raw.doesExist("error")
+        m.statusLbl.text  = "X " + raw.error
+        m.statusLbl.color = m.cRed
+        return
+    else
+        m.statusLbl.text  = "X Not an array"
+        m.statusLbl.color = m.cRed
+        return
+    end if
+
+    m.cats   = data
+    m.catIdx    = 0
+    m.catOffset = 0
+    m.loaded    = true
+    m.statusLbl.text  = str(data.count()).trim() + " categories loaded"
+    m.statusLbl.color = m.cGreen
+    renderCats()
+    loadStreams()
 end sub
 
-sub onChannels()
-    chs = m.task.channels
-    if type(chs) <> "roArray" or chs.count() = 0 then return
+' ---------------------------------------------------------------------------
+sub loadStreams()
+    if m.cats.count() = 0 then return
+    cat = m.cats[m.catIdx]
+    catId = ""
+    if cat.doesExist("category_id") then catId = cat.category_id
+    m.loadingStreams   = true
+    m.streams          = []
+    m.streamOffset     = 0
+    m.streamCursor     = 0
+    renderStreams()
 
-    m.allChannels = chs
+    m.catNameForStreams = ""
+    if cat.doesExist("category_name") then m.catNameForStreams = cat.category_name
 
-    ' collect unique groups preserving order
-    seen = {}
-    m.groups = ["All"]
-    for each ch in chs
-        g = ch.group
-        if g = "" then g = "Uncategorized"
-        if not seen.doesExist(g)
-            seen[g] = true
-            m.groups.push(g)
-        end if
-    end for
-
-    m.groupIdx = 0
-    renderGroups()
-    applyGroupFilter()
+    m.streamTask.url = ""
+    m.streamTask.url = m.apiBase + "&action=get_live_streams&category_id=" + catId
 end sub
 
-' -- render group sidebar -----------------------------------------------------
-sub renderGroups()
-    while m.groupList.getChildCount() > 0
-        m.groupList.removeChildIndex(0)
+' ---------------------------------------------------------------------------
+sub onStreams()
+    raw = m.streamTask.result
+    m.loadingStreams = false
+    if raw = invalid or not raw.doesExist("_isArray")
+        m.streamCountLbl.text = "error loading"
+        renderStreams()
+        return
+    end if
+    data = raw._arr
+    m.streams      = data
+    m.streamOffset = 0
+    m.streamCursor = 0
+    m.streamCountLbl.text = str(data.count()).trim() + " ch"
+    renderStreams()
+end sub
+
+' ---------------------------------------------------------------------------
+sub renderCats()
+    while m.catList.getChildCount() > 0
+        m.catList.removeChildIndex(0)
     end while
 
-    maxGroups = 12
+    maxShow = 12
     y = 0
-    for i = 0 to m.groups.count() - 1
-        if i >= maxGroups then exit for
-        g = m.groups[i]
+    startI = m.catOffset
+    endI   = startI + maxShow - 1
+    if endI >= m.cats.count() then endI = m.cats.count() - 1
 
-        sel   = (i = m.groupIdx) and m.focusSide = "group"
-        active = (i = m.groupIdx)
+    for i = startI to endI
+        cat = m.cats[i]
+        localI = i - startI
 
-        rowBg = m.groupList.createChild("Rectangle")
+        isSel    = (i = m.catIdx) and (m.focusSide = "cat")
+        isActive = (i = m.catIdx)
+
+        rowBg = m.catList.createChild("Rectangle")
         rowBg.translation = [0, y]
         rowBg.width  = m.leftW
         rowBg.height = m.rowH - 2
-        if sel then rowBg.color = m.cSel else if active then rowBg.color = "0x21262DFF" else rowBg.color = m.cBg
+        if isSel then rowBg.color = m.cSel else if isActive then rowBg.color = "0x21262DFF" else rowBg.color = m.cBg
 
-        lbl = m.groupList.createChild("Label")
+        name = ""
+        if cat.doesExist("category_name") then name = cat.category_name
+
+        lbl = m.catList.createChild("Label")
         lbl.translation = [14, y + 10]
-        lbl.text  = g
+        lbl.text  = name
         lbl.font  = "font:SmallSystemFont"
-        if active then lbl.color = m.cText else lbl.color = m.cSub
+        if isActive then lbl.color = m.cText else lbl.color = m.cSub
         lbl.width = m.leftW - 20
         lbl.truncateOnDelimiter = "..."
 
         y = y + m.rowH
     end for
 
-    if m.groups.count() > maxGroups
-        more = m.groupList.createChild("Label")
-        more.translation = [14, y + 6]
-        more.text  = "..." + str(m.groups.count() - maxGroups).trim() + " more"
-        more.font  = "font:SmallSystemFont"
-        more.color = m.cSub
-    end if
-end sub
-
-' -- apply filter and render channel list ------------------------------------
-sub applyGroupFilter()
-    grp = m.groups[m.groupIdx]
-    if grp = "All"
-        m.filteredChs = m.allChannels
-    else
-        filtered = []
-        for each ch in m.allChannels
-            g = ch.group
-            if g = "" then g = "Uncategorized"
-            if g = grp then filtered.push(ch)
-        end for
-        m.filteredChs = filtered
-    end if
-
-    m.chOffset = 0
-    m.chCursor = 0
-    m.chCountLbl.text = str(m.filteredChs.count()).trim() + " ch"
-    renderChannels()
-end sub
-
-sub renderChannels()
-    while m.chList.getChildCount() > 0
-        m.chList.removeChildIndex(0)
-    end while
-
-    y = 0
-    endIdx = m.chOffset + m.maxRows - 1
-    if endIdx >= m.filteredChs.count() then endIdx = m.filteredChs.count() - 1
-
-    chW = 1280 - m.rightX - 80
-
-    for i = m.chOffset to endIdx
-        ch = m.filteredChs[i]
-        localI = i - m.chOffset
-
-        sel = (localI = m.chCursor) and m.focusSide = "channel"
-
-        rowBg = m.chList.createChild("Rectangle")
-        rowBg.translation = [0, y]
-        rowBg.width  = chW
-        rowBg.height = m.rowH - 2
-        if sel then rowBg.color = m.cSel else if i mod 2 = 0 then rowBg.color = m.cBg else rowBg.color = "0x161B22FF"
-
-        ' channel number
-        numLbl = m.chList.createChild("Label")
-        numLbl.translation = [10, y + 10]
-        numLbl.text  = str(i + 1).trim()
-        numLbl.font  = "font:SmallSystemFont"
-        numLbl.color = m.cSub
-        numLbl.width = 60
-
-        ' channel name
-        nameLbl = m.chList.createChild("Label")
-        nameLbl.translation = [74, y + 10]
-        nameLbl.text  = ch.name
-        nameLbl.font  = "font:SmallSystemFont"
-        if sel then nameLbl.color = "0xFFFFFFFF" else nameLbl.color = m.cText
-        nameLbl.width = chW - 210
-        nameLbl.truncateOnDelimiter = "..."
-
-        ' group tag (small)
-        grpLbl = m.chList.createChild("Label")
-        grpLbl.translation = [chW - 200, y + 10]
-        grpLbl.text  = ch.group
-        grpLbl.font  = "font:SmallSystemFont"
-        grpLbl.color = m.cSub
-        grpLbl.width = 196
-        grpLbl.truncateOnDelimiter = "..."
-
-        y = y + m.rowH
-    end for
-
-    if m.filteredChs.count() = 0
-        empty = m.chList.createChild("Label")
-        empty.translation = [14, 16]
-        empty.text  = "No channels in this group."
-        empty.font  = "font:SmallSystemFont"
-        empty.color = m.cSub
-    end if
-
-    if m.filteredChs.count() > m.maxRows
-        hint = m.chList.createChild("Label")
-        hint.translation = [10, y + 6]
-        hint.text  = "^v scroll - " + str(m.filteredChs.count()).trim() + " total"
+    if m.cats.count() = 0
+        hint = m.catList.createChild("Label")
+        hint.translation = [14, 16]
+        hint.text  = "Loading..."
         hint.font  = "font:SmallSystemFont"
         hint.color = m.cSub
     end if
 end sub
 
-' -- key handling ------------------------------------------------------------
+' ---------------------------------------------------------------------------
+sub renderStreams()
+    while m.streamList.getChildCount() > 0
+        m.streamList.removeChildIndex(0)
+    end while
+
+    if m.loadingStreams
+        lbl = m.streamList.createChild("Label")
+        lbl.translation = [14, 16]
+        lbl.text  = "Loading channels..."
+        lbl.font  = "font:SmallSystemFont"
+        lbl.color = m.cSub
+        return
+    end if
+
+    if m.streams.count() = 0
+        lbl = m.streamList.createChild("Label")
+        lbl.translation = [14, 16]
+        lbl.text  = "No channels in this category."
+        lbl.font  = "font:SmallSystemFont"
+        lbl.color = m.cSub
+        return
+    end if
+
+    chW = 1280 - m.rightX - 80
+    y   = 0
+    endIdx = m.streamOffset + m.maxRows - 1
+    if endIdx >= m.streams.count() then endIdx = m.streams.count() - 1
+
+    for i = m.streamOffset to endIdx
+        s = m.streams[i]
+        localI = i - m.streamOffset
+        isSel  = (localI = m.streamCursor) and (m.focusSide = "stream")
+
+        rowBg = m.streamList.createChild("Rectangle")
+        rowBg.translation = [0, y]
+        rowBg.width  = chW
+        rowBg.height = m.rowH - 2
+        if isSel then rowBg.color = m.cSel else if i mod 2 = 0 then rowBg.color = m.cBg else rowBg.color = "0x161B22FF"
+
+        ' number
+        numLbl = m.streamList.createChild("Label")
+        numLbl.translation = [10, y + 10]
+        numLbl.text  = str(i + 1).trim()
+        numLbl.font  = "font:SmallSystemFont"
+        numLbl.color = m.cSub
+        numLbl.width = 52
+
+        ' name
+        name = ""
+        if s.doesExist("name") then name = s.name
+        nameLbl = m.streamList.createChild("Label")
+        nameLbl.translation = [66, y + 10]
+        nameLbl.text  = name
+        nameLbl.font  = "font:SmallSystemFont"
+        if isSel then nameLbl.color = "0xFFFFFFFF" else nameLbl.color = m.cText
+        nameLbl.width = chW - 70
+        nameLbl.truncateOnDelimiter = "..."
+
+        y = y + m.rowH
+    end for
+
+    if m.streams.count() > m.maxRows
+        hint = m.streamList.createChild("Label")
+        hint.translation = [10, y + 6]
+        hint.text  = "^v scroll - " + str(m.streams.count()).trim() + " total"
+        hint.font  = "font:SmallSystemFont"
+        hint.color = m.cSub
+    end if
+end sub
+
+' ---------------------------------------------------------------------------
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
 
-    if m.focusSide = "group"
-        if key = "right"
-            m.focusSide = "channel"
-            renderGroups()
-            renderChannels()
-            return true
-        else if key = "up"
-            if m.groupIdx > 0
-                m.groupIdx = m.groupIdx - 1
-                renderGroups()
-                applyGroupFilter()
+    if m.focusSide = "cat"
+        if key = "up"
+            if m.catIdx > 0
+                m.catIdx = m.catIdx - 1
+                if m.catIdx < m.catOffset then m.catOffset = m.catIdx
+                renderCats()
+                loadStreams()
             end if
             return true
         else if key = "down"
-            if m.groupIdx < m.groups.count() - 1
-                m.groupIdx = m.groupIdx + 1
-                renderGroups()
-                applyGroupFilter()
+            if m.catIdx < m.cats.count() - 1
+                m.catIdx = m.catIdx + 1
+                if m.catIdx >= m.catOffset + m.maxRows then m.catOffset = m.catIdx - m.maxRows + 1
+                renderCats()
+                loadStreams()
             end if
             return true
-        else if key = "OK"
-            m.focusSide = "channel"
-            renderGroups()
-            renderChannels()
+        else if key = "right" or key = "OK"
+            if m.streams.count() > 0
+                m.focusSide = "stream"
+                renderCats()
+                renderStreams()
+            end if
             return true
-        else if key = "replay"   ' * = force reload
+        else if key = "replay"
             m.loaded = false
-            m.statusLbl.text = "*  Reloading..."
+            m.statusLbl.text  = "Reloading..."
             m.statusLbl.color = m.cSub
-            m.task.url = ""
-            m.task.url = m.m3uUrl
+            m.catTask.url = ""
+            m.catTask.url = m.apiBase + "&action=get_live_categories"
             return true
         end if
 
-    else  ' focusSide = "channel"
+    else ' focusSide = "stream"
         if key = "left"
-            m.focusSide = "group"
-            renderGroups()
-            renderChannels()
+            m.focusSide = "cat"
+            renderCats()
+            renderStreams()
             return true
-
         else if key = "up"
-            if m.chCursor > 0
-                m.chCursor = m.chCursor - 1
-            else if m.chOffset > 0
-                m.chOffset = m.chOffset - 1
-                m.chCursor = 0
+            if m.streamCursor > 0
+                m.streamCursor = m.streamCursor - 1
+            else if m.streamOffset > 0
+                m.streamOffset = m.streamOffset - 1
             end if
-            renderChannels()
+            renderStreams()
             return true
-
         else if key = "down"
-            if m.chCursor < m.maxRows - 1 and (m.chOffset + m.chCursor) < m.filteredChs.count() - 1
-                m.chCursor = m.chCursor + 1
-            else if m.chOffset + m.maxRows < m.filteredChs.count()
-                m.chOffset = m.chOffset + 1
-                m.chCursor = m.maxRows - 1
+            if m.streamCursor < m.maxRows - 1 and (m.streamOffset + m.streamCursor) < m.streams.count() - 1
+                m.streamCursor = m.streamCursor + 1
+            else if m.streamOffset + m.maxRows < m.streams.count()
+                m.streamOffset = m.streamOffset + 1
             end if
-            renderChannels()
+            renderStreams()
             return true
-
         else if key = "OK"
-            idx = m.chOffset + m.chCursor
-            if idx >= 0 and idx < m.filteredChs.count()
-                ch = m.filteredChs[idx]
-                m.nowPlayingLbl.text = "> NOW PLAYING: " + ch.name
-                m.nowPlayingLbl.color = "0x3FB950FF"
-                m.top.selectedChannel = ch
+            idx = m.streamOffset + m.streamCursor
+            if idx >= 0 and idx < m.streams.count()
+                s = m.streams[idx]
+                streamId = ""
+                if s.doesExist("stream_id") then streamId = str(s.stream_id).trim()
+                name = ""
+                if s.doesExist("name") then name = s.name
+                if streamId <> ""
+                    url = m.streamBase + "/" + streamId + ".m3u8"
+                    ch = {name: name, url: url, group: m.catNameForStreams, logo: "", tvgId: streamId}
+                    m.hintLbl.text  = "> NOW PLAYING: " + name
+                    m.hintLbl.color = m.cGreen
+                    m.top.selectedChannel = ch
+                end if
             end if
             return true
-
-        else if key = "replay"   ' * = reload
-            m.loaded = false
-            m.statusLbl.text = "*  Reloading..."
-            m.statusLbl.color = m.cSub
-            m.task.url = ""
-            m.task.url = m.m3uUrl
+        else if key = "replay"
+            loadStreams()
             return true
         end if
     end if

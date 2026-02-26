@@ -36,7 +36,13 @@
             if code >= 200 and code < 300
                 parsed = ParseJSON(resp)
                 if parsed <> invalid
-                    m.top.result = parsed
+                    ' RSG assocarray fields cannot hold roArray directly;
+                    ' wrap arrays so the field assignment always succeeds.
+                    if type(parsed) = "roArray"
+                        m.top.result = {_arr: parsed, _isArray: true}
+                    else
+                        m.top.result = parsed
+                    end if
                 else
                     m.top.result = {error: "JSON parse failed", raw: Left(resp, 200)}
                 end if
