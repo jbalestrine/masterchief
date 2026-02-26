@@ -195,13 +195,13 @@ sub renderGroups()
         rowBg.translation = [0, y]
         rowBg.width  = LEFT_W
         rowBg.height = ROW_H - 2
-        rowBg.color  = iif(sel, C_SEL, iif(active, "0x21262DFF", C_BG))
+        if sel then rowBg.color = C_SEL else if active then rowBg.color = "0x21262DFF" else rowBg.color = C_BG
 
         lbl = m.groupList.createChild("Label")
         lbl.translation = [14, y + 10]
         lbl.text  = g
         lbl.font  = "font:SmallSystemFont"
-        lbl.color = iif(active, C_TEXT, C_SUB)
+        if active then lbl.color = C_TEXT else lbl.color = C_SUB
         lbl.width = LEFT_W - 20
         lbl.truncateOnDelimiter = "..."
 
@@ -259,7 +259,7 @@ sub renderChannels()
         rowBg.translation = [0, y]
         rowBg.width  = chW
         rowBg.height = ROW_H - 2
-        rowBg.color  = iif(sel, C_SEL, iif(i mod 2 = 0, C_BG, "0x161B22FF"))
+        if sel then rowBg.color = C_SEL else if i mod 2 = 0 then rowBg.color = C_BG else rowBg.color = "0x161B22FF"
 
         ' channel number
         numLbl = m.chList.createChild("Label")
@@ -274,7 +274,7 @@ sub renderChannels()
         nameLbl.translation = [74, y + 10]
         nameLbl.text  = ch.name
         nameLbl.font  = "font:SmallSystemFont"
-        nameLbl.color = iif(sel, "0xFFFFFFFF", C_TEXT)
+        if sel then nameLbl.color = "0xFFFFFFFF" else nameLbl.color = C_TEXT
         nameLbl.width = chW - 210
         nameLbl.truncateOnDelimiter = "..."
 
