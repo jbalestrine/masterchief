@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    EchoPanel — Echo AI model status, capabilities, recent activity
+    EchoPanel - Echo AI model status, capabilities, recent activity
     Endpoints: /api/echo/status  and  /api/echo/recent (if available)
 -->
 <component name="EchoPanel" extends="Group">
@@ -23,7 +23,7 @@
             bg.height = 596
             bg.color  = "0x0D1117FF"
 
-            ' ── left card: model status ─────────────────────────────
+            ' -- left card: model status -----------------------------
             leftCard = m.top.createChild("Rectangle")
             leftCard.translation = [36, 12]
             leftCard.width  = 580
@@ -48,7 +48,7 @@
             sep.height = 2
             sep.color  = "0x30363DFF"
 
-            ' stat rows — we'll populate these dynamically
+            ' stat rows - we'll populate these dynamically
             m.statLabels = []
             statKeys = ["Model", "Status", "Backend", "Context", "Temperature", "Memory entries", "Capabilities"]
             y = 70
@@ -62,7 +62,7 @@
 
                 valLbl = m.top.createChild("Label")
                 valLbl.translation = [240, y]
-                valLbl.text  = "–"
+                valLbl.text  = "-"
                 valLbl.font  = "font:SmallSystemFont"
                 valLbl.color = "0xE6EDF3FF"
                 valLbl.width = 360
@@ -71,7 +71,7 @@
                 y = y + 36
             end for
 
-            ' ── right card: capabilities + memory ──────────────────
+            ' -- right card: capabilities + memory ------------------
             rightCard = m.top.createChild("Rectangle")
             rightCard.translation = [636, 12]
             rightCard.width  = 608
@@ -95,20 +95,20 @@
         end sub
 
         function load(args as Dynamic)
-            m.statusLbl.text = "⟳  Fetching..."
+            m.statusLbl.text = "*  Fetching..."
             m.statusTask.url = BASE_URL + "/api/echo/status"
         end function
 
         sub onStatusResult()
             data = m.statusTask.result
             if data = invalid
-                m.statusLbl.text = "✗ no response"
+                m.statusLbl.text = "X no response"
                 return
             end if
             if data.doesExist("error")
-                m.statusLbl.text = "✗ " + data.error
+                m.statusLbl.text = "X " + data.error
                 for i = 0 to m.statLabels.count() - 1
-                    m.statLabels[i].text = "–"
+                    m.statLabels[i].text = "-"
                 end for
                 return
             end if
@@ -117,10 +117,10 @@
             vals = [
                 safeStr(data, "model",         safeStr(data, "current_model",    "not loaded")),
                 safeStr(data, "status",         safeStr(data, "state",           "unknown")),
-                safeStr(data, "backend",        safeStr(data, "engine",          "–")),
-                safeStr(data, "context_length", safeStr(data, "ctx_length",      "–")),
-                safeStr(data, "temperature",    "–"),
-                safeStr(data, "memory_count",   safeStr(data, "memories",        "–")),
+                safeStr(data, "backend",        safeStr(data, "engine",          "-")),
+                safeStr(data, "context_length", safeStr(data, "ctx_length",      "-")),
+                safeStr(data, "temperature",    "-"),
+                safeStr(data, "memory_count",   safeStr(data, "memories",        "-")),
                 capsString(data)
             ]
 
@@ -163,7 +163,7 @@
                 for each cap in caps
                     cl = m.capsGroup.createChild("Label")
                     cl.translation = [0, y]
-                    cl.text  = "  ✓  " + str(cap).trim()
+                    cl.text  = "  OK  " + str(cap).trim()
                     cl.font  = "font:SmallSystemFont"
                     cl.color = "0x3FB950FF"
                     y = y + 26
@@ -194,7 +194,7 @@
                 for each hook in hooks
                     hl = m.capsGroup.createChild("Label")
                     hl.translation = [0, y]
-                    hl.text  = "  ⚡ " + str(hook).trim()
+                    hl.text  = "   " + str(hook).trim()
                     hl.font  = "font:SmallSystemFont"
                     hl.color = "0xD29922FF"
                     y = y + 24
@@ -211,7 +211,7 @@
         function capsString(data as Dynamic) as String
             caps = invalid
             if data.doesExist("capabilities") then caps = data.capabilities
-            if type(caps) <> "roArray" then return "–"
+            if type(caps) <> "roArray" then return "-"
             if caps.count() = 0 then return "none"
             return str(caps.count()).trim() + " enabled"
         end function

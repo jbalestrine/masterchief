@@ -1,5 +1,5 @@
 ' ============================================================
-'  panelUtils.brs — shared helpers included by all panels
+'  panelUtils.brs - shared helpers included by all panels
 ' ============================================================
 
 ' colour palette (must match MainScene)

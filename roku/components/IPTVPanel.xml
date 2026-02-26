@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    IPTVPanel — browse M3U playlist channels by group, select to play.
+    IPTVPanel - browse M3U playlist channels by group, select to play.
     Emits: m.top.selectedChannel = {name, url, group, logo} when OK pressed
 -->
 <component name="IPTVPanel" extends="Group">
@@ -10,7 +10,7 @@
     </interface>
     <script type="text/brightscript"><![CDATA[
 
-' ── Playlist URL ─────────────────────────────────────────────────────────────
+' -- Playlist URL -------------------------------------------------------------
 CONST M3U_URL = "http://1tv41.icu:8080/get.php?username=3022207888&password=leonmatthews60@gmail.com&type=m3u"
 
 CONST ROW_H    = 40
@@ -45,7 +45,7 @@ sub init()
     m.task.observeField("channels", "onChannels")
 end sub
 
-' ── chrome ──────────────────────────────────────────────────────────────────
+' -- chrome ------------------------------------------------------------------
 sub buildChrome()
     ' background
     bg = m.top.createChild("Rectangle")
@@ -63,7 +63,7 @@ sub buildChrome()
 
     titleLbl = m.top.createChild("Label")
     titleLbl.translation = [52, 19]
-    titleLbl.text  = "[TV]  LIVE TV  —  IPTV PLAYER"
+    titleLbl.text  = "[TV]  LIVE TV  -  IPTV PLAYER"
     titleLbl.font  = "font:MediumBoldSystemFont"
     titleLbl.color = C_TEXT
 
@@ -121,30 +121,30 @@ sub buildChrome()
 
     m.nowPlayingLbl = m.top.createChild("Label")
     m.nowPlayingLbl.translation = [52, 569]
-    m.nowPlayingLbl.text  = "◀▶ Switch pane   ▲▼ Navigate   OK = Play   * = Reload playlist"
+    m.nowPlayingLbl.text  = "<> Switch pane   ^v Navigate   OK = Play   * = Reload playlist"
     m.nowPlayingLbl.font  = "font:SmallSystemFont"
     m.nowPlayingLbl.color = C_SUB
     m.nowPlayingLbl.width = 1160
 end sub
 
-' ── load (called by MainScene) ───────────────────────────────────────────────
+' -- load (called by MainScene) -----------------------------------------------
 function load(args as Dynamic)
     if m.loaded then return invalid
-    m.statusLbl.text = "⟳  Loading playlist..."
+    m.statusLbl.text = "*  Loading playlist..."
     m.task.url = M3U_URL
 end function
 
-' ── M3U task callbacks ───────────────────────────────────────────────────────
+' -- M3U task callbacks -------------------------------------------------------
 sub onStatus()
     s = m.task.status
     if Left(s, 5) = "error"
-        m.statusLbl.text = "✗ " + s
+        m.statusLbl.text = "X " + s
         m.statusLbl.color = "0xF85149FF"
     else if Left(s, 2) = "ok"
         parts = s.Tokenize(":")
         count = "?"
         if parts.count() >= 2 then count = parts[1].trim()
-        m.statusLbl.text = "✓  " + count + " channels loaded"
+        m.statusLbl.text = "OK  " + count + " channels loaded"
         m.statusLbl.color = "0x3FB950FF"
         m.loaded = true
     else
@@ -176,7 +176,7 @@ sub onChannels()
     applyGroupFilter()
 end sub
 
-' ── render group sidebar ─────────────────────────────────────────────────────
+' -- render group sidebar -----------------------------------------------------
 sub renderGroups()
     while m.groupList.getChildCount() > 0
         m.groupList.removeChildIndex(0)
@@ -217,7 +217,7 @@ sub renderGroups()
     end if
 end sub
 
-' ── apply filter and render channel list ────────────────────────────────────
+' -- apply filter and render channel list ------------------------------------
 sub applyGroupFilter()
     grp = m.groups[m.groupIdx]
     if grp = "All"
@@ -301,13 +301,13 @@ sub renderChannels()
     if m.filteredChs.count() > MAX_ROWS
         hint = m.chList.createChild("Label")
         hint.translation = [10, y + 6]
-        hint.text  = "▲▼ scroll — " + str(m.filteredChs.count()).trim() + " total"
+        hint.text  = "^v scroll - " + str(m.filteredChs.count()).trim() + " total"
         hint.font  = "font:SmallSystemFont"
         hint.color = C_SUB
     end if
 end sub
 
-' ── key handling ────────────────────────────────────────────────────────────
+' -- key handling ------------------------------------------------------------
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
 
@@ -338,7 +338,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             return true
         else if key = "replay"   ' * = force reload
             m.loaded = false
-            m.statusLbl.text = "⟳  Reloading..."
+            m.statusLbl.text = "*  Reloading..."
             m.statusLbl.color = C_SUB
             m.task.url = M3U_URL
             return true
@@ -375,7 +375,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             idx = m.chOffset + m.chCursor
             if idx >= 0 and idx < m.filteredChs.count()
                 ch = m.filteredChs[idx]
-                m.nowPlayingLbl.text = "▶ NOW PLAYING: " + ch.name
+                m.nowPlayingLbl.text = "> NOW PLAYING: " + ch.name
                 m.nowPlayingLbl.color = "0x3FB950FF"
                 m.top.selectedChannel = ch
             end if
@@ -383,7 +383,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
 
         else if key = "replay"   ' * = reload
             m.loaded = false
-            m.statusLbl.text = "⟳  Reloading..."
+            m.statusLbl.text = "*  Reloading..."
             m.statusLbl.color = C_SUB
             m.task.url = M3U_URL
             return true

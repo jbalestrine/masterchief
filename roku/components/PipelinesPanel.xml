@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    PipelinesPanel — shows CI/CD pipeline list from /api/pipelines
+    PipelinesPanel - shows CI/CD pipeline list from /api/pipelines
 -->
 <component name="PipelinesPanel" extends="Group">
     <interface>
         <function name="load" />
     </interface>
     <script type="text/brightscript"><![CDATA[
-        ' ── config ───────────────────────────────────────────────────
+        ' -- config ---------------------------------------------------
         CONST BASE_URL = "http://10.0.0.159:8080"
 
         sub init()
@@ -19,7 +19,7 @@
             m.task.observeField("result", "onResult")
         end sub
 
-        ' ── chrome (static UI) ───────────────────────────────────────
+        ' -- chrome (static UI) ---------------------------------------
         sub buildChrome()
             bg = m.top.createChild("Rectangle")
             bg.translation = [0, 0]
@@ -81,13 +81,13 @@
             m.rowGroup.translation = [0, 92]
         end sub
 
-        ' ── load (called by MainScene) ────────────────────────────────
+        ' -- load (called by MainScene) --------------------------------
         function load(args as Dynamic)
-            m.statusLbl.text = "⟳  Fetching..."
+            m.statusLbl.text = "*  Fetching..."
             m.task.url = BASE_URL + "/api/pipelines"
         end function
 
-        ' ── data handler ─────────────────────────────────────────────
+        ' -- data handler ---------------------------------------------
         sub onResult()
             data = m.task.result
             if data = invalid
@@ -95,7 +95,7 @@
                 return
             end if
             if data.doesExist("error")
-                m.statusLbl.text = "✗ " + data.error
+                m.statusLbl.text = "X " + data.error
                 return
             end if
 
@@ -178,13 +178,13 @@
             if m.items.count() > maxRows
                 hint = m.rowGroup.createChild("Label")
                 hint.translation = [36, y + 4]
-                hint.text  = "▲ ▼ scroll  (" + str(m.items.count()).trim() + " total)"
+                hint.text  = "^ v scroll  (" + str(m.items.count()).trim() + " total)"
                 hint.font  = "font:SmallSystemFont"
                 hint.color = "0x8B949EFF"
             end if
         end sub
 
-        ' ── key handling (scroll) ─────────────────────────────────────
+        ' -- key handling (scroll) -------------------------------------
         function onKeyEvent(key as String, press as Boolean) as Boolean
             if not press then return false
             if key = "down" and m.scrollOffset + 12 < m.items.count()
@@ -199,7 +199,7 @@
             return false
         end function
 
-        ' ── helpers ──────────────────────────────────────────────────
+        ' -- helpers --------------------------------------------------
         function statusColor(s as String) as String
             sl = LCase(s)
             if sl = "running" or sl = "success" or sl = "passed" or sl = "active" then return "0x3FB950FF"

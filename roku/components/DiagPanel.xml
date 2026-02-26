@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    DiagPanel — system diagnostics from /sys/diagnostics
+    DiagPanel - system diagnostics from /sys/diagnostics
     Shows: uptime, routes, issues, top-level health indicators
 -->
 <component name="DiagPanel" extends="Group">
@@ -25,7 +25,7 @@
             bg.height = 596
             bg.color  = "0x0D1117FF"
 
-            ' ── top summary bar ─────────────────────────────────────
+            ' -- top summary bar -------------------------------------
             topBar = m.top.createChild("Rectangle")
             topBar.translation = [36, 12]
             topBar.width  = 1208
@@ -34,7 +34,7 @@
 
             titleLbl = m.top.createChild("Label")
             titleLbl.translation = [52, 18]
-            titleLbl.text  = "⚙  SYSTEM DIAGNOSTICS"
+            titleLbl.text  = "  SYSTEM DIAGNOSTICS"
             titleLbl.font  = "font:MediumBoldSystemFont"
             titleLbl.color = "0xE6EDF3FF"
 
@@ -44,7 +44,7 @@
             m.statusLbl.font  = "font:SmallSystemFont"
             m.statusLbl.color = "0x8B949EFF"
 
-            ' ── big stat tiles (row of 5) ───────────────────────────
+            ' -- big stat tiles (row of 5) ---------------------------
             tileLabels = ["Routes", "Functions", "Python Files", "Issues", "Errors"]
             m.tileVals = []
             tileW = 230
@@ -63,13 +63,13 @@
 
                 vl = m.top.createChild("Label")
                 vl.translation = [36 + i * (tileW + 4) + 12, 96]
-                vl.text  = "–"
+                vl.text  = "-"
                 vl.font  = "font:MediumBoldSystemFont"
                 vl.color = "0xE6EDF3FF"
                 m.tileVals.push(vl)
             end for
 
-            ' ── issues list ─────────────────────────────────────────
+            ' -- issues list -----------------------------------------
             issHdr = m.top.createChild("Rectangle")
             issHdr.translation = [36, 160]
             issHdr.width  = 1208
@@ -99,14 +99,14 @@
         end sub
 
         function load(args as Dynamic)
-            m.statusLbl.text = "⟳  Fetching..."
+            m.statusLbl.text = "*  Fetching..."
             m.task.url = BASE_URL + "/sys/diagnostics"
         end function
 
         sub onResult()
             data = m.task.result
             if data = invalid or data.doesExist("error")
-                m.statusLbl.text = "✗ " + iif(data = invalid, "no data", data.error)
+                m.statusLbl.text = "X " + iif(data = invalid, "no data", data.error)
                 ' fallback: try the scan API
                 m.task.url = BASE_URL + "/api/diagnostics"
                 return
@@ -119,14 +119,14 @@
 
             tileKeys = [["routes", "route_count"], ["functions", "function_count"], ["python_files", "total_files"], ["issues", "total_issues"], ["errors", "error_count"]]
             for i = 0 to 4
-                v = "–"
+                v = "-"
                 keys = tileKeys[i]
                 for each k in keys
-                    if v = "–" and summary.doesExist(k) then v = str(summary[k]).trim()
+                    if v = "-" and summary.doesExist(k) then v = str(summary[k]).trim()
                 end for
                 m.tileVals[i].text = v
                 ' colour issues/errors red if > 0
-                if (i = 3 or i = 4) and v <> "–" and val(v) > 0
+                if (i = 3 or i = 4) and v <> "-" and val(v) > 0
                     m.tileVals[i].color = "0xF85149FF"
                 else if (i = 3 or i = 4) and v = "0"
                     m.tileVals[i].color = "0x3FB950FF"
@@ -164,7 +164,7 @@
             if m.issues.count() = 0
                 empty = m.issueGroup.createChild("Label")
                 empty.translation = [52, 8]
-                empty.text  = "✓  No issues detected."
+                empty.text  = "OK  No issues detected."
                 empty.font  = "font:SmallSystemFont"
                 empty.color = "0x3FB950FF"
                 return
@@ -200,7 +200,7 @@
             if m.issues.count() > maxRows
                 hint = m.issueGroup.createChild("Label")
                 hint.translation = [36, y + 4]
-                hint.text  = "▲ ▼ scroll  (" + str(m.issues.count()).trim() + " issues)"
+                hint.text  = "^ v scroll  (" + str(m.issues.count()).trim() + " issues)"
                 hint.font  = "font:SmallSystemFont"
                 hint.color = "0x8B949EFF"
             end if

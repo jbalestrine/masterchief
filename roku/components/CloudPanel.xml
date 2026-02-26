@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    CloudPanel — shows cloud accounts / resource health from /api/cloud/accounts
+    CloudPanel - shows cloud accounts / resource health from /api/cloud/accounts
 -->
 <component name="CloudPanel" extends="Group">
     <interface>
@@ -32,7 +32,7 @@
 
             titleLbl = m.top.createChild("Label")
             titleLbl.translation = [52, 18]
-            titleLbl.text  = "☁  CLOUD ACCOUNTS"
+            titleLbl.text  = "  CLOUD ACCOUNTS"
             titleLbl.font  = "font:MediumBoldSystemFont"
             titleLbl.color = "0xE6EDF3FF"
 
@@ -63,7 +63,7 @@
         end sub
 
         function load(args as Dynamic)
-            m.statusLbl.text = "⟳  Fetching..."
+            m.statusLbl.text = "*  Fetching..."
             m.task.url = BASE_URL + "/api/cloud/accounts"
         end function
 
@@ -74,7 +74,7 @@
                 return
             end if
             if data.doesExist("error")
-                m.statusLbl.text = "✗ " + data.error
+                m.statusLbl.text = "X " + data.error
                 return
             end if
 
@@ -135,7 +135,7 @@
             if m.items.count() > maxRows
                 hint = m.rowGroup.createChild("Label")
                 hint.translation = [36, y + 4]
-                hint.text  = "▲ ▼ scroll  (" + str(m.items.count()).trim() + " total)"
+                hint.text  = "^ v scroll  (" + str(m.items.count()).trim() + " total)"
                 hint.font  = "font:SmallSystemFont"
                 hint.color = "0x8B949EFF"
             end if

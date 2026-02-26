@@ -1,5 +1,5 @@
 ' ============================================================
-'  MasterChief DevOps — Roku Channel
+'  MasterChief DevOps - Roku Channel
 '  Entry point
 ' ============================================================
 sub Main(args as Dynamic)
