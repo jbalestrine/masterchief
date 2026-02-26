@@ -62,16 +62,16 @@ function parseM3U(raw as String) as Object
 
     for each rawLine in lines
         line = rawLine.trim()
-        if line = "" then goto nextLine
-
-        if Left(line, 7) = "#EXTINF"
+        if line = ""
+            ' skip blank
+        else if Left(line, 7) = "#EXTINF"
             ' #EXTINF:-1 tvg-id="X" tvg-name="X" group-title="X" tvg-logo="X",Display Name
             current = {name: "", url: "", group: "Uncategorized", logo: "", tvgId: ""}
 
             ' extract display name (after last comma)
             commaPos = findLastComma(line)
             if commaPos > 0
-                current.name = Mid(line, commaPos + 2).trim()
+                current.name = Mid(line, commaPos + 2, Len(line)).trim()
             end if
 
             ' extract tvg-name (override display name if present)
@@ -92,8 +92,6 @@ function parseM3U(raw as String) as Object
             channels.push(current)
             current = invalid
         end if
-
-        nextLine:
     end for
 
     return channels
