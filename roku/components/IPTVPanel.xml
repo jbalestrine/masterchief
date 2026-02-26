@@ -63,7 +63,7 @@ sub buildChrome()
 
     titleLbl = m.top.createChild("Label")
     titleLbl.translation = [52, 19]
-    titleLbl.text  = "📺  LIVE TV  —  IPTV PLAYER"
+    titleLbl.text  = "[TV]  LIVE TV  —  IPTV PLAYER"
     titleLbl.font  = "font:MediumBoldSystemFont"
     titleLbl.color = C_TEXT
 

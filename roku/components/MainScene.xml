@@ -59,7 +59,7 @@ sub buildHeader()
 
     title = m.top.createChild("Label")
     title.translation = [40, 14]
-    title.text = "⬛ MasterChief DevOps"
+    title.text = "[MC] MasterChief DevOps"
     title.font = "font:MediumBoldSystemFont"
     title.color = C_TEXT
 
@@ -96,7 +96,7 @@ sub buildTabStrip()
 
         lbl = m.top.createChild("Label")
         lbl.translation = [i * tabW + 12, tabY + 13]
-        lbl.text  = iif(isLive, "📺 " + TABS[i], TABS[i])
+        lbl.text  = iif(isLive, "[TV] " + TABS[i], TABS[i])
         lbl.font  = "font:SmallBoldSystemFont"
         lbl.color = C_SUBTEXT
         m.tabLabels.push(lbl)
