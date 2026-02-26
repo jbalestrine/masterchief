@@ -39,7 +39,7 @@
             titleLbl.font  = "font:MediumBoldSystemFont"
             titleLbl.color = "0xE6EDF3FF"
 
-            m.statusLbl = m.top.createChild("Label")
+            m.statusLbl = m.rowGroup.createChild("Label")
             m.statusLbl.translation = [900, 22]
             m.statusLbl.text  = "Loading..."
             m.statusLbl.font  = "font:SmallSystemFont"
@@ -135,7 +135,7 @@
             for i = m.scrollOffset to endIdx
                 item = m.items[i]
 
-                odd = m.top.createChild("Rectangle")
+                odd = m.rowGroup.createChild("Rectangle")
                 odd.translation = [36, y]
                 odd.width  = 1208
                 odd.height = rowH - 1
@@ -146,26 +146,26 @@
                 branch = safeStr(item, "branch",     safeStr(item, "ref",   "-"))
                 lastRun = safeStr(item, "last_run",  safeStr(item, "updated_at", "-"))
 
-                nameLbl = m.top.createChild("Label")
+                nameLbl = m.rowGroup.createChild("Label")
                 nameLbl.translation = [52, y + 9]
                 nameLbl.text  = name
                 nameLbl.font  = "font:SmallSystemFont"
                 nameLbl.color = "0xE6EDF3FF"
                 nameLbl.width = 420
 
-                statusLbl = m.top.createChild("Label")
+                statusLbl = m.rowGroup.createChild("Label")
                 statusLbl.translation = [480, y + 9]
                 statusLbl.text  = UCase(status)
                 statusLbl.font  = "font:SmallBoldSystemFont"
                 statusLbl.color = statusColor(status)
 
-                branchLbl = m.top.createChild("Label")
+                branchLbl = m.rowGroup.createChild("Label")
                 branchLbl.translation = [680, y + 9]
                 branchLbl.text  = branch
                 branchLbl.font  = "font:SmallSystemFont"
                 branchLbl.color = "0x8B949EFF"
 
-                lastLbl = m.top.createChild("Label")
+                lastLbl = m.rowGroup.createChild("Label")
                 lastLbl.translation = [920, y + 9]
                 lastLbl.text  = lastRun
                 lastLbl.font  = "font:SmallSystemFont"
@@ -176,7 +176,7 @@
 
             ' scroll hint
             if m.items.count() > maxRows
-                hint = m.top.createChild("Label")
+                hint = m.rowGroup.createChild("Label")
                 hint.translation = [36, y + 4]
                 hint.text  = "▲ ▼ scroll  (" + str(m.items.count()).trim() + " total)"
                 hint.font  = "font:SmallSystemFont"

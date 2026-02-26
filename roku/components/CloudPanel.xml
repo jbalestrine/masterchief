@@ -111,7 +111,7 @@
             for i = m.scrollOffset to endIdx
                 item = m.items[i]
 
-                odd = m.top.createChild("Rectangle")
+                odd = m.rowGroup.createChild("Rectangle")
                 odd.translation = [36, y]
                 odd.width  = 1208
                 odd.height = rowH - 1
@@ -123,17 +123,17 @@
                 status   = safeStr(item, "status",    safeStr(item, "health", "unknown"))
                 resources = safeStr(item, "resource_count", safeStr(item, "resources", "-"))
 
-                makeLbl(52,   y + 9, name,      "0xE6EDF3FF", 380)
-                makeLbl(440,  y + 9, UCase(provider), "0x58A6FFFF", 172)
-                makeLbl(620,  y + 9, region,    "0x8B949EFF", 172)
-                makeLbl(800,  y + 9, UCase(status), statusColor(status), 212)
-                makeLbl(1020, y + 9, resources, "0x8B949EFF", 200)
+                m_makeLbl(m.rowGroup, 52,   y + 9, name,      "0xE6EDF3FF", 380)
+                m_makeLbl(m.rowGroup, 440,  y + 9, UCase(provider), "0x58A6FFFF", 172)
+                m_makeLbl(m.rowGroup, 620,  y + 9, region,    "0x8B949EFF", 172)
+                m_makeLbl(m.rowGroup, 800,  y + 9, UCase(status), statusColor(status), 212)
+                m_makeLbl(m.rowGroup, 1020, y + 9, resources, "0x8B949EFF", 200)
 
                 y = y + rowH
             end for
 
             if m.items.count() > maxRows
-                hint = m.top.createChild("Label")
+                hint = m.rowGroup.createChild("Label")
                 hint.translation = [36, y + 4]
                 hint.text  = "▲ ▼ scroll  (" + str(m.items.count()).trim() + " total)"
                 hint.font  = "font:SmallSystemFont"
@@ -141,7 +141,7 @@
             end if
 
             if m.items.count() = 0
-                empty = m.top.createChild("Label")
+                empty = m.rowGroup.createChild("Label")
                 empty.translation = [52, 20]
                 empty.text  = "No cloud accounts configured."
                 empty.font  = "font:SmallSystemFont"
@@ -149,8 +149,8 @@
             end if
         end sub
 
-        sub makeLbl(x as Integer, y as Integer, text as String, color as String, w = 300 as Integer)
-            lbl = m.top.createChild("Label")
+        sub m_makeLbl(grp as Object, x as Integer, y as Integer, text as String, color as String, w = 300 as Integer)
+            lbl = grp.createChild("Label")
             lbl.translation = [x, y]
             lbl.text  = text
             lbl.font  = "font:SmallSystemFont"
