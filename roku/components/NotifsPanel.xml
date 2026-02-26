@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    NotifsPanel — notifications / alerts feed from /api/notifications
+    NotifsPanel - notifications / alerts feed from /api/notifications
 -->
 <component name="NotifsPanel" extends="Group">
     <interface>
@@ -62,14 +62,14 @@
         end sub
 
         function load(args as Dynamic)
-            m.statusLbl.text = "⟳  Fetching..."
+            m.statusLbl.text = "*  Fetching..."
             m.task.url = BASE_URL + "/api/notifications"
         end function
 
         sub onResult()
             data = m.task.result
             if data = invalid or data.doesExist("error")
-                m.statusLbl.text = "✗ " + iif(data = invalid, "no data", data.error)
+                m.statusLbl.text = "X " + iif(data = invalid, "no data", data.error)
                 return
             end if
 
@@ -136,7 +136,7 @@
             if m.items.count() > maxRows
                 hint = m.rowGroup.createChild("Label")
                 hint.translation = [36, y + 4]
-                hint.text  = "▲ ▼ scroll  (" + str(m.items.count()).trim() + " total)"
+                hint.text  = "^ v scroll  (" + str(m.items.count()).trim() + " total)"
                 hint.font  = "font:SmallSystemFont"
                 hint.color = "0x8B949EFF"
             end if

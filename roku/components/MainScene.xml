@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    MainScene — root scene, header + tab navigation + panel container.
+    MainScene - root scene, header + tab navigation + panel container.
     Tabs: Pipelines | Cloud | Notifs | Echo AI | Diagnostics | Live TV
 -->
 <component name="MainScene" extends="Scene">
     <script type="text/brightscript"><![CDATA[
 
-' ── config ─────────────────────────────────────────────────────────────────
+' -- config -----------------------------------------------------------------
 ' Change BASE_URL to your machine's LAN IP when running on a real Roku device.
-' (Roku cannot reach 127.0.0.1 on your PC — use e.g. http://192.168.1.50:8080)
+' (Roku cannot reach 127.0.0.1 on your PC - use e.g. http://192.168.1.50:8080)
 CONST BASE_URL = "http://10.0.0.159:8080"
 
 CONST TABS = ["Pipelines", "Cloud", "Notifs", "Echo AI", "Diagnostics", "Live TV"]
@@ -24,7 +24,7 @@ CONST C_TEXT     = "0xE6EDF3FF"
 CONST C_SUBTEXT  = "0x8B949EFF"
 CONST C_BORDER   = "0x30363DFF"
 
-' ── init ───────────────────────────────────────────────────────────────────
+' -- init -------------------------------------------------------------------
 sub init()
     m.activeTab = 0
     m.isPlaying = false
@@ -36,7 +36,7 @@ sub init()
     focusTabStrip()
 end sub
 
-' ── UI construction ─────────────────────────────────────────────────────────
+' -- UI construction ---------------------------------------------------------
 sub buildUI()
     ' full-screen background
     bg = m.top.createChild("Rectangle")
@@ -146,12 +146,12 @@ sub buildFooter()
 
     hint = m.top.createChild("Label")
     hint.translation = [40, 698]
-    hint.text = "◀ ▶ Switch tab   ▲▼ Scroll panel   * Refresh now   Back / Home to exit"
+    hint.text = "< > Switch tab   ^v Scroll panel   * Refresh now   Back / Home to exit"
     hint.font = "font:SmallSystemFont"
     hint.color = C_SUBTEXT
 end sub
 
-' ── video player ─────────────────────────────────────────────────────────────
+' -- video player -------------------------------------------------------------
 sub setupVideoPlayer()
     m.video = m.top.createChild("Video")
     m.video.translation = [0, 0]
@@ -177,7 +177,7 @@ sub setupVideoPlayer()
 
     m.npHint = m.top.createChild("Label")
     m.npHint.translation = [900, 674]
-    m.npHint.text  = "Back = stop   ▲▼ volume"
+    m.npHint.text  = "Back = stop   ^v volume"
     m.npHint.font  = "font:SmallSystemFont"
     m.npHint.color = "0xCCCCCCCC"
     m.npHint.visible = false
@@ -222,7 +222,7 @@ sub playChannel(ch as Dynamic)
     for i = 0 to m.panels.count() - 1
         m.panels[i].visible = false
     end for
-    m.npTitle.text    = "▶  " + ch.name
+    m.npTitle.text    = ">  " + ch.name
     m.npTitle.visible = true
     m.npOverlay.visible = true
     m.npHint.visible  = true
@@ -264,7 +264,7 @@ sub onVideoError()
     end if
 end sub
 
-' ── tab switching ──────────────────────────────────────────────────────────
+' -- tab switching ----------------------------------------------------------
 sub showPanel(idx as Integer)
     for i = 0 to m.panels.count() - 1
         isActive = (i = idx)
@@ -282,7 +282,7 @@ sub showPanel(idx as Integer)
     m.panels[idx].callFunc("load", {})
 end sub
 
-' ── timer (clock + auto-refresh) ──────────────────────────────────────────
+' -- timer (clock + auto-refresh) ------------------------------------------
 sub setupTimer()
     m.timer = m.top.createChild("Timer")
     m.timer.duration = 1
@@ -316,7 +316,7 @@ function RightPad(n as Integer) as String
     return s
 end function
 
-' ── key handling ──────────────────────────────────────────────────────────
+' -- key handling ----------------------------------------------------------
 sub focusTabStrip()
     m.top.setFocus(true)
 end sub

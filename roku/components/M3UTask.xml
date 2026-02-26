@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    M3UTask — fetches an M3U/M3U+ playlist URL and parses it into a channel array.
+    M3UTask - fetches an M3U/M3U+ playlist URL and parses it into a channel array.
     Fields:
-      url      (string)  — M3U URL to fetch
-      channels (array)   — parsed channel objects {name, url, group, logo, tvgId}
-      status   (string)  — "ok" | "error: ..."
+      url      (string)  - M3U URL to fetch
+      channels (array)   - parsed channel objects {name, url, group, logo, tvgId}
+      status   (string)  - "ok" | "error: ..."
 -->
 <component name="M3UTask" extends="Task">
     <interface>
@@ -51,7 +51,7 @@ sub fetch()
     m.top.status = "ok:" + str(channels.count()).trim()
 end sub
 
-' ── M3U parser ──────────────────────────────────────────────────────────────
+' -- M3U parser --------------------------------------------------------------
 ' Handles #EXTM3U, #EXTINF lines and stream URLs.
 ' Returns array of {name, url, group, logo, tvgId}
 function parseM3U(raw as String) as Object
@@ -84,7 +84,7 @@ function parseM3U(raw as String) as Object
             current.logo  = extractAttr(line, "tvg-logo")
 
         else if Left(line, 1) = "#"
-            ' other directive — ignore
+            ' other directive - ignore
         else if current <> invalid
             ' this must be the stream URL
             current.url = line

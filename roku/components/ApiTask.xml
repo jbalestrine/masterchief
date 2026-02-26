@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-    ApiTask — reusable background HTTP GET task.
+    ApiTask - reusable background HTTP GET task.
     Fields:
-      url     (string) — full URL to request
-      result  (assocarray) — parsed JSON response, or {error: "..."}
+      url     (string) - full URL to request
+      result  (assocarray) - parsed JSON response, or {error: "..."}
 -->
 <component name="ApiTask" extends="Task">
     <interface>
