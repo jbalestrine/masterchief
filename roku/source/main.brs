@@ -1,19 +1,27 @@
 ' ============================================================
-'  MasterChief DevOps - Roku Channel
-'  Entry point
+'  MasterChief TV - Roku Channel
+'  Loads ciacpi.myddns.me:8080 via roHtmlWidget
 ' ============================================================
 sub Main(args as Dynamic)
-    screen = CreateObject("roSGScreen")
-    m.port = CreateObject("roMessagePort")
-    screen.setMessagePort(m.port)
+    port = CreateObject("roMessagePort")
 
-    scene = screen.CreateScene("MainScene")
-    screen.show()
+    rect   = CreateObject("roRectangle", 0, 0, 1280, 720)
+    widget = CreateObject("roHtmlWidget", rect, {})
+    widget.SetPort(port)
+    widget.SetUrl("http://ciacpi.myddns.me:8080")
+    widget.SetFocusable(true)
+    widget.SetFocus(true)
 
     while true
-        msg = wait(0, m.port)
-        if type(msg) = "roSGScreenEvent"
-            if msg.isScreenClosed() then return
+        msg = Wait(0, port)
+        if type(msg) = "roHtmlWidgetEvent"
+            data = msg.GetData()
+            if data.reason = "exit" or data.reason = "load-error"
+                exit while
+            end if
+        else if type(msg) = "roUniversalControlEvent"
+            key = msg.GetInt()
+            if key = 0 or key = 10 then exit while
         end if
     end while
 end sub

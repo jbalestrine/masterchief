@@ -4,9 +4,8 @@ major_version=1
 minor_version=0
 build_version=1
 
-# Required: channel type and SceneGraph version
+# Required: channel type
 type=appl
-rsg_version=1.1
 
 mm_icon_focus_hd=pkg:/images/icon_focus_hd.png
 mm_icon_side_hd=pkg:/images/icon_side_hd.png
