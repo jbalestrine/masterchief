@@ -139,7 +139,7 @@
                 odd.translation = [36, y]
                 odd.width  = 1208
                 odd.height = rowH - 1
-                odd.color  = iif(i mod 2 = 0, "0x0D1117FF", "0x161B22FF")
+                if i mod 2 = 0 then odd.color = "0x0D1117FF" else odd.color = "0x161B22FF"
 
                 name   = safeStr(item, "name",       safeStr(item, "id", "pipeline-" + str(i).trim()))
                 status = safeStr(item, "status",     safeStr(item, "state", "unknown"))

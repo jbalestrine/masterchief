@@ -106,7 +106,9 @@
         sub onResult()
             data = m.task.result
             if data = invalid or data.doesExist("error")
-                m.statusLbl.text = "X " + iif(data = invalid, "no data", data.error)
+                errMsg = "no data"
+                if data <> invalid then errMsg = data.error
+                m.statusLbl.text = "X " + errMsg
                 ' fallback: try the scan API
                 m.task.url = BASE_URL + "/api/diagnostics"
                 return
@@ -177,7 +179,7 @@
                 rowBg.translation = [36, y]
                 rowBg.width  = 1208
                 rowBg.height = rowH - 1
-                rowBg.color  = iif(i mod 2 = 0, "0x0D1117FF", "0x161B22FF")
+                if i mod 2 = 0 then rowBg.color = "0x0D1117FF" else rowBg.color = "0x161B22FF"
 
                 msg  = ""
                 sev  = ""

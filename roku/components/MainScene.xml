@@ -96,7 +96,7 @@ sub buildTabStrip()
 
         lbl = m.top.createChild("Label")
         lbl.translation = [i * tabW + 12, tabY + 13]
-        lbl.text  = iif(isLive, "[TV] " + TABS[i], TABS[i])
+        if isLive then lbl.text = "[TV] " + TABS[i] else lbl.text = TABS[i]
         lbl.font  = "font:SmallBoldSystemFont"
         lbl.color = C_SUBTEXT
         m.tabLabels.push(lbl)
@@ -271,7 +271,7 @@ sub showPanel(idx as Integer)
         isLive   = (i = 5)
         m.panels[i].visible  = isActive
         if isActive
-            m.tabRects[i].color  = iif(isLive, C_TAB_IPTV, C_TAB_SEL)
+            if isLive then m.tabRects[i].color = C_TAB_IPTV else m.tabRects[i].color = C_TAB_SEL
             m.tabLabels[i].color = "0xFFFFFFFF"
         else
             m.tabRects[i].color  = C_TAB_IDLE

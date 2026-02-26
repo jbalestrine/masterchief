@@ -69,7 +69,9 @@
         sub onResult()
             data = m.task.result
             if data = invalid or data.doesExist("error")
-                m.statusLbl.text = "X " + iif(data = invalid, "no data", data.error)
+                errMsg = "no data"
+                if data <> invalid then errMsg = data.error
+                m.statusLbl.text = "X " + errMsg
                 return
             end if
 
