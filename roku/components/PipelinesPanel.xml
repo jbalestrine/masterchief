@@ -35,7 +35,7 @@
 
             titleLbl = m.top.createChild("Label")
             titleLbl.translation = [52, 18]
-            titleLbl.text  = "🔄  PIPELINES"
+            titleLbl.text  = "[~]  PIPELINES"
             titleLbl.font  = "font:MediumBoldSystemFont"
             titleLbl.color = "0xE6EDF3FF"
 
