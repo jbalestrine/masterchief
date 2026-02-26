@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    MainScene — root scene, header + tab navigation + panel container.
+    Tabs: Pipelines | Cloud | Notifications | Echo AI | Diagnostics
+-->
+<component name="MainScene" extends="Scene">
+    <script type="text/brightscript"><![CDATA[
+
+' ── config ─────────────────────────────────────────────────────────────────
+' Change BASE_URL to your machine's LAN IP when running on a real Roku device.
+' (Roku cannot reach 127.0.0.1 on your PC — use e.g. http://192.168.1.50:8080)
+CONST BASE_URL = "http://127.0.0.1:8080"
+
+CONST TABS = ["Pipelines", "Cloud", "Notifs", "Echo AI", "Diagnostics"]
+CONST REFRESH_SECS = 30     ' auto-refresh interval
+
+' colours
+CONST C_BG       = "0x0D1117FF"   ' deep github dark
+CONST C_HEADER   = "0x161B22FF"
+CONST C_TAB_IDLE = "0x21262DFF"
+CONST C_TAB_SEL  = "0x238636FF"   ' github green
+CONST C_TEXT     = "0xE6EDF3FF"
+CONST C_SUBTEXT  = "0x8B949EFF"
+CONST C_BORDER   = "0x30363DFF"
+
+' ── init ───────────────────────────────────────────────────────────────────
+sub init()
+    m.activeTab = 0
+    buildUI()
+    setupTimer()
+    showPanel(0)
+    focusTabStrip()
+end sub
+
+' ── UI construction ─────────────────────────────────────────────────────────
+sub buildUI()
+    ' full-screen background
+    bg = m.top.createChild("Rectangle")
+    bg.width  = 1280
+    bg.height = 720
+    bg.color  = C_BG
+
+    buildHeader()
+    buildTabStrip()
+    buildPanels()
+    buildFooter()
+end sub
+
+sub buildHeader()
+    bar = m.top.createChild("Rectangle")
+    bar.translation = [0, 0]
+    bar.width  = 1280
+    bar.height = 68
+    bar.color  = C_HEADER
+
+    title = m.top.createChild("Label")
+    title.translation = [40, 14]
+    title.text = "⬛ MasterChief DevOps"
+    title.font = "font:MediumBoldSystemFont"
+    title.color = C_TEXT
+
+    sep = m.top.createChild("Rectangle")
+    sep.translation = [0, 68]
+    sep.width  = 1280
+    sep.height = 2
+    sep.color  = C_BORDER
+
+    m.clockLabel = m.top.createChild("Label")
+    m.clockLabel.translation = [1050, 22]
+    m.clockLabel.text = ""
+    m.clockLabel.font = "font:SmallSystemFont"
+    m.clockLabel.color = C_SUBTEXT
+
+    updateClock()
+end sub
+
+sub buildTabStrip()
+    m.tabRects  = []
+    m.tabLabels = []
+    tabY    = 70
+    tabH    = 52
+    tabW    = 1280 / TABS.count()
+
+    for i = 0 to TABS.count() - 1
+        r = m.top.createChild("Rectangle")
+        r.translation = [i * tabW, tabY]
+        r.width  = tabW - 2
+        r.height = tabH
+        r.color  = C_TAB_IDLE
+        m.tabRects.push(r)
+
+        lbl = m.top.createChild("Label")
+        lbl.translation = [i * tabW + 20, tabY + 13]
+        lbl.text  = TABS[i]
+        lbl.font  = "font:SmallBoldSystemFont"
+        lbl.color = C_SUBTEXT
+        m.tabLabels.push(lbl)
+    end for
+
+    ' separator below tab strip
+    sep2 = m.top.createChild("Rectangle")
+    sep2.translation = [0, tabY + tabH]
+    sep2.width  = 1280
+    sep2.height = 2
+    sep2.color  = C_BORDER
+end sub
+
+sub buildPanels()
+    ' Lazy-create panel components; all start hidden
+    m.panels = [
+        createPanel("PipelinesPanel"),
+        createPanel("CloudPanel"),
+        createPanel("NotifsPanel"),
+        createPanel("EchoPanel"),
+        createPanel("DiagPanel")
+    ]
+end sub
+
+function createPanel(compName as String) as Object
+    p = m.top.createChild(compName)
+    p.translation = [0, 124]
+    p.visible = false
+    return p
+end function
+
+sub buildFooter()
+    bar = m.top.createChild("Rectangle")
+    bar.translation = [0, 694]
+    bar.width  = 1280
+    bar.height = 26
+    bar.color  = C_HEADER
+
+    hint = m.top.createChild("Label")
+    hint.translation = [40, 698]
+    hint.text = "◀ ▶ Switch tab   ▲▼ Scroll panel   * Refresh now   Back / Home to exit"
+    hint.font = "font:SmallSystemFont"
+    hint.color = C_SUBTEXT
+end sub
+
+' ── tab switching ──────────────────────────────────────────────────────────
+sub showPanel(idx as Integer)
+    CONST C_TAB_IDLE_L = "0x21262DFF"
+    CONST C_TAB_SEL_L  = "0x238636FF"
+
+    for i = 0 to m.panels.count() - 1
+        m.panels[i].visible   = (i = idx)
+        m.tabRects[i].color   = iif(i = idx, C_TAB_SEL_L, C_TAB_IDLE_L)
+        m.tabLabels[i].color  = iif(i = idx, "0xFFFFFFFF", "0x8B949EFF")
+    end for
+
+    m.activeTab = idx
+    ' trigger data load on the newly-visible panel
+    m.panels[idx].callFunc("load", {})
+end sub
+
+' ── timer (clock + auto-refresh) ──────────────────────────────────────────
+sub setupTimer()
+    m.timer = m.top.createChild("Timer")
+    m.timer.duration = 1
+    m.timer.repeat   = true
+    m.timer.observeField("fire", "onTick")
+    m.timer.control  = "start"
+    m.tickCount = 0
+end sub
+
+sub onTick()
+    m.tickCount = m.tickCount + 1
+    updateClock()
+    if m.tickCount mod REFRESH_SECS = 0
+        m.panels[m.activeTab].callFunc("load", {})
+    end if
+end sub
+
+sub updateClock()
+    dt = CreateObject("roDateTime")
+    dt.ToLocalTime()
+    h   = dt.GetHours()
+    min = dt.GetMinutes()
+    sec = dt.GetSeconds()
+    m.clockLabel.text = RightPad(h) + ":" + RightPad(min) + ":" + RightPad(sec)
+end sub
+
+function RightPad(n as Integer) as String
+    s = str(n).trim()
+    if len(s) = 1 then s = "0" + s
+    return s
+end function
+
+' ── key handling ──────────────────────────────────────────────────────────
+sub focusTabStrip()
+    m.top.setFocus(true)
+end sub
+
+function onKeyEvent(key as String, press as Boolean) as Boolean
+    if not press then return false
+    if key = "left"
+        if m.activeTab > 0
+            showPanel(m.activeTab - 1)
+        end if
+        return true
+    else if key = "right"
+        if m.activeTab < TABS.count() - 1
+            showPanel(m.activeTab + 1)
+        end if
+        return true
+    else if key = "replay"   ' * button = refresh now
+        m.panels[m.activeTab].callFunc("load", {})
+        return true
+    end if
+    return false
+end function
+
+    ]]></script>
+</component>

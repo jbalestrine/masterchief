@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    ApiTask — reusable background HTTP GET task.
+    Fields:
+      url     (string) — full URL to request
+      result  (assocarray) — parsed JSON response, or {error: "..."}
+-->
+<component name="ApiTask" extends="Task">
+    <interface>
+        <field id="url"    type="string"    onChange="onUrlChange" />
+        <field id="result" type="assocarray" />
+    </interface>
+    <script type="text/brightscript"><![CDATA[
+        sub init()
+            m.top.functionName = "fetch"
+        end sub
+
+        sub onUrlChange()
+            m.top.control = "run"
+        end sub
+
+        sub fetch()
+            url = m.top.url
+            if url = "" then return
+
+            http = CreateObject("roUrlTransfer")
+            http.SetUrl(url)
+            http.SetCertificatesFile("common:/certs/ca-bundle.crt")
+            http.InitClientCertificates()
+            http.AddHeader("Accept", "application/json")
+            http.AddHeader("User-Agent", "MasterChief-Roku/1.0")
+
+            resp = http.GetToString()
+            code = http.GetResponseCode()
+
+            if code >= 200 and code < 300
+                parsed = ParseJSON(resp)
+                if parsed <> invalid
+                    m.top.result = parsed
+                else
+                    m.top.result = {error: "JSON parse failed", raw: Left(resp, 200)}
+                end if
+            else
+                m.top.result = {error: "HTTP " + str(code)}
+            end if
+        end sub
+    ]]></script>
+</component>
