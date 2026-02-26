@@ -8,7 +8,7 @@ sub Main(args as Dynamic)
     rect   = CreateObject("roRectangle", 0, 0, 1280, 720)
     widget = CreateObject("roHtmlWidget", rect, {})
     widget.SetPort(port)
-    widget.SetUrl("http://ciacpi.myddns.me:8080")
+    widget.SetUrl("http://127.0.0.1:8080")
     widget.SetFocusable(true)
     widget.SetFocus(true)
 
