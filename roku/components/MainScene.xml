@@ -1,44 +1,48 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!--
-    MainScene - root scene, header + tab navigation + panel container.
-    Tabs: Pipelines | Cloud | Notifs | Echo AI | Diagnostics | Live TV
--->
+<!-- MainScene - IPTV-only channel browser + video player -->
 <component name="MainScene" extends="Scene">
     <script type="text/brightscript"><![CDATA[
-' -- init -------------------------------------------------------------------
+
 sub init()
-    m.tabs        = ["Pipelines", "Cloud", "Notifs", "Echo AI", "Diagnostics", "Live TV"]
-    m.refreshSecs = 30
-    m.cBg         = "0x0D1117FF"
-    m.cHeader     = "0x161B22FF"
-    m.cTabIdle    = "0x21262DFF"
-    m.cTabSel     = "0x238636FF"
-    m.cTabIptv    = "0xBD2D0EFF"
-    m.cText       = "0xE6EDF3FF"
-    m.cSubtext    = "0x8B949EFF"
-    m.cBorder     = "0x30363DFF"
-    m.activeTab = 0
+    m.cBg      = "0x0D1117FF"
+    m.cHeader  = "0x161B22FF"
+    m.cBorder  = "0x30363DFF"
+    m.cText    = "0xE6EDF3FF"
+    m.cSubtext = "0x8B949EFF"
     m.isPlaying = false
     m.currentCh = invalid
     buildUI()
     setupVideoPlayer()
     setupTimer()
-    showPanel(0)
-    focusTabStrip()
+    m.iptv.callFunc("load", {})
+    m.top.setFocus(true)
 end sub
 
-' -- UI construction ---------------------------------------------------------
 sub buildUI()
-    ' full-screen background
     bg = m.top.createChild("Rectangle")
     bg.width  = 1280
     bg.height = 720
     bg.color  = m.cBg
-
     buildHeader()
-    buildTabStrip()
-    buildPanels()
-    buildFooter()
+    sep = m.top.createChild("Rectangle")
+    sep.translation = [0, 68]
+    sep.width  = 1280
+    sep.height = 2
+    sep.color  = m.cBorder
+    m.iptv = m.top.createChild("IPTVPanel")
+    m.iptv.translation = [0, 70]
+    m.iptv.visible = true
+    m.iptv.observeField("selectedChannel", "onChannelSelected")
+    sep2 = m.top.createChild("Rectangle")
+    sep2.translation = [0, 694]
+    sep2.width  = 1280
+    sep2.height = 2
+    sep2.color  = m.cBorder
+    hint = m.top.createChild("Label")
+    hint.translation = [40, 698]
+    hint.text = "^v/OK Browse channels   * Reload   Back / Home = exit"
+    hint.font = "font:SmallSystemFont"
+    hint.color = m.cSubtext
 end sub
 
 sub buildHeader()
@@ -47,102 +51,25 @@ sub buildHeader()
     bar.width  = 1280
     bar.height = 68
     bar.color  = m.cHeader
-
     title = m.top.createChild("Label")
-    title.translation = [40, 14]
-    title.text = "[MC] MasterChief DevOps"
+    title.translation = [40, 16]
+    title.text = "MasterChief TV"
     title.font = "font:MediumBoldSystemFont"
     title.color = m.cText
-
-    sep = m.top.createChild("Rectangle")
-    sep.translation = [0, 68]
-    sep.width  = 1280
-    sep.height = 2
-    sep.color  = m.cBorder
-
     m.clockLabel = m.top.createChild("Label")
-    m.clockLabel.translation = [1050, 22]
+    m.clockLabel.translation = [1080, 24]
     m.clockLabel.text = ""
     m.clockLabel.font = "font:SmallSystemFont"
     m.clockLabel.color = m.cSubtext
-
+    m.npHeader = m.top.createChild("Label")
+    m.npHeader.translation = [320, 16]
+    m.npHeader.text = ""
+    m.npHeader.font = "font:MediumBoldSystemFont"
+    m.npHeader.color = "0xFFD700FF"
+    m.npHeader.visible = false
     updateClock()
 end sub
 
-sub buildTabStrip()
-    m.tabRects  = []
-    m.tabLabels = []
-    tabY    = 70
-    tabH    = 52
-    tabW    = 1280 / m.tabs.count()
-
-    for i = 0 to m.tabs.count() - 1
-        isLive = (i = 5)
-        r = m.top.createChild("Rectangle")
-        r.translation = [i * tabW, tabY]
-        r.width  = tabW - 2
-        r.height = tabH
-        r.color  = m.cTabIdle
-        m.tabRects.push(r)
-
-        lbl = m.top.createChild("Label")
-        lbl.translation = [i * tabW + 12, tabY + 13]
-        if isLive then lbl.text = "[TV] " + m.tabs[i] else lbl.text = m.tabs[i]
-        lbl.font  = "font:SmallBoldSystemFont"
-        lbl.color = m.cSubtext
-        m.tabLabels.push(lbl)
-    end for
-
-    ' separator below tab strip
-    sep2 = m.top.createChild("Rectangle")
-    sep2.translation = [0, tabY + tabH]
-    sep2.width  = 1280
-    sep2.height = 2
-    sep2.color  = m.cBorder
-end sub
-
-sub buildPanels()
-    ' Lazy-create panel components; all start hidden
-    m.panels = [
-        createPanel("PipelinesPanel"),
-        createPanel("CloudPanel"),
-        createPanel("NotifsPanel"),
-        createPanel("EchoPanel"),
-        createPanel("DiagPanel"),
-        createIPTVPanel()
-    ]
-end sub
-
-function createPanel(compName as String) as Object
-    p = m.top.createChild(compName)
-    p.translation = [0, 124]
-    p.visible = false
-    return p
-end function
-
-function createIPTVPanel() as Object
-    p = m.top.createChild("IPTVPanel")
-    p.translation = [0, 124]
-    p.visible = false
-    p.observeField("selectedChannel", "onChannelSelected")
-    return p
-end function
-
-sub buildFooter()
-    bar = m.top.createChild("Rectangle")
-    bar.translation = [0, 694]
-    bar.width  = 1280
-    bar.height = 26
-    bar.color  = m.cHeader
-
-    hint = m.top.createChild("Label")
-    hint.translation = [40, 698]
-    hint.text = "< > Switch tab   ^v Scroll panel   * Refresh now   Back / Home to exit"
-    hint.font = "font:SmallSystemFont"
-    hint.color = m.cSubtext
-end sub
-
-' -- video player -------------------------------------------------------------
 sub setupVideoPlayer()
     m.video = m.top.createChild("Video")
     m.video.translation = [0, 0]
@@ -151,38 +78,22 @@ sub setupVideoPlayer()
     m.video.visible = false
     m.video.observeField("state",     "onVideoState")
     m.video.observeField("errorInfo", "onVideoError")
-
-    m.npOverlay = m.top.createChild("Rectangle")
-    m.npOverlay.translation = [0, 656]
-    m.npOverlay.width  = 1280
-    m.npOverlay.height = 64
-    m.npOverlay.color  = "0x000000BB"
-    m.npOverlay.visible = false
-
-    m.npTitle = m.top.createChild("Label")
-    m.npTitle.translation = [40, 664]
-    m.npTitle.text  = ""
-    m.npTitle.font  = "font:MediumBoldSystemFont"
-    m.npTitle.color = "0xFFFFFFFF"
-    m.npTitle.visible = false
-
-    m.npHint = m.top.createChild("Label")
-    m.npHint.translation = [900, 674]
-    m.npHint.text  = "Back = stop   ^v volume"
-    m.npHint.font  = "font:SmallSystemFont"
-    m.npHint.color = "0xCCCCCCCC"
-    m.npHint.visible = false
-
     m.loadingLbl = m.top.createChild("Label")
     m.loadingLbl.translation = [400, 332]
-    m.loadingLbl.text  = "Connecting to stream..."
+    m.loadingLbl.text  = "Connecting..."
     m.loadingLbl.font  = "font:MediumBoldSystemFont"
     m.loadingLbl.color = "0xFFFFFFFF"
     m.loadingLbl.visible = false
+    m.backHint = m.top.createChild("Label")
+    m.backHint.translation = [40, 690]
+    m.backHint.text  = "Back = stop"
+    m.backHint.font  = "font:SmallSystemFont"
+    m.backHint.color = "0xCCCCCCCC"
+    m.backHint.visible = false
 end sub
 
 sub onChannelSelected()
-    ch = m.panels[5].selectedChannel
+    ch = m.iptv.selectedChannel
     if ch = invalid then return
     if ch.url = "" then return
     m.currentCh = ch
@@ -200,36 +111,30 @@ sub playChannel(ch as Dynamic)
         content.streamFormat = "dash"
     else if Instr(1, url, ".mp4") > 0
         content.streamFormat = "mp4"
-    else if Instr(1, url, ".ts") > 0
-        content.streamFormat = "ts"
     else
         content.streamFormat = "hls"
     end if
     content.title = ch.name
     m.video.content = content
     m.video.visible = true
+    m.iptv.visible  = false
     m.video.control = "play"
     m.video.setFocus(true)
-    for i = 0 to m.panels.count() - 1
-        m.panels[i].visible = false
-    end for
-    m.npTitle.text    = ">  " + ch.name
-    m.npTitle.visible = true
-    m.npOverlay.visible = true
-    m.npHint.visible  = true
-    m.loadingLbl.text    = "Connecting to stream..."
+    m.npHeader.text    = ">  " + ch.name
+    m.npHeader.visible = true
+    m.loadingLbl.text    = "Connecting..."
     m.loadingLbl.visible = true
+    m.backHint.visible = true
 end sub
 
 sub stopPlayback()
     m.isPlaying = false
-    m.video.control = "stop"
-    m.video.visible = false
-    m.npOverlay.visible = false
-    m.npTitle.visible   = false
-    m.npHint.visible    = false
+    m.video.control  = "stop"
+    m.video.visible  = false
+    m.iptv.visible   = true
+    m.npHeader.visible   = false
     m.loadingLbl.visible = false
-    showPanel(5)
+    m.backHint.visible   = false
     m.top.setFocus(true)
 end sub
 
@@ -250,50 +155,22 @@ sub onVideoError()
     if info <> invalid
         msg = ""
         if info.doesExist("errorMsg") then msg = info.errorMsg
-        m.loadingLbl.text    = "Stream error: " + msg
+        m.loadingLbl.text    = "Error: " + msg
         m.loadingLbl.visible = true
     end if
 end sub
 
-' -- tab switching ----------------------------------------------------------
-sub showPanel(idx as Integer)
-    for i = 0 to m.panels.count() - 1
-        isActive = (i = idx)
-        isLive   = (i = 5)
-        m.panels[i].visible  = isActive
-        if isActive
-            if isLive then m.tabRects[i].color = m.cTabIptv else m.tabRects[i].color = m.cTabSel
-            m.tabLabels[i].color = "0xFFFFFFFF"
-        else
-            m.tabRects[i].color  = m.cTabIdle
-            m.tabLabels[i].color = "0x8B949EFF"
-        end if
-    end for
-    m.activeTab = idx
-    m.panels[idx].callFunc("load", {})
-    ' always re-acquire focus on the scene so left/right keep working
-    m.top.setFocus(true)
-end sub
-
-' -- timer (clock + auto-refresh) ------------------------------------------
 sub setupTimer()
     m.timer = m.top.createChild("Timer")
     m.timer.duration = 1
     m.timer.repeat   = true
     m.timer.observeField("fire", "onTick")
     m.timer.control  = "start"
-    m.tickCount = 0
 end sub
 
 sub onTick()
-    m.tickCount = m.tickCount + 1
     updateClock()
-    ' Re-assert scene focus every tick so API task callbacks can't steal it
     if not m.isPlaying then m.top.setFocus(true)
-    ' skip auto-refresh for IPTV tab (heavy) and when video is playing
-    if m.tickCount mod m.refreshSecs = 0 and not m.isPlaying and m.activeTab < 5
-        m.panels[m.activeTab].callFunc("load", {})
-    end if
 end sub
 
 sub updateClock()
@@ -311,38 +188,14 @@ function RightPad(n as Integer) as String
     return s
 end function
 
-' -- key handling ----------------------------------------------------------
-sub focusTabStrip()
-    m.top.setFocus(true)
-end sub
-
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
-
-    ' while video is playing, Back stops it; let Video handle everything else
     if m.isPlaying
         if key = "back"
             stopPlayback()
             return true
         end if
         return false
-    end if
-
-    if key = "left"
-        if m.activeTab > 0
-            showPanel(m.activeTab - 1)
-        end if
-        return true
-    else if key = "right"
-        if m.activeTab < m.tabs.count() - 1
-            showPanel(m.activeTab + 1)
-        end if
-        return true
-    else if key = "replay"   ' * button = refresh now (not IPTV)
-        if m.activeTab < 5
-            m.panels[m.activeTab].callFunc("load", {})
-        end if
-        return true
     end if
     return false
 end function

@@ -58,7 +58,7 @@ sub buildChrome()
     bg = m.top.createChild("Rectangle")
     bg.translation = [0, 0]
     bg.width  = 1280
-    bg.height = 596
+    bg.height = 624
     bg.color  = m.cBg
 
     ' title bar
@@ -85,7 +85,7 @@ sub buildChrome()
     sideBar = m.top.createChild("Rectangle")
     sideBar.translation = [36, 62]
     sideBar.width  = m.leftW
-    sideBar.height = 510
+    sideBar.height = 538
     sideBar.color  = m.cCard
 
     sideHdr = m.top.createChild("Label")
@@ -101,7 +101,7 @@ sub buildChrome()
     chArea = m.top.createChild("Rectangle")
     chArea.translation = [m.rightX + 36, 62]
     chArea.width  = 1280 - m.rightX - 72
-    chArea.height = 510
+    chArea.height = 538
     chArea.color  = m.cCard
 
     chHdr = m.top.createChild("Label")
@@ -121,13 +121,13 @@ sub buildChrome()
 
     ' hint bar
     hintBg = m.top.createChild("Rectangle")
-    hintBg.translation = [36, 558]
+    hintBg.translation = [36, 586]
     hintBg.width  = 1208
     hintBg.height = 30
     hintBg.color  = "0x0D1117FF"
 
     m.hintLbl = m.top.createChild("Label")
-    m.hintLbl.translation = [52, 563]
+    m.hintLbl.translation = [52, 591]
     m.hintLbl.text  = "<> Pane   ^v Navigate   OK = Select   * = Reload"
     m.hintLbl.font  = "font:SmallSystemFont"
     m.hintLbl.color = m.cSub
