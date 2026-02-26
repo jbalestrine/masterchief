@@ -17,90 +17,78 @@
         sub fetch()
             url = m.top.url
             if url = "" then return
-
             http = CreateObject("roUrlTransfer")
             http.SetUrl(url)
             http.SetCertificatesFile("common:/certs/ca-bundle.crt")
             http.InitClientCertificates()
             http.AddHeader("User-Agent", "Roku/1.0")
-
             resp = http.GetToString()
             code = http.GetResponseCode()
-
             if code < 200 or code >= 300
-                m.top.result = {error: "HTTP " + str(code).trim()}
+                m.top.result = {error: "HTTP " + stri(code).trim()}
                 return
             end if
-
             rs = CreateObject("roString")
             rs.SetString(resp)
             lines = rs.Tokenize(chr(10))
-
             channels   = []
             groups     = []
             groupsSeen = {}
             maxCh      = 3000
             extinf     = ""
-
             for each rawLine in lines
-                if channels.count() >= maxCh then exit for
-                line = rawLine
-                if Right(line, 1) = chr(13)
-                    line = Left(line, Len(line) - 1)
-                end if
-                line = Trim(line)
-                if line <> ""
-                    if Left(line, 7) = "#EXTINF"
-                        extinf = line
-                    else if Left(line, 1) <> "#" and extinf <> ""
-                        ch     = parseExtinf(extinf)
-                        ch.url = line
-                        channels.push(ch)
-                        g = ch.group
-                        if g = "" then g = "Uncategorized"
-                        if not groupsSeen.doesExist(g)
-                            groupsSeen[g] = true
-                            groups.push(g)
+                if channels.count() < maxCh
+                    ln = rawLine
+                    if Right(ln, 1) = chr(13) then ln = Left(ln, Len(ln) - 1)
+                    ln = Trim(ln)
+                    if ln <> ""
+                        if Left(ln, 7) = "#EXTINF"
+                            extinf = ln
+                        else if Left(ln, 1) <> "#" and extinf <> ""
+                            ch = buildChannel(extinf, ln)
+                            channels.push(ch)
+                            grp = ch.group
+                            if grp = "" then grp = "Uncategorized"
+                            if not groupsSeen.doesExist(grp)
+                                groupsSeen[grp] = true
+                                groups.push(grp)
+                            end if
+                            extinf = ""
                         end if
-                        extinf = ""
                     end if
                 end if
             end for
-
-            m.top.result = {
-                _isM3U    : true,
-                _groups   : groups,
-                _channels : channels
-            }
+            m.top.result = {_isM3U: true, _groups: groups, _channels: channels}
         end sub
 
-        function parseExtinf(line as String) as Object
-            ch = {name: "", group: "", logo: ""}
-            commaPos = 0
-            k = Len(line)
-            while k > 1
-                if Mid(line, k, 1) = ","
-                    commaPos = k
-                    k = 1
-                end if
-                k = k - 1
-            end while
-            if commaPos > 0
-                ch.name = Trim(Mid(line, commaPos + 1, Len(line) - commaPos))
-            end if
-            ch.group = extractAttr(line, "group-title")
-            ch.logo  = extractAttr(line, "tvg-logo")
+        function buildChannel(extinf as String, url as String) as Object
+            ch = {}
+            ch.url   = url
+            ch.name  = lastCommaVal(extinf)
+            ch.group = attrVal(extinf, "group-title")
+            ch.logo  = attrVal(extinf, "tvg-logo")
             return ch
         end function
 
-        function extractAttr(line as String, attr as String) as String
+        function lastCommaVal(line as String) as String
+            lastPos = 0
+            cur = Instr(1, line, ",")
+            while cur > 0
+                lastPos = cur
+                cur = Instr(cur + 1, line, ",")
+            end while
+            if lastPos = 0 then return ""
+            return Trim(Mid(line, lastPos + 1, Len(line) - lastPos))
+        end function
+
+        function attrVal(line as String, attr as String) as String
             needle = attr + "=" + chr(34)
-            pos = Instr(1, line, needle)
-            if pos = 0 then return ""
-            s = pos + Len(needle)
-            e = Instr(s, line, chr(34))
-            if e = 0 then return ""
-            return Mid(line, s, e - s)
+            startPos = Instr(1, line, needle)
+            if startPos = 0 then return ""
+            valStart = startPos + Len(needle)
+            valEnd   = Instr(valStart, line, chr(34))
+            if valEnd = 0 then return ""
+            return Mid(line, valStart, valEnd - valStart)
         end function
 
     ]]></script>
