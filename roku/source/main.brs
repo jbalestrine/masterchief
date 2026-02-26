@@ -1,5 +1,21 @@
-' MasterChief DevOps - webapp channel
-' Roku loads webapp_url from manifest directly.
-' This file is unused when type=webapp but must exist.
+' MasterChief DevOps - WebView RSG channel
 sub Main(args as Dynamic)
+    screen = CreateObject("roSGScreen")
+    port = CreateObject("roMessagePort")
+    screen.setMessagePort(port)
+    scene = screen.CreateScene("MainScene")
+    screen.show()
+
+    ' Set the URL after scene is shown
+    wv = scene.findNode("webView")
+    if wv <> invalid
+        wv.uri = "http://ciacpu.myddns.me:8080/"
+    end if
+
+    while true
+        msg = wait(0, port)
+        if type(msg) = "roSGScreenEvent"
+            if msg.isScreenClosed() then return
+        end if
+    end while
 end sub
