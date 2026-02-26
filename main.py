@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 
 """MasterChief Flask Web Application - All-in-One File"""
 
@@ -8629,6 +8629,7 @@ def register_echo_hook(chatbot):
     except Exception:
         pass
 '''
+            _echo_call = ('\n    register_echo_hook(app.extensions.get(\'chatbot\'))' if 'echo_hook' in capabilities else '')
             settings_code = ''
             if 'settings_page' in capabilities:
                 settings_code = f'''
@@ -8667,7 +8668,7 @@ bp = Blueprint('{module_name}', __name__, url_prefix='/modules/{module_name}'){r
 
 def init(app):
     """Called by MasterChief to register this module."""
-    app.register_blueprint(bp){"\n    register_echo_hook(app.extensions.get('chatbot')" + ")" if 'echo_hook' in capabilities else ""}
+    app.register_blueprint(bp){_echo_call}
     print(f'Module {module_name} registered at /modules/{module_name}')
 ''', encoding='utf-8')
 
