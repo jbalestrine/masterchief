@@ -35,8 +35,7 @@ function formatTs(ts as Dynamic) as String
     dt = CreateObject("roDateTime")
     dt.FromISO8601String(str(n))
     dt.ToLocalTime()
-    return RightPad(dt.GetHours()) + ":" + RightPad(dt.GetMinutes()) + " " + _
-           str(dt.GetMonth()).trim() + "/" + str(dt.GetDayOfMonth()).trim()
+    return RightPad(dt.GetHours()) + ":" + RightPad(dt.GetMinutes()) + " " + str(dt.GetMonth()).trim() + "/" + str(dt.GetDayOfMonth()).trim()
 end function
 
 function RightPad(n as Integer) as String
