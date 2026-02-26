@@ -5,11 +5,11 @@
 ' Map a status string to a colour
 function statusColor(s as String) as String
     sl = LCase(s)
-    if sl = "running" or sl = "active" or sl = "healthy" or sl = "ok" or sl = "success" or sl = "passed"
+    if sl = "running" or sl = "active" or sl = "healthy" or sl = "ok" or sl = "success" or sl = "passed" or sl = "connected" or sl = "ready" or sl = "loaded"
         return "0x3FB950FF"   ' green
-    else if sl = "failed" or sl = "error" or sl = "unhealthy" or sl = "critical"
+    else if sl = "failed" or sl = "error" or sl = "unhealthy" or sl = "critical" or sl = "disconnected"
         return "0xF85149FF"   ' red
-    else if sl = "pending" or sl = "queued" or sl = "warning" or sl = "degraded"
+    else if sl = "pending" or sl = "queued" or sl = "warning" or sl = "degraded" or sl = "loading" or sl = "initializing" or sl = "waiting"
         return "0xD29922FF"   ' yellow
     else
         return "0x8B949EFF"   ' subtext grey
@@ -35,10 +35,10 @@ function formatTs(ts as Dynamic) as String
     dt = CreateObject("roDateTime")
     dt.FromISO8601String(str(n))
     dt.ToLocalTime()
-    return RightPad(dt.GetHours()) + ":" + RightPad(dt.GetMinutes()) + " " + str(dt.GetMonth()).trim() + "/" + str(dt.GetDayOfMonth()).trim()
+    return rp(dt.GetHours()) + ":" + rp(dt.GetMinutes()) + " " + str(dt.GetMonth()).trim() + "/" + str(dt.GetDayOfMonth()).trim()
 end function
 
-function RightPad(n as Integer) as String
+function rp(n as Integer) as String
     s = str(n).trim()
     if len(s) = 1 then s = "0" + s
     return s

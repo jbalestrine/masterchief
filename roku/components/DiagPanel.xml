@@ -237,19 +237,5 @@
             return "0x8B949EFF"
         end function
 
-        function safeStr(aa as Dynamic, key as String, fallback = "" as String) as String
-            if type(aa) = "roAssociativeArray" and aa.doesExist(key)
-                v = aa[key]
-                if v = invalid then return fallback
-                return str(v).trim()
-            end if
-            return fallback
-        end function
-
-        function rp(n as Integer) as String
-            s = str(n).trim()
-            if len(s) = 1 then s = "0" + s
-            return s
-        end function
     ]]></script>
 </component>
