@@ -37,7 +37,7 @@
             titleLbl.font  = "font:MediumBoldSystemFont"
             titleLbl.color = "0xE6EDF3FF"
 
-            m.statusLbl = m.rowGroup.createChild("Label")
+            m.statusLbl = m.top.createChild("Label")
             m.statusLbl.translation = [900, 22]
             m.statusLbl.text  = "Loading..."
             m.statusLbl.font  = "font:SmallSystemFont"
