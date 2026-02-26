@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+    M3UTask — fetches an M3U/M3U+ playlist URL and parses it into a channel array.
+    Fields:
+      url      (string)  — M3U URL to fetch
+      channels (array)   — parsed channel objects {name, url, group, logo, tvgId}
+      status   (string)  — "ok" | "error: ..."
+-->
+<component name="M3UTask" extends="Task">
+    <interface>
+        <field id="url"      type="string"  onChange="onUrlChange" />
+        <field id="channels" type="array"   />
+        <field id="status"   type="string"  />
+    </interface>
+    <script type="text/brightscript"><![CDATA[
+
+sub init()
+    m.top.functionName = "fetch"
+end sub
+
+sub onUrlChange()
+    m.top.control = "run"
+end sub
+
+sub fetch()
+    url = m.top.url
+    if url = "" then return
+
+    m.top.status = "Fetching playlist..."
+
+    http = CreateObject("roUrlTransfer")
+    http.SetUrl(url)
+    http.SetCertificatesFile("common:/certs/ca-bundle.crt")
+    http.InitClientCertificates()
+    http.AddHeader("User-Agent", "MasterChief-Roku/1.0")
+    http.EnablePeerVerification(false)
+    http.EnableHostVerification(false)
+
+    raw = http.GetToString()
+    code = http.GetResponseCode()
+
+    if code < 200 or code >= 300
+        m.top.status = "error: HTTP " + str(code).trim()
+        m.top.channels = []
+        return
+    end if
+
+    m.top.status = "Parsing M3U..."
+    channels = parseM3U(raw)
+    m.top.channels = channels
+    m.top.status = "ok:" + str(channels.count()).trim()
+end sub
+
+' ── M3U parser ──────────────────────────────────────────────────────────────
+' Handles #EXTM3U, #EXTINF lines and stream URLs.
+' Returns array of {name, url, group, logo, tvgId}
+function parseM3U(raw as String) as Object
+    channels = []
+    current = invalid
+
+    lines = raw.Tokenize(chr(10))
+
+    for each rawLine in lines
+        line = rawLine.trim()
+        if line = "" then goto nextLine
+
+        if Left(line, 7) = "#EXTINF"
+            ' #EXTINF:-1 tvg-id="X" tvg-name="X" group-title="X" tvg-logo="X",Display Name
+            current = {name: "", url: "", group: "Uncategorized", logo: "", tvgId: ""}
+
+            ' extract display name (after last comma)
+            commaPos = findLastComma(line)
+            if commaPos > 0
+                current.name = Mid(line, commaPos + 2).trim()
+            end if
+
+            ' extract tvg-name (override display name if present)
+            tvgName = extractAttr(line, "tvg-name")
+            if tvgName <> "" then current.name = tvgName
+
+            current.tvgId = extractAttr(line, "tvg-id")
+            current.group = extractAttr(line, "group-title")
+            if current.group = "" then current.group = "Uncategorized"
+            current.logo  = extractAttr(line, "tvg-logo")
+
+        else if Left(line, 1) = "#"
+            ' other directive — ignore
+        else if current <> invalid
+            ' this must be the stream URL
+            current.url = line
+            if current.name = "" then current.name = "Channel " + str(channels.count() + 1).trim()
+            channels.push(current)
+            current = invalid
+        end if
+
+        nextLine:
+    end for
+
+    return channels
+end function
+
+' Find position of last comma in a string (1-based)
+function findLastComma(s as String) as Integer
+    pos = -1
+    i = Len(s)
+    while i > 0
+        if Mid(s, i, 1) = ","
+            pos = i
+            exit while
+        end if
+        i = i - 1
+    end while
+    return pos
+end function
+
+' Extract a quoted attribute value: attr="value" or attr='value'
+function extractAttr(line as String, attrName as String) as String
+    needle = attrName + "="
+    startIdx = Instr(1, line, needle)
+    if startIdx = 0 then return ""
+
+    startIdx = startIdx + Len(needle)
+    quote = Mid(line, startIdx, 1)
+    if quote <> chr(34) and quote <> "'" then return ""
+
+    startIdx = startIdx + 1
+    endIdx = Instr(startIdx, line, quote)
+    if endIdx = 0 then return ""
+
+    return Mid(line, startIdx, endIdx - startIdx)
+end function
+
+    ]]></script>
+</component>

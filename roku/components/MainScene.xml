@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
     MainScene — root scene, header + tab navigation + panel container.
-    Tabs: Pipelines | Cloud | Notifications | Echo AI | Diagnostics
+    Tabs: Pipelines | Cloud | Notifs | Echo AI | Diagnostics | Live TV
 -->
 <component name="MainScene" extends="Scene">
     <script type="text/brightscript"><![CDATA[
@@ -11,7 +11,7 @@
 ' (Roku cannot reach 127.0.0.1 on your PC — use e.g. http://192.168.1.50:8080)
 CONST BASE_URL = "http://127.0.0.1:8080"
 
-CONST TABS = ["Pipelines", "Cloud", "Notifs", "Echo AI", "Diagnostics"]
+CONST TABS = ["Pipelines", "Cloud", "Notifs", "Echo AI", "Diagnostics", "Live TV"]
 CONST REFRESH_SECS = 30     ' auto-refresh interval
 
 ' colours
@@ -19,6 +19,7 @@ CONST C_BG       = "0x0D1117FF"   ' deep github dark
 CONST C_HEADER   = "0x161B22FF"
 CONST C_TAB_IDLE = "0x21262DFF"
 CONST C_TAB_SEL  = "0x238636FF"   ' github green
+CONST C_TAB_IPTV = "0xBD2D0EFF"   ' red accent for Live TV
 CONST C_TEXT     = "0xE6EDF3FF"
 CONST C_SUBTEXT  = "0x8B949EFF"
 CONST C_BORDER   = "0x30363DFF"
@@ -26,7 +27,10 @@ CONST C_BORDER   = "0x30363DFF"
 ' ── init ───────────────────────────────────────────────────────────────────
 sub init()
     m.activeTab = 0
+    m.isPlaying = false
+    m.currentCh = invalid
     buildUI()
+    setupVideoPlayer()
     setupTimer()
     showPanel(0)
     focusTabStrip()
@@ -82,6 +86,7 @@ sub buildTabStrip()
     tabW    = 1280 / TABS.count()
 
     for i = 0 to TABS.count() - 1
+        isLive = (i = 5)
         r = m.top.createChild("Rectangle")
         r.translation = [i * tabW, tabY]
         r.width  = tabW - 2
@@ -90,8 +95,8 @@ sub buildTabStrip()
         m.tabRects.push(r)
 
         lbl = m.top.createChild("Label")
-        lbl.translation = [i * tabW + 20, tabY + 13]
-        lbl.text  = TABS[i]
+        lbl.translation = [i * tabW + 12, tabY + 13]
+        lbl.text  = iif(isLive, "📺 " + TABS[i], TABS[i])
         lbl.font  = "font:SmallBoldSystemFont"
         lbl.color = C_SUBTEXT
         m.tabLabels.push(lbl)
@@ -112,7 +117,8 @@ sub buildPanels()
         createPanel("CloudPanel"),
         createPanel("NotifsPanel"),
         createPanel("EchoPanel"),
-        createPanel("DiagPanel")
+        createPanel("DiagPanel"),
+        createIPTVPanel()
     ]
 end sub
 
@@ -120,6 +126,14 @@ function createPanel(compName as String) as Object
     p = m.top.createChild(compName)
     p.translation = [0, 124]
     p.visible = false
+    return p
+end function
+
+function createIPTVPanel() as Object
+    p = m.top.createChild("IPTVPanel")
+    p.translation = [0, 124]
+    p.visible = false
+    p.observeField("selectedChannel", "onChannelSelected")
     return p
 end function
 
@@ -137,19 +151,134 @@ sub buildFooter()
     hint.color = C_SUBTEXT
 end sub
 
+' ── video player ─────────────────────────────────────────────────────────────
+sub setupVideoPlayer()
+    m.video = m.top.createChild("Video")
+    m.video.translation = [0, 0]
+    m.video.width  = 1280
+    m.video.height = 720
+    m.video.visible = false
+    m.video.observeField("state",     "onVideoState")
+    m.video.observeField("errorInfo", "onVideoError")
+
+    m.npOverlay = m.top.createChild("Rectangle")
+    m.npOverlay.translation = [0, 656]
+    m.npOverlay.width  = 1280
+    m.npOverlay.height = 64
+    m.npOverlay.color  = "0x000000BB"
+    m.npOverlay.visible = false
+
+    m.npTitle = m.top.createChild("Label")
+    m.npTitle.translation = [40, 664]
+    m.npTitle.text  = ""
+    m.npTitle.font  = "font:MediumBoldSystemFont"
+    m.npTitle.color = "0xFFFFFFFF"
+    m.npTitle.visible = false
+
+    m.npHint = m.top.createChild("Label")
+    m.npHint.translation = [900, 674]
+    m.npHint.text  = "Back = stop   ▲▼ volume"
+    m.npHint.font  = "font:SmallSystemFont"
+    m.npHint.color = "0xCCCCCCCC"
+    m.npHint.visible = false
+
+    m.loadingLbl = m.top.createChild("Label")
+    m.loadingLbl.translation = [400, 332]
+    m.loadingLbl.text  = "Connecting to stream..."
+    m.loadingLbl.font  = "font:MediumBoldSystemFont"
+    m.loadingLbl.color = "0xFFFFFFFF"
+    m.loadingLbl.visible = false
+end sub
+
+sub onChannelSelected()
+    ch = m.panels[5].selectedChannel
+    if ch = invalid then return
+    if ch.url = "" then return
+    m.currentCh = ch
+    playChannel(ch)
+end sub
+
+sub playChannel(ch as Dynamic)
+    m.isPlaying = true
+    content = CreateObject("roSGNode", "ContentNode")
+    content.url = ch.url
+    url = LCase(ch.url)
+    if Instr(1, url, ".m3u8") > 0 or Instr(1, url, "hls") > 0
+        content.streamFormat = "hls"
+    else if Instr(1, url, ".mpd") > 0
+        content.streamFormat = "dash"
+    else if Instr(1, url, ".mp4") > 0
+        content.streamFormat = "mp4"
+    else if Instr(1, url, ".ts") > 0
+        content.streamFormat = "ts"
+    else
+        content.streamFormat = "hls"
+    end if
+    content.title = ch.name
+    m.video.content = content
+    m.video.visible = true
+    m.video.control = "play"
+    m.video.setFocus(true)
+    for i = 0 to m.panels.count() - 1
+        m.panels[i].visible = false
+    end for
+    m.npTitle.text    = "▶  " + ch.name
+    m.npTitle.visible = true
+    m.npOverlay.visible = true
+    m.npHint.visible  = true
+    m.loadingLbl.text    = "Connecting to stream..."
+    m.loadingLbl.visible = true
+end sub
+
+sub stopPlayback()
+    m.isPlaying = false
+    m.video.control = "stop"
+    m.video.visible = false
+    m.npOverlay.visible = false
+    m.npTitle.visible   = false
+    m.npHint.visible    = false
+    m.loadingLbl.visible = false
+    showPanel(5)
+    m.top.setFocus(true)
+end sub
+
+sub onVideoState()
+    state = m.video.state
+    if state = "buffering"
+        m.loadingLbl.text    = "Buffering..."
+        m.loadingLbl.visible = true
+    else if state = "playing"
+        m.loadingLbl.visible = false
+    else if state = "stopped" or state = "finished"
+        if m.isPlaying then stopPlayback()
+    end if
+end sub
+
+sub onVideoError()
+    info = m.video.errorInfo
+    if info <> invalid
+        msg = ""
+        if info.doesExist("errorMsg") then msg = info.errorMsg
+        m.loadingLbl.text    = "Stream error: " + msg
+        m.loadingLbl.visible = true
+    end if
+end sub
+
 ' ── tab switching ──────────────────────────────────────────────────────────
 sub showPanel(idx as Integer)
-    CONST C_TAB_IDLE_L = "0x21262DFF"
-    CONST C_TAB_SEL_L  = "0x238636FF"
-
     for i = 0 to m.panels.count() - 1
-        m.panels[i].visible   = (i = idx)
-        m.tabRects[i].color   = iif(i = idx, C_TAB_SEL_L, C_TAB_IDLE_L)
-        m.tabLabels[i].color  = iif(i = idx, "0xFFFFFFFF", "0x8B949EFF")
+        isActive = (i = idx)
+        isLive   = (i = 5)
+        m.panels[i].visible  = isActive
+        if isActive
+            m.tabRects[i].color  = iif(isLive, C_TAB_IPTV, C_TAB_SEL)
+            m.tabLabels[i].color = "0xFFFFFFFF"
+        else
+            m.tabRects[i].color  = C_TAB_IDLE
+            m.tabLabels[i].color = "0x8B949EFF"
+        end if
     end for
-
     m.activeTab = idx
-    ' trigger data load on the newly-visible panel
     m.panels[idx].callFunc("load", {})
 end sub
 
@@ -166,7 +295,8 @@ end sub
 sub onTick()
     m.tickCount = m.tickCount + 1
     updateClock()
-    if m.tickCount mod REFRESH_SECS = 0
+    ' skip auto-refresh for IPTV tab (heavy) and when video is playing
+    if m.tickCount mod REFRESH_SECS = 0 and not m.isPlaying and m.activeTab < 5
         m.panels[m.activeTab].callFunc("load", {})
     end if
 end sub
@@ -193,6 +323,16 @@ end sub
 
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
+
+    ' while video is playing, Back stops it; let Video handle everything else
+    if m.isPlaying
+        if key = "back"
+            stopPlayback()
+            return true
+        end if
+        return false
+    end if
+
     if key = "left"
         if m.activeTab > 0
             showPanel(m.activeTab - 1)
@@ -203,8 +343,10 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             showPanel(m.activeTab + 1)
         end if
         return true
-    else if key = "replay"   ' * button = refresh now
-        m.panels[m.activeTab].callFunc("load", {})
+    else if key = "replay"   ' * button = refresh now (not IPTV)
+        if m.activeTab < 5
+            m.panels[m.activeTab].callFunc("load", {})
+        end if
         return true
     end if
     return false
