@@ -21,6 +21,21 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 PIPELINE = None
 MODEL_ID = os.environ.get('IMAGE_LOCAL_MODEL', 'runwayml/stable-diffusion-v1-5')
 
+# Style -> prompt suffix mapping so the selected style actually affects generation
+_STYLE_SUFFIXES = {
+    'photorealistic': ', photorealistic, hyperrealistic, 8k uhd, sharp focus, dslr photography, highly detailed',
+    'illustration':   ', illustration, artistic, detailed painting, vibrant colors, smooth linework',
+    'digital-art':    ', digital art, concept art, vivid colors, artstation, trending, cinematic lighting',
+}
+
+
+def _build_prompt(job: dict) -> str:
+    """Return the prompt with the chosen style suffix appended."""
+    base   = (job.get('prompt') or '').strip()
+    style  = (job.get('style')  or '').strip().lower()
+    suffix = _STYLE_SUFFIXES.get(style, '')
+    return base + suffix
+
 
 def load_pipeline():
     global PIPELINE
@@ -85,32 +100,61 @@ def process_job(job_path: Path):
 
         pipe = load_pipeline()
         if pipe is None:
-            # record a per-job diagnostic log so we can debug import/load issues
+            # Diffusers/torch unavailable — fall back to PIL placeholder image
             try:
-                diag = Path(__file__).parent / 'data' / 'backups' / f'job_{job_id}.log'
-                diag.parent.mkdir(parents=True, exist_ok=True)
-                with diag.open('a', encoding='utf-8') as fh:
-                    fh.write(f"--- {time.ctime()} ---\n")
-                    fh.write('PIPELINE NOT AVAILABLE\n')
-                    try:
-                        import importlib, sys
-                        fh.write('sys.path snapshot:\n')
-                        for pth in sys.path[:5]:
-                            fh.write('  ' + str(pth) + '\n')
-                        fh.write('\n')
-                        fh.write('torch spec: ' + str(importlib.util.find_spec('torch')) + '\n')
-                        fh.write('diffusers spec: ' + str(importlib.util.find_spec('diffusers')) + '\n')
-                    except Exception as ee:
-                        fh.write('diag import failed: ' + str(ee) + '\n')
-            except Exception:
-                pass
-            job['status'] = 'error'
-            job['error'] = 'diffusers or torch not available on worker'
-            job_path.write_text(json.dumps(job), encoding='utf-8')
+                from PIL import Image, ImageDraw, ImageFont
+                import textwrap
+                prompt_text = _build_prompt(job)
+                size_str = job.get('size', '512x512')
+                try:
+                    w, h = (int(x) for x in size_str.split('x'))
+                except Exception:
+                    w, h = 512, 512
+                img = Image.new('RGB', (w, h), color=(30, 20, 50))
+                draw = ImageDraw.Draw(img)
+                # purple gradient-ish background bands
+                for y in range(h):
+                    r = int(20 + (y / h) * 40)
+                    g = int(10 + (y / h) * 20)
+                    b = int(50 + (y / h) * 60)
+                    draw.line([(0, y), (w, y)], fill=(r, g, b))
+                # border
+                draw.rectangle([4, 4, w - 5, h - 5], outline=(150, 100, 220), width=3)
+                # title
+                try:
+                    font_title = ImageFont.truetype('arial.ttf', 22)
+                    font_body = ImageFont.truetype('arial.ttf', 16)
+                except Exception:
+                    font_title = ImageFont.load_default()
+                    font_body = font_title
+                draw.text((w // 2, 30), '🖼️ Echo Image Preview', font=font_title, fill=(220, 200, 255), anchor='mm')
+                draw.text((w // 2, 60), '(diffusers not installed — placeholder)', font=font_body, fill=(160, 140, 200), anchor='mm')
+                # wrapped prompt
+                max_chars = max(20, w // 10)
+                lines = textwrap.wrap(prompt_text, width=max_chars)
+                y_pos = h // 2 - len(lines) * 18
+                for line in lines:
+                    draw.text((w // 2, y_pos), line, font=font_body, fill=(255, 240, 255), anchor='mm')
+                    y_pos += 28
+                # footer hint
+                draw.text((w // 2, h - 30), 'pip install diffusers[torch] transformers', font=font_body, fill=(120, 100, 160), anchor='mm')
+                fname = f"img_{int(time.time()*1000)}_{uuid.uuid4().hex}.png"
+                fpath = OUT_DIR / fname
+                img.save(str(fpath))
+                rel = fpath.relative_to(Path(__file__).parent).as_posix()
+                job['path'] = rel
+                job['progress'] = 100
+                job['status'] = 'done'
+                job_path.write_text(json.dumps(job), encoding='utf-8')
+                print('Job done (PIL placeholder):', job_id, '->', rel)
+            except Exception as pil_err:
+                job['status'] = 'error'
+                job['error'] = f'diffusers/torch not available; PIL fallback also failed: {pil_err}'
+                job_path.write_text(json.dumps(job), encoding='utf-8')
             return
 
         job['progress'] = 15
-        prompt = job.get('prompt','')
+        prompt = _build_prompt(job)
         size = job.get('size','512x512')
         parts = size.split('x')
         try:
