@@ -1,0 +1,31 @@
+{
+  "slug": "module-system-v3",
+  "label": "Module Command Center",
+  "icon": "🧩",
+  "color": "#f5a623",
+  "version": "3.0.0",
+  "description": "Platform hub for discovering, generating, installing, and linking MasterChief addon modules. Central registry and capability bus.",
+  "category": "admin_ops",
+  "nav_section": "Admin Ops",
+  "capabilities": [
+    "module-install",
+    "module-generate",
+    "package-introspect",
+    "addon-manage",
+    "registry-read",
+    "registry-write",
+    "capability-bus",
+    "nav-inject"
+  ],
+  "requires": [],
+  "entry_point": "app.py",
+  "api_base": "/addons/modules/module-system-v3/app/api",
+  "public_api": [
+    "GET /api/registry",
+    "GET /api/capabilities",
+    "GET /api/nav-sections",
+    "GET /api/discover",
+    "GET /api/installed",
+    "GET /api/packages"
+  ]
+}

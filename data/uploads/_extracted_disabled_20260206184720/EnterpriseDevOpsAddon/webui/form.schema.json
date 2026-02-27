@@ -1,0 +1,4 @@
+
+{
+  "ui:order": ["location", "resourceGroup", "adminUser", "enableSOFS", "enableDocker", "enableWSL"]
+}

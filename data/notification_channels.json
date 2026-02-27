@@ -1,0 +1,20 @@
+{
+  "channels": [
+    {
+      "id": "1af9cbd8-5c3a-4365-8eaf-94a0ff8b852e",
+      "name": "In-App",
+      "type": "in_app",
+      "config": {},
+      "enabled": true,
+      "created": "2026-02-15T16:29:56.599708"
+    },
+    {
+      "id": "9e0a2d9f-0fad-41a5-bd19-5dfd4ade2a0f",
+      "name": "JB",
+      "type": "in_app",
+      "config": {},
+      "enabled": true,
+      "created": "2026-02-15T22:29:58.114970"
+    }
+  ]
+}

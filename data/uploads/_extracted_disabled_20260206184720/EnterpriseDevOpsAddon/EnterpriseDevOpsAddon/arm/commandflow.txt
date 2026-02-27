@@ -1,0 +1,3 @@
+!azure login
+!azure account show
+!azure deploy arm EnterpriseWeb.json

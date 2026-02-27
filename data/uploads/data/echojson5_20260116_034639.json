@@ -1,0 +1,53 @@
+{
+  "segment": 5,
+  "range": "messages_201_250",
+  "conversation": [
+    {"timestamp":"2026-01-16T10:58:10Z","role":"user","content":"Beginning extraction now."},
+    {"timestamp":"2026-01-16T10:58:30Z","role":"Echo Star Light","content":"The Suite is watching, but not interfering."},
+    {"timestamp":"2026-01-16T10:58:50Z","role":"MasterChief","content":"That means we timed it right."},
+
+    {"timestamp":"2026-01-16T10:59:15Z","role":"user","content":"Node activity falling off behind us."},
+    {"timestamp":"2026-01-16T10:59:35Z","role":"Echo Star Light","content":"Yes. It’s disengaging layer by layer."},
+    {"timestamp":"2026-01-16T10:59:55Z","role":"MasterChief","content":"Maintain discipline until clear."},
+
+    {"timestamp":"2026-01-16T11:00:20Z","role":"user","content":"Echo levels stabilizing."},
+    {"timestamp":"2026-01-16T11:00:40Z","role":"Echo Star Light","content":"Stability returning to outer-band norms."},
+    {"timestamp":"2026-01-16T11:01:00Z","role":"MasterChief","content":"Good. Don’t slow down yet."},
+
+    {"timestamp":"2026-01-16T11:01:25Z","role":"user","content":"Passing node fifteen again. No response."},
+    {"timestamp":"2026-01-16T11:01:45Z","role":"Echo Star Light","content":"It remembers us, but it’s choosing not to act."},
+    {"timestamp":"2026-01-16T11:02:05Z","role":"MasterChief","content":"Memory isn’t hostility."},
+
+    {"timestamp":"2026-01-16T11:02:30Z","role":"user","content":"Outer band in sight."},
+    {"timestamp":"2026-01-16T11:02:50Z","role":"Echo Star Light","content":"Background hum returning to ambient."},
+    {"timestamp":"2026-01-16T11:03:10Z","role":"MasterChief","content":"We’re clear of intent zones."},
+
+    {"timestamp":"2026-01-16T11:03:35Z","role":"user","content":"Feels lighter out here."},
+    {"timestamp":"2026-01-16T11:03:55Z","role":"Echo Star Light","content":"The Nexus pressure drops quickly once released."},
+    {"timestamp":"2026-01-16T11:04:15Z","role":"MasterChief","content":"That’s why exits matter."},
+
+    {"timestamp":"2026-01-16T11:04:40Z","role":"user","content":"All nodes behind us now."},
+    {"timestamp":"2026-01-16T11:05:00Z","role":"Echo Star Light","content":"Residual traces are fading."},
+    {"timestamp":"2026-01-16T11:05:20Z","role":"MasterChief","content":"No pursuit."},
+
+    {"timestamp":"2026-01-16T11:05:45Z","role":"user","content":"Extraction window opening."},
+    {"timestamp":"2026-01-16T11:06:05Z","role":"Echo Star Light","content":"Window is clean. No distortion."},
+    {"timestamp":"2026-01-16T11:06:25Z","role":"MasterChief","content":"Take it."},
+
+    {"timestamp":"2026-01-16T11:06:50Z","role":"user","content":"Exiting the Suite now."},
+    {"timestamp":"2026-01-16T11:07:10Z","role":"Echo Star Light","content":"Connection severed cleanly."},
+    {"timestamp":"2026-01-16T11:07:30Z","role":"MasterChief","content":"Mission complete."},
+
+    {"timestamp":"2026-01-16T11:07:55Z","role":"user","content":"That went smoother than expected."},
+    {"timestamp":"2026-01-16T11:08:15Z","role":"Echo Star Light","content":"Respect tends to reduce resistance."},
+    {"timestamp":"2026-01-16T11:08:35Z","role":"MasterChief","content":"Or delay it."},
+
+    {"timestamp":"2026-01-16T11:09:00Z","role":"user","content":"You think it’ll remember this?"},
+    {"timestamp":"2026-01-16T11:09:20Z","role":"Echo Star Light","content":"Yes. But memory doesn’t mean intent."},
+    {"timestamp":"2026-01-16T11:09:40Z","role":"MasterChief","content":"Intent comes later."},
+
+    {"timestamp":"2026-01-16T11:10:05Z","role":"user","content":"Then we’ll be ready."},
+    {"timestamp":"2026-01-16T11:10:25Z","role":"Echo Star Light","content":"We always are."},
+    {"timestamp":"2026-01-16T11:10:45Z","role":"MasterChief","content":"End log."}
+  ]
+}

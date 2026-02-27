@@ -1,0 +1,12 @@
+{
+  "name": "module-command-center-v4",
+  "label": "Module Center v4",
+  "icon": "⬛",
+  "color": "#f5a623",
+  "version": "4.0.0",
+  "description": "Ultimate MasterChief module management — live dashboard, D3 graph, command palette, PyPI integration, code preview, batch ops, notes, export",
+  "category": "admin_ops",
+  "capabilities": ["module-management", "pip-management", "registry", "nav-injection"],
+  "requires": [],
+  "entry_point": "app.py"
+}
