@@ -44,11 +44,53 @@
                         m.top.result = parsed
                     end if
                 else
-                    m.top.result = {error: "JSON parse failed", raw: Left(resp, 200)}
+                    ' Try XML fallback (some Xtream Codes servers return XML)
+                    xmlResult = parseXmlResponse(resp)
+                    if xmlResult <> invalid
+                        m.top.result = {_arr: xmlResult, _isArray: true}
+                    else
+                        m.top.result = {error: "Parse failed", raw: Left(resp, 300)}
+                    end if
                 end if
             else
                 m.top.result = {error: "HTTP " + str(code)}
             end if
         end sub
+
+        ' Parse XML response into an array of assoc arrays.
+        ' Handles both attribute-style and child-element-style Xtream Codes XML.
+        function parseXmlResponse(s as String) as Object
+            xml = CreateObject("roXMLElement")
+            if not xml.Parse(s) then return invalid
+            children = xml.GetChildElements()
+            if children = invalid then return invalid
+
+            result = []
+            for each child in children
+                item = {}
+
+                ' attributes (e.g. <category category_id="1" category_name="News"/>)
+                attrs = child.GetAttributes()
+                if attrs <> invalid
+                    keys = attrs.Keys()
+                    for each k in keys
+                        item[k] = attrs[k]
+                    end for
+                end if
+
+                ' child element text (e.g. <category><category_id>1</category_id></category>)
+                grandChildren = child.GetChildElements()
+                if grandChildren <> invalid
+                    for each gc in grandChildren
+                        item[gc.GetName()] = gc.GetText()
+                    end for
+                end if
+
+                result.push(item)
+            end for
+
+            if result.count() = 0 then return invalid
+            return result
+        end function
     ]]></script>
 </component>

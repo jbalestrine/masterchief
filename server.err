@@ -1,0 +1,17 @@
+DEBUG: main.py is starting
+INFO:github_integration:GitHub integration initialized for user: jbalestrine
+DEBUG: About to call register_routes
+DEBUG: Registering GitHub integration routes
+DEBUG: Successfully called register_routes
+INFO:main:Forced default model set to: C:\Users\Echo\masterchief\models\mistral-7b-instruct-v0.1.Q4_K_M.gguf
+ERROR:main:Chat initialization failed
+Traceback (most recent call last):
+  File "C:\Users\Echo\masterchief\main.py", line 585, in init_chat
+    from echo.runtime import model_runtime
+ImportError: cannot import name 'model_runtime' from 'echo.runtime' (unknown location)
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8080
+ * Running on http://10.0.0.159:8080
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug:127.0.0.1 - - [26/Feb/2026 01:52:20] "[33mPOST /addons/api/create-blank HTTP/1.1[0m" 404 -

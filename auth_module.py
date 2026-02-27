@@ -214,6 +214,21 @@ class AuthModule:
             </html>
             '''
 
+        @self.app.route('/roku')
+        def roku_autologin():
+            """Auto-login endpoint for Roku TV — no credentials required."""
+            from flask_login import login_user
+            roku_user = User(
+                user_id='roku-tv',
+                username='roku',
+                email='roku@localhost',
+                provider='roku',
+                role='admin',
+                permissions=['*']
+            )
+            login_user(roku_user, remember=True)
+            return redirect('/')
+
         @self.app.route('/auth/azure/login')
         def azure_login():
             """Initiate Azure AD login"""

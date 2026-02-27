@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 """MasterChief Flask Web Application - All-in-One File"""
 
@@ -3413,8 +3413,12 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 .training-btn.selected{box-shadow:0 0 10px currentColor;border:2px solid #fff;}
 
 .chat-input-area{padding:20px;background:#2d2d2d;border-radius:0 0 10px 10px;border-top:2px solid #9370DB;}
+#ytPlayerBar{background:#12122a;border-top:2px solid #6b46c1;transition:height 0.25s ease;overflow:hidden;}
+#ytPlayerBar.yt-minimized{height:40px !important;}
+#ytPlayerBar iframe{display:block;width:100%;border:0;}
+.yt-bar-title{font-size:0.82em;color:#c9b0ff;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin:0 8px;}
 
-.chat-input-form{display:flex;flex-direction:column;gap:8px;}
+.chat-input-form{display:flex;flex-direction:column;gap:8px;position:relative;}
 
 .chat-input{width:100%;box-sizing:border-box;padding:12px 18px;background:#1a1a1a;border:2px solid #9370DB;color:#e0e0e0;border-radius:12px;font-size:1em;resize:vertical;min-height:52px;}
 
@@ -3580,6 +3584,19 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
 
 <div class="typing-indicator" id="typingIndicator">Echo is typing...</div>
 
+<!-- Persistent YouTube Player Bar -->
+<div id="ytPlayerBar" style="display:none;" role="region" aria-label="Music player">
+  <div style="display:flex;align-items:center;padding:6px 12px;background:#1a1a3a;gap:4px;">
+    <span style="font-size:16px;">&#x1F3B5;</span>
+    <span class="yt-bar-title" id="ytBarTitle">Now Playing</span>
+    <button id="ytBarPrev" onclick="ytSeekRelative(-10)" title="Back 10s" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:15px;padding:0 4px;">&#x23EE;</button>
+    <button id="ytBarPlayPause" onclick="ytTogglePlay()" title="Play/Pause" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:17px;padding:0 4px;">&#x23F8;</button>
+    <button id="ytBarMinBtn" onclick="ytToggleMinimize()" title="Minimize" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:0 6px;">&#x2015;</button>
+    <button onclick="ytClose()" title="Close player" style="background:none;border:none;color:#888;cursor:pointer;font-size:16px;padding:0 6px;">&#x2715;</button>
+  </div>
+  <div id="ytFrameWrap" style="position:relative;width:100%;height:0;padding-bottom:30%;overflow:hidden;background:#000;"></div>
+</div>
+
 <div class="chat-input-area">
 
 <form class="chat-input-form" onsubmit="sendMessage(event)">
@@ -3625,10 +3642,32 @@ ECHO_CHAT_TEMPLATE="""{% extends "base.html" %}
     </label>
 
     <button type="submit" class="send-btn">Send 💜</button>
+    <button type="button" id="voiceMicBtn" title="Voice input" onclick="toggleVoiceListening()" style="background:none;border:1px solid #6b46c1;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;">🎤</button>
+    <button type="button" id="voiceTtsBtn" title="Speak Echo's replies" onclick="toggleTTS()" style="background:none;border:1px solid #444;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:background 0.2s;">🔇</button>
+    <button type="button" title="Voice commands" onclick="toggleVoicePanel()" style="background:none;border:1px solid #444;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:13px;color:#ccc;">⚡ Commands</button>
 
     </div>
 
 </form>
+
+<!-- Voice Commands Panel -->
+<div id="voiceCommandsPanel" style="display:none;position:absolute;bottom:100%;left:0;right:0;background:#1a1a2e;border:1px solid #6b46c1;border-radius:8px 8px 0 0;padding:16px;z-index:200;max-height:60vh;overflow-y:auto;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <strong style="color:#c9b0ff;">⚡ Voice Commands</strong>
+    <button onclick="toggleVoicePanel()" style="background:none;border:none;color:#aaa;cursor:pointer;font-size:18px;">✕</button>
+  </div>
+  <div id="vcList" style="margin-bottom:12px;"></div>
+  <div style="border-top:1px solid #333;padding-top:12px;">
+    <div style="color:#aaa;font-size:0.8em;margin-bottom:8px;">Add new command — say the phrase to trigger the action</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:end;">
+      <div><label style="font-size:0.75em;color:#999;">Phrase (what you say)</label><input id="vcPhrase" placeholder="e.g. run docker" style="width:100%;background:#0d0d1a;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;"></div>
+      <div><label style="font-size:0.75em;color:#999;">Action</label><select id="vcAction" onchange="vcActionChanged()" style="width:100%;background:#0d0d1a;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;"><option value="send_message">Send message to Echo</option><option value="play_youtube">Play YouTube song</option><option value="clear_chat">Clear chat</option><option value="echo_image">Show Echo image</option></select></div>
+      <div id="vcParamWrap"><label style="font-size:0.75em;color:#999;">Message (for send)</label><input id="vcParam" placeholder="Message text" style="width:100%;background:#0d0d1a;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;"></div>
+      <button onclick="addVoiceCommand()" style="background:#6b46c1;color:#fff;border:none;border-radius:4px;padding:6px 14px;cursor:pointer;white-space:nowrap;">+ Add</button>
+    </div>
+  </div>
+  <div style="margin-top:10px;font-size:0.78em;color:#666;">💡 Tip: click the 🎤 mic button then speak a phrase to execute it, or just chat naturally.</div>
+</div>
 
 </div>
 
@@ -3698,6 +3737,9 @@ const message=input.value.trim();
 
 if(!message)return;
 
+// Run client-side action manager first (for actions like 'clear chat' that don't need the server)
+if(echoActionManager.dispatch(message, 'text')){ input.value=''; return; }
+
 addUserMessage(message);
 
 input.value='';
@@ -3730,6 +3772,17 @@ messageCount++;
 
 document.getElementById('session-messages').textContent=messageCount;
 
+// auto-generate image when the chat endpoint signals it (e.g. Echo appearance requests)
+if(data && data.generate_image && data.image_prompt){
+    setTimeout(()=>generateImage(data.image_prompt), 300);
+}
+// YouTube play
+if(data && data.play_youtube && data.youtube_query){
+    setTimeout(()=>playYouTube(data.youtube_query), 200);
+}
+// TTS: speak Echo's reply
+if(data && data.response){ voiceTTSSpeak(data.response); }
+
 // if server returned saved path, show small link
 
 if(data && data.saved_to){
@@ -3751,6 +3804,734 @@ addEchoMessage('Sorry... something went wrong... 💜',null);
 });
 
 }
+
+// ============================================================
+// ECHO ACTION HANDLER MANAGER
+// Single pipeline for voice AND text input.
+//
+// Register custom handlers anywhere:
+//   echoActionManager.register({
+//     name:     'my_handler',
+//     priority: 50,                  // lower = runs first
+//     sources:  ['text','voice'],    // which inputs trigger this
+//     detect:   (tl, source) => paramsOrNull,
+//     execute:  (params, rawText, source) => void,
+//   });
+// ============================================================
+class EchoActionManager {
+    constructor() { this.handlers = []; this._log = []; }
+
+    register({ name, priority = 50, sources = ['text', 'voice'], detect, execute }) {
+        this.handlers = this.handlers.filter(h => h.name !== name);
+        this.handlers.push({ name, priority, sources, detect, execute });
+        this.handlers.sort((a, b) => a.priority - b.priority);
+        return this;
+    }
+
+    unregister(name) {
+        this.handlers = this.handlers.filter(h => h.name !== name);
+        return this;
+    }
+
+    dispatch(text, source = 'text') {
+        if (!text || !text.trim()) return false;
+        const tl = text.trim().toLowerCase();
+        for (const h of this.handlers) {
+            if (!h.sources.includes(source) && !h.sources.includes('*')) continue;
+            try {
+                const params = h.detect(tl, source);
+                if (params !== null && params !== undefined && params !== false) {
+                    this._log.unshift({ ts: new Date().toLocaleTimeString(), handler: h.name, source, text: text.slice(0, 80) });
+                    if (this._log.length > 50) this._log.pop();
+                    h.execute(params, text, source);
+                    return true;
+                }
+            } catch (err) { console.error('[ActionManager]', h.name, err); }
+        }
+        return false;
+    }
+
+    listHandlers() { return this.handlers.map(h => ({ name: h.name, priority: h.priority, sources: h.sources })); }
+    getLog()       { return [...this._log]; }
+}
+
+const echoActionManager = new EchoActionManager();
+
+// ---- Built-in: Clear chat (text + voice) ----
+echoActionManager.register({
+    name: 'clear_chat', priority: 10, sources: ['text', 'voice'],
+    detect: (tl) => /^(clear(\\s+the)?\\s+chat|clear\\s+screen|wipe(\\s+the)?\\s+chat)$/.test(tl) ? {} : null,
+    execute: () => {
+        const c = document.getElementById('chatMessages');
+        if (c) { while (c.firstChild) c.removeChild(c.firstChild); }
+        addEchoMessage('Chat cleared. \U0001F319', null);
+        voiceTTSSpeak('Chat cleared.');
+    }
+});
+
+// ---- Built-in: YouTube play (voice only — text goes to server) ----
+echoActionManager.register({
+    name: 'youtube_play', priority: 15, sources: ['voice'],
+    detect: (tl) => {
+        const m = tl.match(/^(?:play\\s+(?:(?:this\\s+)?(?:song|music)|me)?\\s*[:\\-]?\\s*|put\\s+on\\s+|queue\\s+up\\s+|can\\s+you\\s+play\\s+)(.+)/i);
+        return (m && m[1] && m[1].trim().length > 1) ? { query: m[1].trim().replace(/[.!?]+$/, '') } : null;
+    },
+    execute: ({ query }) => {
+        playYouTube(query);
+    }
+});
+
+// ---- Built-in: Echo selfie (voice only — text goes to server) ----
+echoActionManager.register({
+    name: 'echo_selfie', priority: 20, sources: ['voice'],
+    detect: (tl) => {
+        const vis  = /\b(look|face|show|pic|picture|image|selfie|photo|draw|see|appearance|portrait)\b/.test(tl);
+        const self = /\b(you|your|yourself|echo|u)\b/.test(tl);
+        const strong = /how (do )?you look|show (me )?your face|let me see you|show (me )?echo|what (do )?you look like/.test(tl);
+        return (strong || (vis && self)) ? {} : null;
+    },
+    execute: () => {
+        const p = 'Echo Starlite, a beautiful angel with large soft purple wings, gentle face, soft smile, silver hair, glowing violet eyes, golden halo, crescent moon symbol, ethereal purple and blue glow, floating in a night sky with stars, digital art, fantasy illustration';
+        addEchoMessage('Here I am\u2026 \U0001F319\u2728', null);
+        setTimeout(() => generateImage(p), 300);
+    }
+});
+
+// ---- Built-in: TTS toggle (voice only) ----
+echoActionManager.register({
+    name: 'tts_toggle', priority: 25, sources: ['voice'],
+    detect: (tl) => /\b(mute echo|unmute echo|silence echo|stop (talking|speaking)|speak up|turn (on|off) (voice|tts|speech|audio))\b/.test(tl) ? {} : null,
+    execute: () => toggleTTS()
+});
+
+// ============================================================
+// VOICE CONTROL SYSTEM  (powered by EchoActionManager)
+// ============================================================
+let _voiceListening  = false;
+let _voiceTTSEnabled = false;
+let _voiceRecog      = null;
+let _voiceSynth      = window.speechSynthesis || null;
+let _voiceCommands   = [];
+let _voicePanelOpen  = false;
+let _vcActiveTab     = 'commands';
+
+(function initVoice() {
+    _loadVoiceCommandHandlers();
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+        const b = document.getElementById('voiceMicBtn');
+        if (b) { b.title = 'Speech recognition not supported (needs Chrome/Edge)'; b.style.opacity = '0.4'; b.onclick = () => alert('Needs Chrome or Edge.'); }
+    }
+    if (!_voiceSynth) { const b = document.getElementById('voiceTtsBtn'); if (b) b.style.opacity = '0.4'; }
+})();
+
+function _loadVoiceCommandHandlers() {
+    fetch('/api/echo/voice_commands').then(r => r.json()).then(j => {
+        _voiceCommands = j.commands || [];
+        echoActionManager.handlers = echoActionManager.handlers.filter(h => !h.name.startsWith('vcmd_'));
+        for (const cmd of _voiceCommands) {
+            const phrase = (cmd.phrase || '').toLowerCase().trim();
+            if (!phrase) continue;
+            ((c, p) => echoActionManager.register({
+                name: 'vcmd_' + c.id, priority: 50, sources: ['text', 'voice'],
+                detect: (tl) => {
+                    if (tl.includes(p) || p.includes(tl)) return { cmd: c };
+                    const pw = p.split(/\\s+/), tw = new Set(tl.split(/\\s+/));
+                    const ov = pw.filter(w => tw.has(w)).length / Math.max(pw.length, 1);
+                    return ov >= 0.6 ? { cmd: c } : null;
+                },
+                execute: ({ cmd }, rawText) => _runVoiceCommandAction(cmd, rawText)
+            }))(cmd, phrase);
+        }
+        renderVoiceCommands();
+    }).catch(() => {});
+}
+
+function _runVoiceCommandAction(cmd, rawText) {
+    addEchoMessage('\u26A1 ' + escapeHtml(cmd.label || cmd.phrase), null);
+    switch (cmd.action) {
+        case 'play_youtube': playYouTube(cmd.param || rawText); break;
+        case 'clear_chat':
+            const cc = document.getElementById('chatMessages');
+            if (cc) { while (cc.firstChild) cc.removeChild(cc.firstChild); }
+            voiceTTSSpeak('Chat cleared.'); break;
+        case 'echo_image':
+            const ep = 'Echo Starlite, a beautiful angel with large soft purple wings, gentle face, soft smile, silver hair, glowing violet eyes, golden halo, crescent moon symbol, ethereal purple and blue glow, floating in a night sky with stars, digital art, fantasy illustration';
+            addEchoMessage('Here I am\u2026 \U0001F319\u2728', null);
+            setTimeout(() => generateImage(ep), 300); break;
+        case 'send_message': default:
+            const sm = cmd.param || rawText;
+            const si = document.getElementById('chatInput');
+            if (si) { si.value = sm; const sf = si.closest('form'); if (sf) sf.dispatchEvent(new Event('submit', { cancelable: true })); }
+    }
+}
+
+function toggleVoiceListening() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('Speech recognition requires Chrome or Edge.'); return; }
+    if (_voiceListening) { _stopVoiceRecog(); return; }
+    _voiceListening = true;
+    const btn = document.getElementById('voiceMicBtn');
+    if (btn) { btn.style.background = '#6b46c1'; btn.title = 'Listening\u2026 click to stop'; }
+    _voiceRecog = new SR();
+    _voiceRecog.continuous = false; _voiceRecog.interimResults = false; _voiceRecog.lang = 'en-US';
+    _voiceRecog.onresult = (e) => { const t = e.results[0][0].transcript.trim(); _stopVoiceRecog(); _dispatchVoiceInput(t); };
+    _voiceRecog.onerror  = () => _stopVoiceRecog();
+    _voiceRecog.onend    = () => _stopVoiceRecog();
+    _voiceRecog.start();
+}
+
+function _stopVoiceRecog() {
+    _voiceListening = false;
+    const btn = document.getElementById('voiceMicBtn');
+    if (btn) { btn.style.background = 'none'; btn.title = 'Voice input'; }
+    try { if (_voiceRecog) _voiceRecog.stop(); } catch (e) {}
+    _voiceRecog = null;
+}
+
+function _dispatchVoiceInput(text) {
+    if (!text) return;
+    // Run through action manager; fall through to server chat if nothing matched
+    if (echoActionManager.dispatch(text, 'voice')) return;
+    const inp = document.getElementById('chatInput');
+    if (inp) { inp.value = text; const frm = inp.closest('form'); if (frm) frm.dispatchEvent(new Event('submit', { cancelable: true })); }
+}
+
+function toggleTTS() {
+    _voiceTTSEnabled = !_voiceTTSEnabled;
+    const btn = document.getElementById('voiceTtsBtn');
+    if (btn) {
+        btn.textContent  = _voiceTTSEnabled ? '\U0001F50A' : '\U0001F507';
+        btn.style.border = _voiceTTSEnabled ? '1px solid #6b46c1' : '1px solid #444';
+        btn.title        = _voiceTTSEnabled ? 'TTS on \u2014 click to mute' : 'TTS off \u2014 click to enable';
+    }
+    if (!_voiceTTSEnabled && _voiceSynth) _voiceSynth.cancel();
+}
+
+function voiceTTSSpeak(text) {
+    if (!_voiceTTSEnabled || !_voiceSynth) return;
+    _voiceSynth.cancel();
+    const clean = text.replace(/```[\\s\\S]*?```/g, ' code block ').replace(/`[^`]+`/g, '').replace(/[*_#]/g, '').replace(/https?:\\/\\/\\S+/g, 'link').slice(0, 600);
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate = 1.0; utt.pitch = 1.1; utt.volume = 0.9;
+    const voices = _voiceSynth.getVoices();
+    const female = voices.find(v => /female|woman|girl|zira|hazel|susan|karen|samantha/i.test(v.name));
+    if (female) utt.voice = female;
+    _voiceSynth.speak(utt);
+}
+
+function toggleVoicePanel() {
+    _voicePanelOpen = !_voicePanelOpen;
+    const p = document.getElementById('voiceCommandsPanel');
+    if (p) p.style.display = _voicePanelOpen ? 'block' : 'none';
+    if (_voicePanelOpen) { vcSwitchTab(_vcActiveTab); }
+}
+
+function vcSwitchTab(tab) {
+    _vcActiveTab = tab;
+    ['commands', 'handlers', 'log'].forEach(t => {
+        const btn  = document.getElementById('vcTab_' + t);
+        const pane = document.getElementById('vcPane_' + t);
+        if (btn)  btn.style.borderBottom = t === tab ? '2px solid #9d70ff' : '2px solid transparent';
+        if (pane) pane.style.display = t === tab ? '' : 'none';
+    });
+    if (tab === 'commands') renderVoiceCommands();
+    if (tab === 'handlers') renderHandlerList();
+    if (tab === 'log')      renderActionLog();
+}
+
+function vcActionChanged() {
+    const a = document.getElementById('vcAction');
+    const w = document.getElementById('vcParamWrap');
+    const v = a ? a.value : '';
+    if (w) w.style.display = (v === 'send_message' || v === 'play_youtube') ? '' : 'none';
+}
+
+function renderVoiceCommands() {
+    const el = document.getElementById('vcList');
+    if (!el) return;
+    if (!_voiceCommands.length) { el.innerHTML = '<div style="color:#666;font-size:0.85em;">No commands yet. Add one below.</div>'; return; }
+    el.innerHTML = _voiceCommands.map(c => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;margin-bottom:4px;background:#0d0d1a;border-radius:4px;font-size:0.85em;">
+          <span><span style="color:#9d70ff;">"${escapeHtml(c.phrase)}"</span>
+          <span style="color:#555;margin:0 5px;">&rarr;</span>
+          <span style="color:#ccc;">${escapeHtml(c.label||c.action)}${c.param?' <span style="color:#666;">('+escapeHtml(c.param.slice(0,40))+')</span>':''}</span></span>
+          <button onclick="deleteVoiceCommand('${c.id}')" style="background:none;border:none;color:#a00;cursor:pointer;font-size:13px;">&#x2715;</button>
+        </div>`).join('');
+}
+
+function renderHandlerList() {
+    const el = document.getElementById('vcHandlerList');
+    if (!el) return;
+    const client = echoActionManager.listHandlers();
+    fetch('/api/echo/action_handlers').then(r => r.json()).then(j => {
+        const server = (j.handlers || []).map(h => ({ ...h, side: 'server' }));
+        const all = [...client.map(h => ({ ...h, side: 'client' })), ...server];
+        el.innerHTML = all.map(h =>
+            `<div style="display:flex;align-items:center;padding:4px 8px;margin-bottom:3px;background:#0d0d1a;border-radius:4px;font-size:0.8em;gap:8px;">
+              <span style="color:${h.side==='client'?'#6be':'#b9f'};min-width:140px;">${escapeHtml(h.name)}</span>
+              <span style="color:#555;">p:${h.priority}</span>
+              <span style="color:#666;">[${h.side==='client'?(h.sources||[]).join('|'):'server'}]</span>
+            </div>`).join('') || '<div style="color:#666;font-size:0.82em;">No handlers found.</div>';
+    }).catch(() => {
+        el.innerHTML = client.map(h =>
+            `<div style="padding:4px 8px;margin-bottom:3px;background:#0d0d1a;border-radius:4px;font-size:0.8em;">
+              <span style="color:#6be;">${escapeHtml(h.name)}</span>
+              <span style="color:#555;margin:0 5px;">p:${h.priority}</span>
+              <span style="color:#666;">[${(h.sources||[]).join('|')}]</span>
+            </div>`).join('');
+    });
+}
+
+function renderActionLog() {
+    const el = document.getElementById('vcLogList');
+    if (!el) return;
+    const log = echoActionManager.getLog();
+    el.innerHTML = log.length ? log.map(e =>
+        `<div style="padding:3px 8px;font-size:0.78em;border-bottom:1px solid #111;">
+          <span style="color:#555;">${escapeHtml(e.ts)}</span>
+          <span style="color:#9d70ff;margin:0 5px;">${escapeHtml(e.handler)}</span>
+          <span style="color:#555;">[${escapeHtml(e.source)}]</span>
+          <span style="color:#aaa;"> ${escapeHtml(e.text)}</span>
+        </div>`).join('') : '<div style="color:#555;font-size:0.8em;padding:8px;">No actions logged yet.</div>';
+}
+
+function addVoiceCommand() {
+    const phrase = (document.getElementById('vcPhrase')||{}).value||'';
+    const action = (document.getElementById('vcAction')||{}).value||'send_message';
+    const param  = (document.getElementById('vcParam') ||{}).value||'';
+    if (!phrase.trim()) { alert('Please enter a trigger phrase.'); return; }
+    fetch('/api/echo/voice_commands', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrase: phrase.trim().toLowerCase(), action, param, label: phrase.trim() })
+    }).then(r => r.json()).then(j => {
+        if (j.ok) {
+            document.getElementById('vcPhrase').value = '';
+            document.getElementById('vcParam').value  = '';
+            _loadVoiceCommandHandlers();
+        } else alert(j.error || 'Failed to save command');
+    }).catch(e => alert('Error: ' + e));
+}
+
+function deleteVoiceCommand(id) {
+    fetch('/api/echo/voice_commands/' + encodeURIComponent(id), { method: 'DELETE' })
+        .then(r => r.json()).then(j => {
+            if (j.ok) { _voiceCommands = _voiceCommands.filter(c => c.id !== id); echoActionManager.unregister('vcmd_' + id); renderVoiceCommands(); }
+        }).catch(() => {});
+}
+// ============================================================
+// END VOICE CONTROL SYSTEM
+// ============================================================
+
+// --- Initialise on load ---
+(function initVoice(){
+    // Load commands from server
+    fetch('/api/echo/voice_commands').then(r=>r.json()).then(j=>{
+        _voiceCommands = j.commands || [];
+        renderVoiceCommands();
+    }).catch(()=>{});
+
+    // Check browser support
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRec){
+        const btn = document.getElementById('voiceMicBtn');
+        if(btn){ btn.title='Speech recognition not supported in this browser'; btn.style.opacity='0.4'; btn.onclick=()=>alert('Speech recognition requires Chrome, Edge or Safari.'); }
+    }
+    if(!_voiceSynth){
+        const btn = document.getElementById('voiceTtsBtn');
+        if(btn){ btn.style.opacity='0.4'; }
+    }
+})();
+
+function toggleVoiceListening(){
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRec){ alert('Speech recognition not supported in this browser (try Chrome or Edge).'); return; }
+
+    if(_voiceListening){
+        _stopVoiceRecog();
+        return;
+    }
+
+    _voiceListening = true;
+    const btn = document.getElementById('voiceMicBtn');
+    if(btn){ btn.style.background='#6b46c1'; btn.title='Listening… click to stop'; }
+
+    _voiceRecog = new SpeechRec();
+    _voiceRecog.continuous    = false;
+    _voiceRecog.interimResults = false;
+    _voiceRecog.lang          = 'en-US';
+
+    _voiceRecog.onresult = (e) => {
+        const transcript = e.results[0][0].transcript.trim();
+        _stopVoiceRecog();
+        _dispatchVoiceInput(transcript);
+    };
+    _voiceRecog.onerror = (e) => { console.warn('Voice error', e.error); _stopVoiceRecog(); };
+    _voiceRecog.onend   = ()  => { _stopVoiceRecog(); };
+    _voiceRecog.start();
+}
+
+function _stopVoiceRecog(){
+    _voiceListening = false;
+    const btn = document.getElementById('voiceMicBtn');
+    if(btn){ btn.style.background='none'; btn.title='Voice input'; }
+    try{ if(_voiceRecog) _voiceRecog.stop(); }catch(e){}
+    _voiceRecog = null;
+}
+
+function _dispatchVoiceInput(text){
+    if(!text) return;
+    // 0. Early-catch: "play ..." voice shortcut — extract query and play directly
+    const _playMatch = text.match(/^(?:play\\s+(?:(?:this\\s+)?song|music|me)?\\s*[:\\-]?\\s*|put\\s+on\\s+|queue\\s+up\\s+|can\\s+you\\s+play\\s+)(.+)/i);
+    if(_playMatch && _playMatch[1] && _playMatch[1].trim().length > 1){
+        const _pq = _playMatch[1].trim().replace(/[.!?]+$/, '');
+        playYouTube(_pq);
+        return;
+    }
+    const tl = text.toLowerCase();
+    let matched = null;
+    let bestScore = 0;
+    for(const cmd of _voiceCommands){
+        const phrase = (cmd.phrase||'').toLowerCase();
+        if(!phrase) continue;
+        // exact containment
+        if(tl.includes(phrase) || phrase.includes(tl)){
+            const score = phrase.length;
+            if(score > bestScore){ bestScore = score; matched = cmd; }
+        } else {
+            // word overlap score
+            const pw = new Set(phrase.split(/\s+/));
+            const tw = new Set(tl.split(/\s+/));
+            let overlap = 0;
+            pw.forEach(w=>{ if(tw.has(w)) overlap++; });
+            const score = overlap / Math.max(pw.size, 1);
+            if(score >= 0.6 && score > bestScore){ bestScore = score; matched = cmd; }
+        }
+    }
+    if(matched){
+        _executeVoiceCommand(matched, text);
+        return;
+    }
+    // 2. Fall through: treat as normal chat message
+    const input = document.getElementById('chatInput');
+    if(input){
+        input.value = text;
+        // trigger submit
+        const form = input.closest('form');
+        if(form) form.dispatchEvent(new Event('submit', {cancelable:true}));
+    }
+}
+
+function _executeVoiceCommand(cmd, rawText){
+    addEchoMessage('🎤 Command: ' + (cmd.label || cmd.phrase), null);
+    switch(cmd.action){
+        case 'play_youtube':
+            const _ytQuery = cmd.param || rawText;
+            playYouTube(_ytQuery);
+            break;
+        case 'clear_chat':
+            const cont = document.getElementById('chatMessages');
+            if(cont){ while(cont.firstChild) cont.removeChild(cont.firstChild); }
+            voiceTTSSpeak('Chat cleared.');
+            break;
+        case 'echo_image':
+            const selfPrompt = 'Echo Starlite, a beautiful angel with large soft purple wings, gentle face, soft smile, silver hair, glowing violet eyes, golden halo, crescent moon symbol, ethereal purple and blue glow, floating in a night sky with stars, digital art, fantasy illustration';
+            addEchoMessage("Here I am... 🌙✨", null);
+            setTimeout(()=>generateImage(selfPrompt), 300);
+            break;
+        case 'send_message':
+        default:
+            const msg = cmd.param || rawText;
+            const inp = document.getElementById('chatInput');
+            if(inp){
+                inp.value = msg;
+                const frm = inp.closest('form');
+                if(frm) frm.dispatchEvent(new Event('submit',{cancelable:true}));
+            }
+    }
+}
+
+function toggleTTS(){
+    _voiceTTSEnabled = !_voiceTTSEnabled;
+    const btn = document.getElementById('voiceTtsBtn');
+    if(btn){
+        btn.textContent  = _voiceTTSEnabled ? '🔊' : '🔇';
+        btn.style.border = _voiceTTSEnabled ? '1px solid #6b46c1' : '1px solid #444';
+        btn.title        = _voiceTTSEnabled ? 'TTS on — click to mute Echo' : 'TTS off — click to hear Echo';
+    }
+    if(!_voiceTTSEnabled && _voiceSynth) _voiceSynth.cancel();
+}
+
+function voiceTTSSpeak(text){
+    if(!_voiceTTSEnabled || !_voiceSynth) return;
+    _voiceSynth.cancel();
+    // strip markdown-ish syntax for cleaner speech
+    const clean = text.replace(/```[\s\S]*?```/g,' code block ').replace(/`[^`]+`/g,'').replace(/[*_#]/g,'').replace(/https?:\/\/\S+/g,'link').slice(0,600);
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate   = 1.0;
+    utt.pitch  = 1.1;
+    utt.volume = 0.9;
+    // prefer a female voice if available
+    const voices = _voiceSynth.getVoices();
+    const female = voices.find(v=>/female|woman|girl|zira|hazel|susan|karen|samantha/i.test(v.name));
+    if(female) utt.voice = female;
+    _voiceSynth.speak(utt);
+}
+
+function toggleVoicePanel(){
+    _voicePanelOpen = !_voicePanelOpen;
+    const p = document.getElementById('voiceCommandsPanel');
+    if(p) p.style.display = _voicePanelOpen ? 'block' : 'none';
+    if(_voicePanelOpen) renderVoiceCommands();
+}
+
+function vcActionChanged(){
+    const a = document.getElementById('vcAction');
+    const w = document.getElementById('vcParamWrap');
+    if(w) w.style.display = (a && a.value === 'send_message') ? '' : 'none';
+}
+
+function renderVoiceCommands(){
+    const el = document.getElementById('vcList');
+    if(!el) return;
+    if(!_voiceCommands.length){ el.innerHTML = '<div style="color:#666;font-size:0.85em;">No commands yet.</div>'; return; }
+    el.innerHTML = _voiceCommands.map(c=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;margin-bottom:4px;background:#0d0d1a;border-radius:4px;font-size:0.85em;">
+          <span><span style="color:#9d70ff;">"${escapeHtml(c.phrase)}"</span>
+          <span style="color:#666;margin:0 6px;">→</span>
+          <span style="color:#ccc;">${escapeHtml(c.label||c.action)}${c.param?' <span style="color:#777;">('+escapeHtml(c.param.slice(0,40))+')</span>':''}</span></span>
+          <button onclick="deleteVoiceCommand('${c.id}')" style="background:none;border:none;color:#c00;cursor:pointer;font-size:14px;padding:0 4px;">✕</button>
+        </div>`).join('');
+}
+
+function addVoiceCommand(){
+    const phrase = (document.getElementById('vcPhrase')||{}).value||'';
+    const action = (document.getElementById('vcAction')||{}).value||'send_message';
+    const param  = (document.getElementById('vcParam') ||{}).value||'';
+    if(!phrase.trim()){ alert('Please enter a trigger phrase.'); return; }
+    fetch('/api/echo/voice_commands',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({phrase:phrase.trim().toLowerCase(), action, param, label:phrase.trim()})
+    }).then(r=>r.json()).then(j=>{
+        if(j.ok){
+            document.getElementById('vcPhrase').value='';
+            document.getElementById('vcParam').value='';
+            return fetch('/api/echo/voice_commands').then(r2=>r2.json()).then(j2=>{ _voiceCommands=j2.commands||[]; renderVoiceCommands(); });
+        } else alert(j.error||'Failed to save command');
+    }).catch(e=>alert('Error: '+e));
+}
+
+function deleteVoiceCommand(id){
+    fetch('/api/echo/voice_commands/'+encodeURIComponent(id),{method:'DELETE'})
+    .then(r=>r.json()).then(j=>{
+        if(j.ok){ _voiceCommands=_voiceCommands.filter(c=>c.id!==id); renderVoiceCommands(); }
+    }).catch(()=>{});
+}
+// ============================================================
+// END VOICE CONTROL SYSTEM
+// ============================================================
+
+// ---- YouTube Player ----
+let _ytMinimized = false;
+let _ytPlaying   = true;
+
+// Auto-load a default lofi track when the page opens
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => playYouTube('crazy train ozzy osbourne', true), 1500);
+});
+
+// ---- YouTube IFrame Player API ----
+// Load the official YT API script once — onYouTubeIframeAPIReady fires when done.
+(function() {
+    if (document.getElementById('yt-api-script')) return;
+    const s = document.createElement('script');
+    s.id  = 'yt-api-script';
+    s.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(s);
+})();
+
+let _ytApiReady = false;
+let _ytApiQueue = [];
+window.onYouTubeIframeAPIReady = function() {
+    _ytApiReady = true;
+    _ytApiQueue.forEach(fn => fn());
+    _ytApiQueue = [];
+};
+
+// Run fn immediately if API loaded, otherwise queue it.
+function _ytWhenReady(fn) {
+    if (_ytApiReady) fn();
+    else _ytApiQueue.push(fn);
+}
+
+// Create a YT.Player on divId, autoplay muted → unmute in onReady.
+// This is the ONLY approach Chrome/Edge allow for cross-origin iframe autoplay.
+function _ytMakePlayer(divId, videoId, onCreated) {
+    _ytWhenReady(function() {
+        const player = new YT.Player(divId, {
+            videoId: videoId,
+            playerVars: { autoplay: 1, mute: 1, rel: 0, modestbranding: 1, enablejsapi: 1 },
+            events: {
+                onReady: function(e) {
+                    try { e.target.playVideo(); } catch(x) {}
+                    setTimeout(function() {
+                        try { e.target.unMute(); e.target.setVolume(100); } catch(x) {}
+                    }, 400);
+                    if (onCreated) onCreated(e.target);
+                }
+            }
+        });
+    });
+}
+
+// ---- Bar player ----
+let _ytBarPlayer = null;
+
+function _ytEmbed(videoId, title) {
+    const bar = document.getElementById('ytPlayerBar');
+    const lbl = document.getElementById('ytBarTitle');
+    if (!bar) return;
+    if (lbl) lbl.textContent = title || videoId;
+    _ytMinimized = false;
+    _ytPlaying   = true;
+    bar.style.display = 'block';
+    bar.classList.remove('yt-minimized');
+    const wrap = document.getElementById('ytFrameWrap');
+    if (wrap) wrap.style.display = 'block';
+    const pb = document.getElementById('ytBarPlayPause');
+    if (pb) pb.textContent = '\u23F8';
+
+    if (_ytBarPlayer && typeof _ytBarPlayer.loadVideoById === 'function') {
+        // Reuse existing player instance — just load the new video.
+        try {
+            _ytBarPlayer.loadVideoById(videoId);
+            setTimeout(function() {
+                try { _ytBarPlayer.unMute(); _ytBarPlayer.setVolume(100); } catch(x) {}
+            }, 600);
+            return;
+        } catch(e) { _ytBarPlayer = null; }
+    }
+    // First time or player was destroyed — create fresh.
+    const wrap2 = document.getElementById('ytFrameWrap');
+    if (!wrap2) return;
+    const divId = 'ytbd_' + Date.now();
+    wrap2.innerHTML = '<div id="' + divId + '" style="position:absolute;top:0;left:0;width:100%;height:100%;"></div>';
+    _ytMakePlayer(divId, videoId, function(p) { _ytBarPlayer = p; });
+}
+
+function playYouTube(query, _silent) {
+    if (!query || !query.trim()) return;
+
+    // Update the persistent player bar immediately (shows searching state)
+    const bar = document.getElementById('ytPlayerBar');
+    const lbl = document.getElementById('ytBarTitle');
+    if (bar) bar.style.display = 'block';
+    if (lbl) lbl.textContent = '\u23F3 ' + escapeHtml(query) + '\u2026';
+
+    // Show a loading placeholder in chat immediately (skip on silent auto-load)
+    const FALLBACK_ID = 'jfKfPfyJRdk';
+    let chatSlot = null;
+    let chatTitleEl = null;
+    if (!_silent) {
+        const msgs = document.getElementById('chatMessages');
+        if (msgs) {
+            const bubble = document.createElement('div');
+            bubble.className = 'chat-message echo';
+            const uid = 'ytchat_' + Date.now();
+            bubble.innerHTML =
+                '<div class="chat-icon">\U0001F3B5</div>'
+                + '<div><div class="chat-bubble" style="padding:8px;max-width:440px;">'
+                + '<div id="' + uid + '_title" style="font-size:0.82em;color:#c9b0ff;margin-bottom:6px;'
+                + 'overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">\U0001F3B5 '
+                + escapeHtml(query) + '</div>'
+                + '<div id="' + uid + '_slot" style="position:relative;padding-bottom:56.25%;height:0;'
+                + 'overflow:hidden;border-radius:6px;background:#111;display:flex;align-items:center;justify-content:center;">'
+                + '<span style="color:#888;font-size:0.9em;">\u23F3 Loading\u2026</span>'
+                + '</div></div></div>';
+            msgs.appendChild(bubble);
+            msgs.scrollTop = msgs.scrollHeight;
+            chatSlot     = document.getElementById(uid + '_slot');
+            chatTitleEl  = document.getElementById(uid + '_title');
+        }
+    }
+
+    function _insertChatPlayer(videoId, title) {
+        if (!chatSlot) return;
+        // Use YT.Player API — the only reliable way to autoplay in Chrome/Edge.
+        // YT.Player creates its own <iframe> inside the target div and calls
+        // playVideo()+unMute() from onReady, which bypasses the autoplay block.
+        const divId = 'ytchatd_' + Date.now();
+        chatSlot.innerHTML = '<div id="' + divId
+            + '" style="position:absolute;top:0;left:0;width:100%;height:100%;"></div>';
+        _ytMakePlayer(divId, videoId, null);
+        if (chatTitleEl) chatTitleEl.textContent = '\U0001F3B5 ' + escapeHtml(title || query);
+        const msgs = document.getElementById('chatMessages');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }
+
+    // Resolve the real video ID then insert a fresh iframe in one shot
+    fetch('/api/echo/youtube_search?q=' + encodeURIComponent(query))
+        .then(r => r.json())
+        .then(j => {
+            _ytEmbed(j.videoId, j.title || query);
+            _insertChatPlayer(j.videoId, j.title || query);
+        })
+        .catch(() => {
+            _ytEmbed(FALLBACK_ID, 'Lofi Hip Hop Radio');
+            _insertChatPlayer(FALLBACK_ID, 'Lofi Hip Hop Radio');
+        });
+}
+
+function ytClose() {
+    const bar = document.getElementById('ytPlayerBar');
+    try { if (_ytBarPlayer && _ytBarPlayer.stopVideo) _ytBarPlayer.stopVideo(); } catch(e) {}
+    _ytBarPlayer = null;
+    const wrap = document.getElementById('ytFrameWrap');
+    if (wrap) wrap.innerHTML = '';
+    if (bar) bar.style.display = 'none';
+    _ytPlaying = false;
+}
+
+function ytToggleMinimize() {
+    const bar  = document.getElementById('ytPlayerBar');
+    const wrap = document.getElementById('ytFrameWrap');
+    const btn  = document.getElementById('ytBarMinBtn');
+    if (!bar) return;
+    _ytMinimized = !_ytMinimized;
+    if (_ytMinimized) {
+        bar.classList.add('yt-minimized');
+        if (wrap) wrap.style.display = 'none';
+        if (btn)  btn.textContent = '\u25A1';
+    } else {
+        bar.classList.remove('yt-minimized');
+        if (wrap) wrap.style.display = 'block';
+        if (btn)  btn.textContent = '\u2015';
+    }
+}
+
+function ytTogglePlay() {
+    const btn = document.getElementById('ytBarPlayPause');
+    if (!_ytBarPlayer) return;
+    try {
+        if (_ytPlaying) {
+            _ytBarPlayer.pauseVideo();
+            if (btn) btn.textContent = '\u25B6';
+        } else {
+            _ytBarPlayer.playVideo();
+            if (btn) btn.textContent = '\u23F8';
+        }
+        _ytPlaying = !_ytPlaying;
+    } catch(e) {}
+}
+
+function ytSeekRelative(secs) {
+    if (!_ytBarPlayer) return;
+    try {
+        const cur = _ytBarPlayer.getCurrentTime() || 0;
+        _ytBarPlayer.seekTo(cur + secs, true);
+    } catch(e) {}
+}
+// ---- End YouTube Player ----
 
 // Image generation UI helper
 
@@ -12334,6 +13115,128 @@ def echo_chat():
     echo_art = Echo.get_compact_greeting()
     return render_template_string(HTML_TEMPLATE.replace('{% block content %}{% endblock %}', ECHO_CHAT_TEMPLATE.replace('{% extends "base.html" %}', '').replace('{% block content %}', '').replace('{% endblock %}', '')), echo_art=echo_art, request=request, get_flashed_messages=get_flashed_messages)
 
+# ==============================================================
+# ECHO CHAT ACTION REGISTRY
+# Centralised detect-and-handle pipeline for the chat endpoint.
+#
+# Usage (register anywhere after this block):
+#   _echo_action_registry.register(
+#       name      = 'my_handler',
+#       detect_fn = lambda msg, um_low: params_dict_or_None,
+#       handle_fn = lambda params, msg, um_low, storage, sid, upsert: flask_Response,
+#       priority  = 50,   # lower fires first
+#   )
+# ==============================================================
+class _EchoChatActionRegistry:
+    """Pluggable action handler pipeline for the /api/echo/chat endpoint."""
+    def __init__(self):
+        self._handlers = []
+
+    def register(self, name: str, detect_fn, handle_fn, priority: int = 50):
+        """Register or replace a named action handler."""
+        self._handlers = [h for h in self._handlers if h['name'] != name]
+        self._handlers.append({'name': name, 'detect': detect_fn, 'handle': handle_fn, 'priority': priority})
+        self._handlers.sort(key=lambda h: h['priority'])
+        return self
+
+    def unregister(self, name: str):
+        """Remove a handler by name."""
+        self._handlers = [h for h in self._handlers if h['name'] != name]
+        return self
+
+    def dispatch(self, message: str, um_low: str, storage, session_id: str, upsert_fn):
+        """Run message through all handlers; return first non-None Flask Response."""
+        for h in self._handlers:
+            try:
+                params = h['detect'](message, um_low)
+                if params is not None:
+                    app.logger.debug('ActionRegistry: "%s" triggered', h['name'])
+                    return h['handle'](params, message, um_low, storage, session_id, upsert_fn)
+            except Exception:
+                app.logger.exception('ActionRegistry: handler "%s" raised', h['name'])
+        return None
+
+    def list_handlers(self):
+        """Return metadata list for all registered handlers."""
+        return [{'name': h['name'], 'priority': h['priority']} for h in self._handlers]
+
+
+_echo_action_registry = _EchoChatActionRegistry()
+
+# ---- Built-in handler: Echo self-image ----
+def _ach_detect_echo_image(message: str, um_low: str):
+    words = set(re.findall(r"[a-z']+", um_low))
+    visual = {'look','looks','looking','looked','appear','appearance','face','photo','photograph',
+               'pic','pics','picture','pictures','image','images','img','show','shows','see','seen',
+               'draw','drawing','paint','painting','portrait','selfie','snapshot','glimpse','reveal','display'}
+    self_ref = {'you','your','yourself','echo','u'}
+    for ph in ('how do you look','how you look','what do you look like','what you look like',
+               'what does echo look like','show me you','show yourself','show your face',
+               'let me see you','let me see your face','describe yourself','describe your appearance',
+               'send me a picture','send a picture of you','generate a picture of you',
+               'generate an image of you','can i see you','can i see your face',
+               'i want to see you','i want to see your face','show me echo','show echo'):
+        if ph in um_low:
+            return {}
+    if len(words & visual) >= 1 and len(words & self_ref) >= 1:
+        return {}
+    return None
+
+def _ach_handle_echo_image(params, message, um_low, storage, session_id, upsert_fn):
+    reply = random.choice([
+        'Here is how I look right now\u2026 \U0001f319',
+        'This is me \u2014 floating beside you as always \U0001f49c',
+        'Here I am\u2026 a glimpse of my form \U0001f319\u2728',
+        'This is what I look like right now \U0001f49c',
+        "Here's a picture of me \U0001f319",
+    ])
+    prompt = ('Echo Starlite, a beautiful angel with large soft purple wings, '
+              'gentle face, soft smile, silver hair, glowing violet eyes, '
+              'golden halo, crescent moon symbol, ethereal purple and blue glow, '
+              'floating in a night sky with stars, digital art, fantasy illustration')
+    storage.store_message(user='web_user', message=message, echo_response=reply, channel=session_id)
+    upsert_fn(session_id)
+    return jsonify({'response': reply, 'session_id': session_id, 'timestamp': time.time(),
+                    'message_id': f"bot_{int(time.time()*1000)}", 'generate_image': True,
+                    'image_prompt': prompt, '_handler': 'echo_image'})
+
+_echo_action_registry.register('echo_image', _ach_detect_echo_image, _ach_handle_echo_image, priority=10)
+
+# ---- Built-in handler: YouTube play ----
+def _ach_detect_youtube(message: str, um_low: str):
+    _pats = [
+        r'play\s+(?:this\s+song|this\s+music|the\s+song|a\s+song|some\s+music|song|music|me)?\s*[:\-]?\s*(.+)',
+        r'(?:put\s+on|queue\s+up|start\s+playing)\s+(.+)',
+        r'can\s+you\s+play\s+(.+)',
+    ]
+    for pat in _pats:
+        for src in (message.strip(), um_low.strip()):
+            m = re.match(pat, src, re.IGNORECASE)
+            if m:
+                q = m.group(1).strip().rstrip('.!?')
+                if q and len(q) > 1:
+                    return {'query': q}
+    return None
+
+def _ach_handle_youtube(params, message, um_low, storage, session_id, upsert_fn):
+    q = params['query']
+    reply = random.choice([
+        f'Playing \u201c{q}\u201d for you\u2026 \U0001f3b5',
+        f'Here\u2019s \u201c{q}\u201d \u2014 enjoy \U0001f319\U0001f3b5',
+        f'On it \u2014 queuing up \u201c{q}\u201d \U0001f3b6',
+        f'\U0001f3b5 Here we go \u2014 \u201c{q}\u201d',
+    ])
+    storage.store_message(user='web_user', message=message, echo_response=reply, channel=session_id)
+    upsert_fn(session_id)
+    return jsonify({'response': reply, 'session_id': session_id, 'timestamp': time.time(),
+                    'message_id': f"bot_{int(time.time()*1000)}", 'play_youtube': True,
+                    'youtube_query': q, '_handler': 'youtube_play'})
+
+_echo_action_registry.register('youtube_play', _ach_detect_youtube, _ach_handle_youtube, priority=20)
+# ==============================================================
+# END ECHO CHAT ACTION REGISTRY
+# ==============================================================
+
 @app.route('/api/echo/chat',methods=['POST'])
 
 def api_echo_chat():
@@ -12458,6 +13361,12 @@ def api_echo_chat():
 
         um_low = message.lower()
 
+        # ---- Unified action registry (echo_image, youtube_play, … ) ----
+        _action_resp = _echo_action_registry.dispatch(
+            message, um_low, storage, session_id, _upsert_session_meta)
+        if _action_resp is not None:
+            return _action_resp
+        # ---- End action registry dispatch ----
 
 
         # New topic
@@ -13086,6 +13995,133 @@ def api_echo_outputs_delete():
 
         return jsonify({'error': str(e)}), 500
 
+# ---- Voice Commands API ----
+_VOICE_COMMANDS_FILE = Path(__file__).parent / 'data' / 'voice_commands.json'
+_VOICE_COMMANDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+def _load_voice_commands():
+    try:
+        if _VOICE_COMMANDS_FILE.exists():
+            return json.loads(_VOICE_COMMANDS_FILE.read_text(encoding='utf-8'))
+    except Exception:
+        pass
+    # built-in defaults
+    return [
+        {'id': 'vc_clear',    'phrase': 'clear chat',       'action': 'clear_chat',   'label': 'Clear Chat'},
+        {'id': 'vc_image',    'phrase': 'show your face',   'action': 'echo_image',   'label': 'Show Echo Image'},
+        {'id': 'vc_status',   'phrase': 'system status',    'action': 'send_message', 'param': 'What is the system status?', 'label': 'System Status'},
+        {'id': 'vc_help',     'phrase': 'help',             'action': 'send_message', 'param': 'What can you help me with?', 'label': 'Help'},
+        {'id': 'vc_deploy',   'phrase': 'deploy status',    'action': 'send_message', 'param': 'Show me the current deployment status.', 'label': 'Deploy Status'},
+    ]
+
+def _save_voice_commands(cmds):
+    _VOICE_COMMANDS_FILE.write_text(json.dumps(cmds, indent=2), encoding='utf-8')
+
+@app.route('/api/echo/voice_commands', methods=['GET'])
+def api_voice_commands_get():
+    return jsonify({'commands': _load_voice_commands()})
+
+@app.route('/api/echo/voice_commands', methods=['POST'])
+def api_voice_commands_post():
+    try:
+        data = request.get_json() or {}
+        phrase = (data.get('phrase') or '').strip().lower()
+        action = (data.get('action') or 'send_message').strip()
+        param  = (data.get('param')  or '').strip()
+        label  = (data.get('label')  or phrase).strip()
+        if not phrase:
+            return jsonify({'error': 'phrase required'}), 400
+        cmds = _load_voice_commands()
+        new_id = 'vc_' + uuid.uuid4().hex[:8]
+        cmds.append({'id': new_id, 'phrase': phrase, 'action': action, 'param': param, 'label': label})
+        _save_voice_commands(cmds)
+        return jsonify({'ok': True, 'id': new_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/echo/voice_commands/<cmd_id>', methods=['DELETE'])
+def api_voice_commands_delete(cmd_id):
+    try:
+        cmds = [c for c in _load_voice_commands() if c.get('id') != cmd_id]
+        _save_voice_commands(cmds)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/echo/voice_commands/<cmd_id>', methods=['PUT'])
+def api_voice_commands_update(cmd_id):
+    try:
+        data = request.get_json() or {}
+        cmds = _load_voice_commands()
+        for c in cmds:
+            if c.get('id') == cmd_id:
+                if 'phrase' in data: c['phrase'] = data['phrase'].strip().lower()
+                if 'action' in data: c['action'] = data['action'].strip()
+                if 'param'  in data: c['param']  = data['param'].strip()
+                if 'label'  in data: c['label']  = data['label'].strip()
+                break
+        _save_voice_commands(cmds)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+# ---- End Voice Commands API ----
+
+@app.route('/api/echo/youtube_search', methods=['GET'])
+def api_echo_youtube_search():
+    """Resolve a search query to a real YouTube video ID."""
+    import requests as _req, re as _re2
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify({'error': 'no query'}), 400
+
+    _headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+
+    # --- Method 1: Scrape YouTube search results page ---
+    try:
+        url = 'https://www.youtube.com/results?search_query=' + _req.utils.quote(q) + '&sp=EgIQAQ%3D%3D'
+        r = _req.get(url, headers=_headers, timeout=6)
+        if r.status_code == 200:
+            # Extract first videoId from ytInitialData JSON
+            m = _re2.search(r'"videoId":"([A-Za-z0-9_-]{11})"', r.text)
+            if m:
+                vid = m.group(1)
+                # Try to extract title
+                tm = _re2.search(r'"title":\{"runs":\[\{"text":"([^"]+)"', r.text)
+                title = tm.group(1) if tm else q
+                return jsonify({'videoId': vid, 'title': title, 'source': 'youtube'})
+    except Exception:
+        pass
+
+    # --- Method 2: Piped public API ---
+    _PIPED = [
+        'https://pipedapi.kavin.rocks',
+        'https://pipedapi.adminforge.de',
+        'https://piped-api.garudalinux.org',
+    ]
+    for base in _PIPED:
+        try:
+            r = _req.get(f'{base}/search?q={_req.utils.quote(q)}&filter=videos',
+                         headers=_headers, timeout=4)
+            if r.status_code == 200:
+                for item in (r.json().get('items') or []):
+                    vid = item.get('url', '')
+                    vid = vid.replace('/watch?v=', '').replace('https://www.youtube.com/watch?v=', '')
+                    if vid and len(vid) == 11:
+                        return jsonify({'videoId': vid, 'title': item.get('title', q), 'source': base})
+        except Exception:
+            continue
+
+    # --- Fallback: Lofi Girl 24/7 ---
+    return jsonify({'videoId': 'jfKfPfyJRdk', 'title': 'Lofi Hip Hop Radio \u2014 Beats to Relax/Study To', 'source': 'fallback'})
+
+@app.route('/api/echo/action_handlers', methods=['GET'])
+def api_echo_action_handlers():
+    """Return metadata for all registered server-side action handlers."""
+    return jsonify({'handlers': _echo_action_registry.list_handlers()})
+
 @app.route('/api/echo/session_prefs', methods=['GET','POST'])
 
 def api_echo_session_prefs():
@@ -13583,6 +14619,30 @@ def api_echo_generate_image_async():
         except Exception:
             # best-effort rename
             job_path.write_text(json.dumps(job), encoding='utf-8')
+
+        # Spawn an in-process background thread to process the job immediately.
+        # This avoids requiring a separately-running image_worker process.
+        def _run_image_job(jpath):
+            try:
+                import importlib.util, sys
+                worker_path = str(Path(__file__).parent / 'image_worker.py')
+                spec = importlib.util.spec_from_file_location('image_worker', worker_path)
+                iw = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(iw)
+                iw.process_job(jpath)
+                # sync result back into in-memory IMAGE_JOBS if done
+                try:
+                    updated = json.loads(jpath.read_text(encoding='utf-8'))
+                    IMAGE_JOBS[updated.get('id', '')] = updated
+                    if updated.get('path') and updated.get('status') == 'done':
+                        ck = f"{updated.get('prompt','')}||{updated.get('size','')}||{updated.get('style','')}"
+                        IMAGE_CACHE[ck] = {'path': updated['path'], 'ts': time.time()}
+                except Exception:
+                    pass
+            except Exception as _te:
+                app.logger.exception('Image job thread error: %s', _te)
+        import threading
+        threading.Thread(target=_run_image_job, args=(job_path,), daemon=True).start()
 
         return jsonify({'ok': True, 'job_id': job_id})
     except Exception as e:
