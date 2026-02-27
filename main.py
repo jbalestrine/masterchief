@@ -7,6 +7,7 @@ print("DEBUG: main.py is starting", file=sys.stderr)
 
 import sys
 import os
+import random
 
 # Load environment variables from .env file
 try:
