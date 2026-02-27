@@ -12,3 +12,4 @@ models/*.gguf
 # - logs
 # - scripts
 # - all app files
+data/backups/venv_site_packages_backup.zip
