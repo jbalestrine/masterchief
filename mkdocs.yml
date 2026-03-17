@@ -1,6 +1,6 @@
 site_name: My Project Documentation
 site_url: https://example.com
-repo_url: https://github.com/jbalestrine/masterchief
+repo_url: https://github.com/jbalestrine/masterchief.git
 theme:
   name: material
   palette:
