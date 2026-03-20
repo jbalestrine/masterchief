@@ -41,6 +41,8 @@ DASHBOARD_TEMPLATE = """{% extends "base.html" %}
 <a href="/web_ide" class="btn">Web IDE</a>
 <a href="/masterchief_code_ui" class="btn">MasterChief Code UI</a>
 <a href="/iac_manager" class="btn">IAC Manager</a>
+<a href="/arm_creator" class="btn">ARM Template Creator</a>
+<a href="/tf_wizard" class="btn">TF Wizard</a>
 <a href="/github" class="btn">GitHub Integration</a>
 </div>
 {% endblock %}"""

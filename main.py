@@ -9,6 +9,10 @@ import sys
 import os
 import random
 
+# Pre-import stdlib 'platform' before our local platform/ directory enters sys.path,
+# so that third-party libraries (azure-identity, etc.) get the real stdlib module.
+import platform as _stdlib_platform  # noqa: F401
+
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
@@ -17140,6 +17144,17 @@ if TF_WIZARD_AVAILABLE:
 
 
 
+
+@app.route('/arm_creator')
+def arm_creator():
+    """Serve the ARM Template Creator web UI."""
+    try:
+        p = Path(__file__).resolve().parent / 'arm_creator.html'
+        if p.exists():
+            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception:
+        app.logger.exception('Failed to serve arm_creator.html')
+    return ('ARM Creator not available', 404)
 
 @app.route('/web_ide')
 
