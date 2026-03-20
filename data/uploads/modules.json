@@ -1,0 +1,468 @@
+{
+  "inspircd-4.9.0_6": {
+    "name": "inspircd-4.9.0_6",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspircd-4.9.0_6",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspircd-4.9.0_6\\inspircd-4.9.0\\win",
+    "installed_at": "2026-02-21T02:46:07.509655"
+  },
+  "inspircd": {
+    "name": "inspircd",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspircd",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspircd",
+    "installed_at": "2026-02-21T02:36:21.910570"
+  },
+  "inspirc": {
+    "name": "inspirc",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspirc",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspircd\\inspircd-4.9.0\\make",
+    "installed_at": "2026-02-15T12:09:06.474334"
+  },
+  "test_blank_module": {
+    "name": "test_blank_module",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test_blank_module",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test_blank_module",
+    "installed_at": "2026-02-16T16:48:07.656513",
+    "type": "python",
+    "description": "A test blank module",
+    "is_blank_module": true
+  },
+  "JB": {
+    "name": "JB",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\JB",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\JB",
+    "installed_at": "2026-02-16T16:55:23.556640",
+    "type": "python",
+    "description": "this is a test page. just checking operations.",
+    "is_blank_module": true
+  },
+  "test_module": {
+    "name": "test_module",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test_module",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test_module",
+    "installed_at": "2026-02-16T17:00:30.353145",
+    "type": "python",
+    "description": "Test module",
+    "is_blank_module": true
+  },
+  "new": {
+    "name": "new",
+    "extract_dir": "C:\\users\\Echo\\masterchief\\data\\uploads\\extracted\\new",
+    "source_dir": "C:\\users\\Echo\\masterchief\\data\\uploads\\extracted\\new",
+    "installed_at": "2026-02-16T18:15:44.748798",
+    "type": "web",
+    "description": "",
+    "is_blank_module": true
+  },
+  "DEVOPS": {
+    "name": "DEVOPS",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\DEVOPS",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\DEVOPS",
+    "installed_at": "2026-02-19T00:44:39.228541",
+    "type": "web",
+    "description": "",
+    "is_blank_module": true
+  },
+  "scriptz": {
+    "name": "scriptz",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\scriptz",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\scriptz",
+    "installed_at": "2026-02-19T00:45:22.565799",
+    "type": "web",
+    "description": "",
+    "is_blank_module": true
+  },
+  "modulex": {
+    "name": "modulex",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\modulex",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\modulex\\module-system-v2",
+    "installed_at": "2026-02-21T10:12:42.982962",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "index": {
+    "name": "index",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\index",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\index",
+    "installed_at": "2026-02-19T02:40:35.812018",
+    "type": "web",
+    "description": "test html",
+    "is_blank_module": true
+  },
+  "JAMROOM": {
+    "name": "JAMROOM",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\JAMROOM",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\JAMROOM\\jamroom-open-source",
+    "installed_at": "2026-02-19T02:57:33.563556"
+  },
+  "jamroom": {
+    "name": "jamroom",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\jamroom",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\jamroom\\jamroom-open-source",
+    "installed_at": "2026-02-19T03:00:38.943130"
+  },
+  "newx": {
+    "name": "newx",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\newx",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\newx",
+    "installed_at": "2026-02-19T03:33:28.022817",
+    "type": "web",
+    "description": "load a default website",
+    "is_blank_module": true
+  },
+  "site": {
+    "name": "site",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\site",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\site",
+    "installed_at": "2026-02-19T03:42:15.037816",
+    "type": "web",
+    "description": "",
+    "is_blank_module": true
+  },
+  "masterchief-1.0.1": {
+    "name": "masterchief-1.0.1",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\masterchief-1.0.1",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\masterchief-1.0.1\\masterchief-1.0.1",
+    "installed_at": "2026-02-19T04:07:29.271620",
+    "entry_point": "main.py",
+    "entry_type": "python"
+  },
+  "Inspircdx": {
+    "name": "Inspircdx",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\Inspircdx",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\Inspircdx",
+    "installed_at": "2026-02-20T18:21:52.086658",
+    "type": "web",
+    "description": "irc chat integration.",
+    "is_blank_module": true
+  },
+  "irc": {
+    "name": "irc",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\irc",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\irc",
+    "installed_at": "2026-02-20T20:27:22.651797",
+    "type": "python",
+    "description": "irc",
+    "is_blank_module": true
+  },
+  "merge": {
+    "name": "merge",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\merge",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\merge",
+    "installed_at": "2026-02-21T02:24:12.970842",
+    "type": "web",
+    "description": "",
+    "is_blank_module": true
+  },
+  "x1": {
+    "name": "x1",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\x1",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\x1",
+    "installed_at": "2026-02-21T02:25:08.686372",
+    "type": "python",
+    "description": "",
+    "is_blank_module": true
+  },
+  "jamx": {
+    "name": "jamx",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\jamx",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\jamx",
+    "installed_at": "2026-02-21T03:38:32.147910"
+  },
+  "module-system": {
+    "name": "module-system",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system\\module-system",
+    "installed_at": "2026-02-21T06:31:57.060111",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-manager-module": {
+    "name": "module-manager-module",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager-module",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager-module\\module-manager-module",
+    "installed_at": "2026-02-21T04:10:08.041603",
+    "entry_point": "mm_generator.py",
+    "entry_type": "python"
+  },
+  "abc": {
+    "name": "abc",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\abc",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\abc",
+    "installed_at": "2026-02-21T04:30:21.121564",
+    "type": "python",
+    "description": "",
+    "is_blank_module": true,
+    "capabilities": [],
+    "auto_load": true
+  },
+  "module-manager": {
+    "name": "module-manager",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager\\module-manager",
+    "installed_at": "2026-02-21T05:37:43.470426",
+    "entry_point": "addon.py",
+    "entry_type": "python"
+  },
+  "moduleZ": {
+    "name": "moduleZ",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\moduleZ",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\moduleZ",
+    "installed_at": "2026-02-21T05:19:09.145767",
+    "type": "api",
+    "description": "",
+    "is_blank_module": true,
+    "capabilities": [
+      "background_jobs"
+    ],
+    "auto_load": false
+  },
+  "mm": {
+    "name": "mm",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\mm",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\mm\\module-manager",
+    "installed_at": "2026-02-21T05:27:57.816914",
+    "entry_point": "addon.py",
+    "entry_type": "python"
+  },
+  "module-systemx": {
+    "name": "module-systemx",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-systemx",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-systemx\\module-system",
+    "installed_at": "2026-02-21T05:42:23.365616",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-manager_1": {
+    "name": "module-manager_1",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager_1",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager_1\\module-manager",
+    "installed_at": "2026-02-21T05:46:19.374928",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "m3": {
+    "name": "m3",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\m3",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\m3\\module-manager",
+    "installed_at": "2026-02-21T05:54:42.999536",
+    "entry_point": "addon.py",
+    "entry_type": "python"
+  },
+  "module-manager_OLD": {
+    "name": "module-manager_OLD",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager_OLD",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-manager_OLD\\module-manager",
+    "installed_at": "2026-02-21T06:03:24.090054",
+    "entry_point": "addon.py",
+    "entry_type": "python"
+  },
+  "module-systemZ": {
+    "name": "module-systemZ",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-systemZ",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-systemZ\\module-system",
+    "installed_at": "2026-02-21T06:07:21.538267",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "modules123": {
+    "name": "modules123",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\modules123",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\modules123\\module-system",
+    "installed_at": "2026-02-21T06:13:20.273392",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-masterchief": {
+    "name": "module-masterchief",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-masterchief",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-masterchief\\module-system",
+    "installed_at": "2026-02-21T06:17:31.394811",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-system1": {
+    "name": "module-system1",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system1",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system1\\module-system",
+    "installed_at": "2026-02-21T06:27:13.015445",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-system-v2": {
+    "name": "module-system-v2",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v2",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v2\\module-system-v2",
+    "installed_at": "2026-02-21T20:24:15.773395",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-system-v3": {
+    "name": "module-system-v3",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v3",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v3\\module-system-v3",
+    "installed_at": "2026-02-21T21:03:50.436429",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "Echo_Chat": {
+    "name": "Echo_Chat",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\Echo_Chat",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\Echo_Chat",
+    "installed_at": "2026-02-21T06:59:53.686591",
+    "entry_point": "main.py",
+    "entry_type": "python"
+  },
+  "kubernetes": {
+    "name": "kubernetes",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\kubernetes",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\kubernetes\\kubernetes",
+    "installed_at": "2026-02-21T07:14:06.024346",
+    "entry_point": "plugin.py",
+    "entry_type": "python"
+  },
+  "hvac": {
+    "name": "hvac",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\hvac",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\hvac\\hvac",
+    "installed_at": "2026-02-21T07:17:35.438458",
+    "entry_point": "plugin.py",
+    "entry_type": "python"
+  },
+  "module-system-v4": {
+    "name": "module-system-v4",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v4",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v4",
+    "installed_at": "2026-02-25T09:08:20.306434",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "psutil_1": {
+    "name": "psutil_1",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\psutil_1",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\psutil_1\\psutil",
+    "installed_at": "2026-02-21T07:22:30.218974",
+    "entry_point": "plugin.py",
+    "entry_type": "python"
+  },
+  "module-system-v5": {
+    "name": "module-system-v5",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v5",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v5",
+    "installed_at": "2026-02-21T20:06:00.055921",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "kubernetes_2": {
+    "name": "kubernetes_2",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\kubernetes_2",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\kubernetes_2\\kubernetes",
+    "installed_at": "2026-02-21T07:29:59.061551",
+    "entry_point": "plugin.py",
+    "entry_type": "python"
+  },
+  "inspircdx": {
+    "name": "inspircdx",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspircdx",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\inspircdx\\inspircd-4.9.0",
+    "installed_at": "2026-02-21T10:44:19.470708"
+  },
+  "test-mod-fix": {
+    "name": "test-mod-fix",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test-mod-fix",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test-mod-fix",
+    "installed_at": "2026-02-21T12:27:27.901919",
+    "type": "python",
+    "description": "test module",
+    "is_blank_module": true,
+    "capabilities": [
+      "web_ui",
+      "rest_api"
+    ],
+    "auto_load": false
+  },
+  "test-mod-fix2": {
+    "name": "test-mod-fix2",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test-mod-fix2",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\test-mod-fix2",
+    "installed_at": "2026-02-21T12:27:35.266917",
+    "type": "python",
+    "description": "test",
+    "is_blank_module": true,
+    "capabilities": [
+      "web_ui"
+    ],
+    "auto_load": false
+  },
+  "models5": {
+    "name": "models5",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\models5",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\models5",
+    "installed_at": "2026-02-21T19:12:08.744795",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "pymod": {
+    "name": "pymod",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\pymod",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\pymod\\module-system-v2",
+    "installed_at": "2026-02-21T19:28:04.066023",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-system-v2.1": {
+    "name": "module-system-v2.1",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v2.1",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v2.1\\module-system-v2",
+    "installed_at": "2026-02-21T19:31:01.722707",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-system-v21": {
+    "name": "module-system-v21",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v21",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v21",
+    "installed_at": "2026-02-21T19:44:36.638373",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "mypy_extensions": {
+    "name": "mypy_extensions",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\mypy_extensions",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\mypy_extensions\\mypy_extensions",
+    "installed_at": "2026-02-21T21:05:38.244709",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "mdurl": {
+    "name": "mdurl",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\mdurl",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\mdurl\\mdurl",
+    "installed_at": "2026-02-21T21:06:20.799952",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-system-v4_auto_Install": {
+    "name": "module-system-v4_auto_Install",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v4_auto_Install",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v4_auto_Install\\module-system-v3",
+    "installed_at": "2026-02-21T21:11:35.592002",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "php_1": {
+    "name": "php_1",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\php_1",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\php_1\\php",
+    "installed_at": "2026-02-21T21:13:11.992005",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  },
+  "module-system-v3_link": {
+    "name": "module-system-v3_link",
+    "extract_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v3_link",
+    "source_dir": "C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v3_link\\module-system-v3",
+    "installed_at": "2026-02-21T21:47:16.752183",
+    "entry_point": "app.py",
+    "entry_type": "python"
+  }
+}

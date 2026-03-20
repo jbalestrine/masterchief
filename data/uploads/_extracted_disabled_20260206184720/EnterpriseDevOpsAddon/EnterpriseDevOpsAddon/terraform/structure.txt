@@ -1,0 +1,17 @@
+terraform/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── providers.tf
+├── locals.tf
+├── versions.tf
+├── modules/
+│   ├── network/
+│   ├── compute/
+│   ├── sql/
+│   ├── keyvault/
+│   └── monitoring/
+├── policies/
+│   └── tagging-policy.tf
+└── postinstall/
+    └── dsc-iis.ps1
