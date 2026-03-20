@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IRC Super Control Kernel</title>
+</head>
+<body>
+<h1>IRC Super Control Kernel</h1>
+<!-- Kernel JS -->
+<script src="{{ url_for('static', filename='irc_super_control_kernel.js') }}"></script>
+<!-- Auto-load plugins and run setup when kernel is ready -->
+<script>
+	(function(){
+		const plugins=[
+			'/plugins/chanserv.js',
+			'/plugins/nickserv.js',
+			'/plugins/prebuilt-bots.js',
+			'/plugins/wizard-botsetup.js',
+			'/plugins/starter-dashboard.js'
+		];
+		function loadPlugin(p){return fetch(p).then(r=>r.text()).then(src=>eval(src));}
+		const start=()=>{
+			if(!window.IRCSuper){setTimeout(start,300);return}
+			Promise.all(plugins.map(loadPlugin)).then(()=>{
+				console.log('Plugins loaded');
+				try{window.IRCSuper.log('[Auto] Plugins loaded');}catch(e){}
+				// run BotSetup wizard if available
+				try{if(window.IRCSuper && window.IRCSuper.Wizards && window.IRCSuper.Wizards['BotSetup']) window.IRCSuper.Commands['/wizard'](['BotSetup']);}catch(e){}
+			}).catch(e=>console.error('Plugin load failed',e));
+		};
+		start();
+	})();
+</script>
+</body>
+</html>
+                                <input id="ircPort" placeholder="port" value="6668" style="width:80px;padding:6px"/>

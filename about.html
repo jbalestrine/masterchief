@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About - MasterChief DevOps Platform</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:Arial,sans-serif;background:#1a1a1a;color:#e0e0e0;line-height:1.6;}
+.container{max-width:1400px;margin:0 auto;padding:20px;}
+header{background:#2d2d2d;padding:20px;margin-bottom:30px;border-bottom:3px solid #4CAF50;}
+h1{color:#4CAF50;font-size:2.5em;margin-bottom:10px;}
+.subtitle{color:#888;font-size:1.1em;}
+nav{background:#252525;padding:15px;margin-bottom:30px;border-radius:8px;}
+nav a{color:#4CAF50;text-decoration:none;margin-right:20px;padding:8px 15px;border-radius:5px;display:inline-block;transition:all 0.3s;}
+nav a:hover,nav a.active{background:#4CAF50;color:#fff;}
+.card{background:#2d2d2d;padding:25px;border-radius:10px;border-left:4px solid #4CAF50;box-shadow:0 4px 6px rgba(0,0,0,0.3);}
+.card h3{color:#4CAF50;margin-bottom:15px;font-size:1.4em;}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-bottom:30px;}
+.btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;text-decoration:none;display:inline-block;margin:5px;transition:all 0.3s;}
+.btn:hover{background:#45a049;transform:translateY(-2px);}
+.status-badge{padding:5px 12px;border-radius:15px;font-size:0.85em;font-weight:bold;}
+.progress-bar{background:#1a1a1a;height:20px;border-radius:10px;overflow:hidden;margin:10px 0;}
+.progress-fill{background:linear-gradient(90deg,#4CAF50,#8BC34A);height:100%;transition:width 0.3s;}
+
+/* About Page Specific Styles */
+.hero-section {
+    background: linear-gradient(135deg, #2d2d2d 0%, #1a2e1a 100%);
+    padding: 50px 40px;
+    border-radius: 12px;
+    border-left: 5px solid #4CAF50;
+    margin-bottom: 30px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(76,175,80,0.05) 0%, transparent 50%);
+    pointer-events: none;
+}
+.hero-title {
+    font-size: 2.8em;
+    color: #4CAF50;
+    margin-bottom: 10px;
+    letter-spacing: 1px;
+}
+.hero-subtitle {
+    color: #aaa;
+    font-size: 1.25em;
+    margin-bottom: 20px;
+}
+.version-badge {
+    display: inline-block;
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: #fff;
+    padding: 6px 20px;
+    border-radius: 20px;
+    font-size: 0.95em;
+    font-weight: bold;
+    letter-spacing: 1px;
+    margin-bottom: 25px;
+}
+.hero-description {
+    max-width: 900px;
+    margin: 0 auto;
+    color: #ccc;
+    font-size: 1.05em;
+    line-height: 1.8;
+}
+
+.section-title {
+    color: #4CAF50;
+    font-size: 1.8em;
+    margin-bottom: 8px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #333;
+}
+.section-subtitle {
+    color: #888;
+    font-size: 1em;
+    margin-bottom: 25px;
+}
+.section-block {
+    margin-bottom: 40px;
+}
+
+.feature-card {
+    background: #2d2d2d;
+    padding: 22px 25px;
+    border-radius: 10px;
+    border-left: 4px solid #4CAF50;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: transform 0.25s, box-shadow 0.25s;
+}
+.feature-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+}
+.feature-card h3 {
+    color: #4CAF50;
+    margin-bottom: 8px;
+    font-size: 1.15em;
+}
+.feature-card p {
+    color: #aaa;
+    font-size: 0.95em;
+}
+.feature-icon {
+    font-size: 1.6em;
+    margin-bottom: 10px;
+    display: block;
+}
+
+/* Roadmap / Coming Soon */
+.roadmap-card {
+    background: #2d2d2d;
+    padding: 25px;
+    border-radius: 10px;
+    border-left: 4px solid #ff9800;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    transition: transform 0.25s, box-shadow 0.25s;
+    position: relative;
+}
+.roadmap-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+}
+.roadmap-card h3 {
+    color: #ff9800;
+    margin-bottom: 8px;
+    font-size: 1.15em;
+}
+.roadmap-card p {
+    color: #aaa;
+    font-size: 0.95em;
+    margin-bottom: 12px;
+}
+.roadmap-badges {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.badge-coming-soon {
+    background: rgba(255,152,0,0.15);
+    color: #ff9800;
+    padding: 4px 14px;
+    border-radius: 15px;
+    font-size: 0.8em;
+    font-weight: bold;
+    border: 1px solid rgba(255,152,0,0.3);
+}
+.badge-phase {
+    background: rgba(76,175,80,0.12);
+    color: #4CAF50;
+    padding: 4px 14px;
+    border-radius: 15px;
+    font-size: 0.8em;
+    font-weight: bold;
+    border: 1px solid rgba(76,175,80,0.25);
+}
+.phase-header {
+    color: #ff9800;
+    font-size: 1.15em;
+    margin-bottom: 15px;
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: rgba(255,152,0,0.08);
+    border-radius: 6px;
+    display: inline-block;
+}
+
+/* Tech Stack */
+.tech-card {
+    background: #2d2d2d;
+    padding: 25px;
+    border-radius: 10px;
+    border-left: 4px solid #4CAF50;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    text-align: center;
+    transition: transform 0.25s, box-shadow 0.25s;
+}
+.tech-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+}
+.tech-card .tech-icon {
+    font-size: 2.2em;
+    margin-bottom: 12px;
+    display: block;
+}
+.tech-card h3 {
+    color: #4CAF50;
+    font-size: 1.1em;
+    margin-bottom: 5px;
+}
+.tech-card p {
+    color: #888;
+    font-size: 0.9em;
+}
+
+/* Footer */
+.about-footer {
+    text-align: center;
+    padding: 35px 20px;
+    margin-top: 40px;
+    background: #2d2d2d;
+    border-radius: 10px;
+    border-top: 3px solid #4CAF50;
+}
+.about-footer .footer-heart {
+    font-size: 1.15em;
+    color: #aaa;
+    margin-bottom: 8px;
+}
+.about-footer .footer-heart span {
+    color: #e74c3c;
+}
+.about-footer .footer-version {
+    color: #666;
+    font-size: 0.9em;
+}
+
+/* Grid for tech */
+.tech-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(25px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+    animation: fadeInUp 0.5s ease forwards;
+    opacity: 0;
+}
+</style>
+</head>
+<body>
+
+<header>
+    <div class="container">
+        <h1>MasterChief DevOps Platform</h1>
+        <p class="subtitle">Enterprise DevOps Automation &mdash; Command Center</p>
+    </div>
+</header>
+
+<div class="container">
+    <nav>
+        <a href="/">Dashboard</a>
+        <a href="/echo-chat">Echo Chat</a>
+        <a href="/scripts">Scripts</a>
+        <a href="/processes">Processes</a>
+        <a href="/services">Services</a>
+        <a href="/addons">Addons</a>
+        <a href="/echo-train">Training</a>
+        <a href="/pipelines">Pipelines</a>
+        <a href="/cloud">Cloud</a>
+        <a href="/secrets">Secrets</a>
+        <a href="/echo-memory">Memory</a>
+        <a href="/marketplace">Marketplace</a>
+        <a href="/notifications">Alerts</a>
+        <a href="/rbac">Access</a>
+        <a href="/about" class="active">About</a>
+    </nav>
+
+    <!-- 1. Hero / Identity Section -->
+    <div class="hero-section animate-in" style="animation-delay:0.1s;">
+        <div class="hero-title">MasterChief DevOps Platform</div>
+        <div class="hero-subtitle">Enterprise DevOps Automation &mdash; Built by Echo Starlite</div>
+        <div class="version-badge">v1.3.0</div>
+        <p class="hero-description">
+            A comprehensive enterprise DevOps automation platform featuring multi-cloud infrastructure,
+            AI-powered automation, real-time ChatOps, voice control, and a complete CI/CD pipeline orchestrator.
+            MasterChief brings together the full DevOps lifecycle &mdash; Plan, Code, Build, Test, Release,
+            Deploy, Operate, Monitor, Secure, Optimize &mdash; into one unified platform.
+        </p>
+    </div>
+
+    <!-- 2. Current Features -->
+    <div class="section-block">
+        <h2 class="section-title">Current Features</h2>
+        <p class="section-subtitle">Everything shipped and running in the platform today</p>
+
+        <div class="dashboard-grid">
+            <div class="feature-card animate-in" style="animation-delay:0.15s;">
+                <span class="feature-icon">&#129302;</span>
+                <h3>Echo AI Chat Bot</h3>
+                <p>Conversational AI assistant with training capabilities. Ask Echo anything about your infrastructure, automate tasks via chat, and fine-tune responses with your own datasets.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.2s;">
+                <span class="feature-icon">&#9881;&#65039;</span>
+                <h3>DevOps Master Suite</h3>
+                <p>10 phases, 74+ capabilities across the full DevOps lifecycle. From planning and code analysis to monitoring and security scanning, every phase is covered.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.25s;">
+                <span class="feature-icon">&#128187;</span>
+                <h3>Web IDE</h3>
+                <p>Monaco-based code editor with Git integration. Edit files, browse repositories, and commit changes directly from the browser with syntax highlighting and IntelliSense.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.3s;">
+                <span class="feature-icon">&#128640;</span>
+                <h3>Pipeline Orchestrator</h3>
+                <p>Visual drag-and-drop CI/CD pipeline builder. Design, configure, and execute multi-stage pipelines with parallel steps, approvals, and rollback strategies.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.35s;">
+                <span class="feature-icon">&#9729;&#65039;</span>
+                <h3>Multi-Cloud Dashboard</h3>
+                <p>Unified Azure, AWS, and GCP resource management. View compute, storage, networking, and cost metrics across all your cloud providers in one pane of glass.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.4s;">
+                <span class="feature-icon">&#128272;</span>
+                <h3>Secrets Vault</h3>
+                <p>Encrypted secrets with version history and full audit trail. Store API keys, certificates, and credentials with role-based access and automatic rotation policies.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.45s;">
+                <span class="feature-icon">&#129504;</span>
+                <h3>Echo Memory</h3>
+                <p>Long-term conversation context with semantic search. Echo remembers past interactions, learns from corrections, and builds institutional knowledge over time.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.5s;">
+                <span class="feature-icon">&#128722;</span>
+                <h3>Plugin Marketplace</h3>
+                <p>Browse, install, and configure add-ons from the community marketplace. Extend MasterChief with custom integrations, themes, and workflow modules.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.55s;">
+                <span class="feature-icon">&#128276;</span>
+                <h3>Notification System</h3>
+                <p>Multi-channel alerts across Slack, Teams, Discord, and Email. Configure thresholds, escalation chains, and quiet hours for every alert type.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.6s;">
+                <span class="feature-icon">&#128737;&#65039;</span>
+                <h3>Access Control (RBAC)</h3>
+                <p>Role-based permissions and user management. Define custom roles, assign granular permissions, and enforce least-privilege access across all platform features.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.65s;">
+                <span class="feature-icon">&#127959;&#65039;</span>
+                <h3>Terraform Wizard</h3>
+                <p>Infrastructure as Code generation and deployment. Step-by-step wizard for building Terraform configurations with validation, previews, and one-click apply.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.7s;">
+                <span class="feature-icon">&#128172;</span>
+                <h3>IRC ChatOps Engine</h3>
+                <p>Eggdrop-style bot with data ingestion. Run DevOps commands from IRC channels, ingest logs and metrics, and trigger automations via chat commands.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.75s;">
+                <span class="feature-icon">&#127908;</span>
+                <h3>Voice Automation</h3>
+                <p>Wake words, speech-to-text, text-to-speech, and voice cloning. Control your infrastructure hands-free with natural voice commands and custom wake phrases.</p>
+            </div>
+            <div class="feature-card animate-in" style="animation-delay:0.8s;">
+                <span class="feature-icon">&#127891;</span>
+                <h3>Training System</h3>
+                <p>Dataset upload and model fine-tuning. Train Echo on your organization's documentation, runbooks, and domain knowledge to create a specialized DevOps assistant.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Coming Soon / Roadmap -->
+    <div class="section-block">
+        <h2 class="section-title">&#128640; Coming Soon</h2>
+        <p class="section-subtitle">Enterprise features in active development</p>
+
+        <!-- Phase 1 -->
+        <div class="phase-header">Phase 1 &mdash; Foundation &amp; Core Infrastructure</div>
+        <div class="dashboard-grid">
+            <div class="roadmap-card animate-in" style="animation-delay:0.15s;">
+                <h3>Enterprise Terraform Wizard</h3>
+                <p>Hub-and-spoke landing zones, multi-subscription support, automated VNETs/subnets/NSGs/peering/firewall, fully configurable AKS with node pools and autoscaling.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 1</span>
+                </div>
+            </div>
+            <div class="roadmap-card animate-in" style="animation-delay:0.2s;">
+                <h3>Azure AD User Management</h3>
+                <p>Users and groups per RG/subscription, RBAC assignments, automated onboarding workflows, Key Vault integration for compliance.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 1</span>
+                </div>
+            </div>
+            <div class="roadmap-card animate-in" style="animation-delay:0.25s;">
+                <h3>Azure Site Recovery &amp; DR</h3>
+                <p>Disaster recovery integration, environment cloning for dev/test/prod, automated failover configuration.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 1</span>
+                </div>
+            </div>
+            <div class="roadmap-card animate-in" style="animation-delay:0.3s;">
+                <h3>CIDR &amp; Naming Validation</h3>
+                <p>Real-time CIDR overlap detection, naming conflict resolution, RBAC conflict checking, best-practice recommendations.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 1</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 2 -->
+        <div class="phase-header">Phase 2 &mdash; Visualization &amp; CI/CD</div>
+        <div class="dashboard-grid">
+            <div class="roadmap-card animate-in" style="animation-delay:0.35s;">
+                <h3>Dynamic Architecture Diagrams</h3>
+                <p>Auto-generated hub-and-spoke diagrams from Terraform outputs, SVG/PNG export, live preview in wizard UI.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 2</span>
+                </div>
+            </div>
+            <div class="roadmap-card animate-in" style="animation-delay:0.4s;">
+                <h3>CI/CD Pipeline Templates</h3>
+                <p>Azure DevOps and GitHub Actions YAML generation, plan-on-PR / apply-on-merge workflows, automated template export.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 2</span>
+                </div>
+            </div>
+            <div class="roadmap-card animate-in" style="animation-delay:0.45s;">
+                <h3>Versioned Template Management</h3>
+                <p>Save/edit/update Terraform configuration templates, version history with diff view, template library.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 2</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 3 -->
+        <div class="phase-header">Phase 3 &mdash; Extensibility &amp; Multi-Cloud</div>
+        <div class="dashboard-grid">
+            <div class="roadmap-card animate-in" style="animation-delay:0.5s;">
+                <h3>Akamai CDN &amp; WAF</h3>
+                <p>CDN configuration, Web Application Firewall rules, edge security policies (toggleable module).</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 3</span>
+                </div>
+            </div>
+            <div class="roadmap-card animate-in" style="animation-delay:0.55s;">
+                <h3>API Test Generation</h3>
+                <p>Auto-generated curl commands and REST client snippets from deployed endpoints, post-deployment validation.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 3</span>
+                </div>
+            </div>
+            <div class="roadmap-card animate-in" style="animation-delay:0.6s;">
+                <h3>Multi-Cloud Module Interfaces</h3>
+                <p>Clean variable schemas for AWS/GCP module plug-in, provider-agnostic resource abstraction layer.</p>
+                <div class="roadmap-badges">
+                    <span class="badge-coming-soon">Coming Soon</span>
+                    <span class="badge-phase">Phase 3</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Tech Stack -->
+    <div class="section-block">
+        <h2 class="section-title">Tech Stack</h2>
+        <p class="section-subtitle">The technologies powering MasterChief</p>
+
+        <div class="tech-grid">
+            <div class="tech-card animate-in" style="animation-delay:0.15s;">
+                <span class="tech-icon">&#128013;</span>
+                <h3>Python / Flask</h3>
+                <p>Backend API, automation engine, and orchestration layer</p>
+            </div>
+            <div class="tech-card animate-in" style="animation-delay:0.2s;">
+                <span class="tech-icon">&#9889;</span>
+                <h3>JavaScript (Vanilla)</h3>
+                <p>Frontend UI, real-time dashboards, and interactive components</p>
+            </div>
+            <div class="tech-card animate-in" style="animation-delay:0.25s;">
+                <span class="tech-icon">&#127959;&#65039;</span>
+                <h3>Terraform / HCL</h3>
+                <p>Infrastructure as Code, multi-cloud provisioning, and state management</p>
+            </div>
+            <div class="tech-card animate-in" style="animation-delay:0.3s;">
+                <span class="tech-icon">&#9729;&#65039;</span>
+                <h3>Azure / AWS / GCP</h3>
+                <p>Multi-cloud resource management, compute, storage, and networking</p>
+            </div>
+            <div class="tech-card animate-in" style="animation-delay:0.35s;">
+                <span class="tech-icon">&#128230;</span>
+                <h3>Docker / Kubernetes</h3>
+                <p>Container orchestration, microservices deployment, and scaling</p>
+            </div>
+            <div class="tech-card animate-in" style="animation-delay:0.4s;">
+                <span class="tech-icon">&#128200;</span>
+                <h3>Prometheus / Grafana / Loki</h3>
+                <p>Metrics collection, visualization, log aggregation, and alerting</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Footer -->
+    <div class="about-footer">
+        <p class="footer-heart">Built with <span>&hearts;</span> by Echo Starlite</p>
+        <p class="footer-version">MasterChief DevOps Platform &mdash; v1.3.0</p>
+    </div>
+</div>
+
+<script>
+// Intersection Observer for scroll-triggered animations
+document.addEventListener('DOMContentLoaded', function() {
+    var animatedElements = document.querySelectorAll('.animate-in');
+
+    if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.style.animationPlayState = 'running';
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+
+        animatedElements.forEach(function(el) {
+            el.style.animationPlayState = 'paused';
+            observer.observe(el);
+        });
+    } else {
+        // Fallback: just show everything
+        animatedElements.forEach(function(el) {
+            el.style.opacity = '1';
+        });
+    }
+});
+</script>
+</body>
+</html>

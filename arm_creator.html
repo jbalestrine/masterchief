@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>MasterChief - ARM Template Creator</title>
+<style>
+/* ── Reset & CAF Base ────────────────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#1a1a1a; --bg2:#232323; --bg3:#2d2d2d; --bg4:#333;
+  --accent:#4CAF50; --accent2:#8BC34A; --accent-dim:#2e7d32;
+  --text:#e0e0e0; --text2:#aaa; --text3:#888; --border:#3a3a3a;
+  --danger:#f44336; --warn:#ff9800; --info:#2196F3; --purple:#9C27B0;
+  --sidebar-w:380px; --topbar-h:48px; --statusbar-h:28px;
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+a{color:var(--accent);text-decoration:none;}a:hover{text-decoration:underline;}
+button{font-family:inherit;font-size:inherit;cursor:pointer;}
+input,textarea,select{font-family:inherit;font-size:inherit;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:8px 10px;outline:none;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);}
+::-webkit-scrollbar{width:8px;height:8px;} ::-webkit-scrollbar-track{background:var(--bg);} ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px;} ::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+/* ── Layout ──────────────────────────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100vh;}
+#topbar{height:var(--topbar-h);background:var(--bg3);display:flex;align-items:center;padding:0 16px;gap:12px;border-bottom:2px solid var(--accent);flex-shrink:0;z-index:100;}
+#topbar .logo{color:var(--accent);font-weight:700;font-size:16px;white-space:nowrap;}
+#topbar .logo span{color:var(--text3);font-weight:400;font-size:13px;margin-left:6px;}
+#topbar nav{display:flex;gap:4px;margin-left:auto;}
+#topbar nav a{padding:6px 14px;border-radius:4px;color:var(--text2);font-size:13px;transition:all .2s;}
+#topbar nav a:hover,#topbar nav a.active{background:var(--accent);color:#fff;text-decoration:none;}
+#main{display:flex;flex:1;overflow:hidden;}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+#sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .25s;}
+#sidebar.collapsed{width:0;min-width:0;border:none;overflow:hidden;}
+.section-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-size:12px;text-transform:uppercase;color:var(--text3);letter-spacing:.5px;border-bottom:1px solid var(--border);background:var(--bg3);}
+.section-head button{background:none;border:none;color:var(--accent);font-size:16px;line-height:1;padding:2px 6px;border-radius:3px;}
+.section-head button:hover{background:var(--bg4);}
+#form-content{flex:1;overflow-y:auto;padding:16px;gap:16px;display:flex;flex-direction:column;}
+.form-section{background:var(--bg3);border-radius:8px;padding:16px;border:1px solid var(--border);}
+.form-section h3{color:var(--accent);font-size:14px;font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;}
+.form-row{margin-bottom:12px;}
+.form-row label{display:block;font-weight:600;color:var(--text);margin-bottom:6px;font-size:13px;}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:10px 12px;border-radius:4px;font-size:14px;}
+.form-row textarea{resize:vertical;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:12px;}
+.form-row small{color:var(--text3);font-size:11px;}
+.checkbox-group{display:flex;flex-direction:column;gap:8px;}
+.checkbox-group label{font-weight:normal;display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0;font-size:13px;}
+.checkbox-group input[type="checkbox"]{width:auto;margin:0;accent-color:var(--accent);}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn{background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s;}
+.btn:hover{background:var(--accent2);transform:translateY(-1px);}
+.btn.secondary{background:var(--bg4);color:var(--text2);border:1px solid var(--border);}
+.btn.secondary:hover{background:var(--bg3);border-color:var(--accent);color:var(--accent);}
+.btn.info{background:var(--info);color:#fff;}.btn.info:hover{background:#1565c0;transform:translateY(-1px);}
+.btn.danger{background:var(--danger);color:#fff;}.btn.danger:hover{background:#da190b;}
+.btn.warning{background:var(--warn);color:#fff;}.btn.warning:hover{background:#f57c00;}
+.btn.sm{padding:6px 12px;font-size:12px;}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* ── Resource cards (in sidebar) ─────────────────────────────────── */
+.resource-card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+.resource-card .rc-info{flex:1;}
+.resource-card .rc-name{font-weight:600;color:var(--accent);font-size:13px;}
+.resource-card .rc-type{color:var(--text3);font-size:11px;}
+.resource-card .rc-actions{display:flex;gap:4px;}
+
+/* ── Content ─────────────────────────────────────────────────────── */
+#content{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#preview-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);}
+#preview-header h2{font-size:16px;color:var(--accent);margin:0;}
+#file-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);overflow-x:auto;}
+.file-tab{background:none;border:none;color:var(--text2);padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap;}
+.file-tab:hover{color:var(--text);}.file-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--bg3);}
+#code-preview{flex:1;overflow:auto;padding:0;}
+.code-content{margin:0;padding:16px;background:var(--bg);color:var(--text);font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:13px;line-height:1.6;overflow:auto;white-space:pre-wrap;word-wrap:break-word;height:100%;}
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+#statusbar{height:var(--statusbar-h);background:var(--bg3);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:12px;color:var(--text3);flex-shrink:0;}
+.st-ok{color:var(--accent);} .st-err{color:var(--danger);} .st-warn{color:var(--warn);}
+
+/* ── Modal ───────────────────────────────────────────────────────── */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;width:92%;max-width:700px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--bg3);border-radius:10px 10px 0 0;}
+.modal-header h2{margin:0;font-size:18px;color:var(--accent);}.modal-header button{background:none;border:none;color:var(--text3);font-size:24px;cursor:pointer;padding:0 4px;line-height:1;}.modal-header button:hover{color:var(--danger);}
+.modal-body{padding:20px;}
+
+/* ── Category pills ──────────────────────────────────────────────── */
+.cat-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.cat-pill{padding:8px 16px;border-radius:20px;background:var(--bg4);border:1px solid var(--border);color:var(--text2);cursor:pointer;font-size:13px;transition:all .2s;}
+.cat-pill:hover,.cat-pill.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;max-height:260px;overflow-y:auto;}
+.res-option{padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .15s;font-size:13px;}
+.res-option:hover{border-color:var(--accent);color:var(--accent);}
+.res-option .ro-type{color:var(--text3);font-size:10px;margin-top:2px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Topbar -->
+  <div id="topbar">
+    <div class="logo">MasterChief <span>ARM Creator</span></div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/echo-chat">Echo Chat</a>
+      <a href="/masterchief_code_ui">Code UI</a>
+      <a href="/web_ide">Azure CAF</a>
+      <a href="/tf_wizard">TF Wizard</a>
+      <a href="/arm_creator" class="active">ARM Creator</a>
+      <a href="/features">Features</a>
+    </nav>
+  </div>
+
+  <div id="main">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div class="section-head">
+        <span>ARM Template Builder</span>
+        <button onclick="toggleSidebar()" title="Toggle">&#9776;</button>
+      </div>
+      <div id="form-content">
+
+        <!-- Global Settings -->
+        <div class="form-section">
+          <h3>&#9881;&#65039; Template Settings</h3>
+          <div class="form-row">
+            <label>Schema Version</label>
+            <select id="schema-ver">
+              <option value="2019-04-01" selected>2019-04-01 (Resource Group)</option>
+              <option value="2018-05-01">2018-05-01 (Subscription)</option>
+              <option value="2019-08-01">2019-08-01 (Management Group)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Content Version</label>
+            <input id="content-ver" value="1.0.0.0" />
+          </div>
+        </div>
+
+        <!-- Resources List -->
+        <div class="form-section">
+          <h3>&#128230; Resources <span id="res-count" style="color:var(--accent2)">(0)</span></h3>
+          <div id="resources-list"></div>
+          <button class="btn" onclick="openAddResourceModal()">+ Add Resource</button>
+        </div>
+
+        <!-- Parameters -->
+        <div class="form-section">
+          <h3>&#128203; Parameters <span id="param-count" style="color:var(--accent2)">(0)</span></h3>
+          <div id="params-list"></div>
+          <button class="btn secondary sm" onclick="addParam()">+ Add Parameter</button>
+        </div>
+
+        <!-- Variables -->
+        <div class="form-section">
+          <h3>&#128196; Variables <span id="var-count" style="color:var(--accent2)">(0)</span></h3>
+          <div id="vars-list"></div>
+          <button class="btn secondary sm" onclick="addVar()">+ Add Variable</button>
+        </div>
+
+        <!-- Outputs -->
+        <div class="form-section">
+          <h3>&#128228; Outputs</h3>
+          <div id="outputs-list"></div>
+          <button class="btn secondary sm" onclick="addOutput()">+ Add Output</button>
+        </div>
+
+        <!-- Actions -->
+        <div class="btn-group" style="padding-top:4px">
+          <button class="btn" onclick="downloadTemplate()">&#128190; Download JSON</button>
+          <button class="btn info" onclick="validateTemplate()">&#9989; Validate</button>
+          <button class="btn secondary" onclick="clearTemplate()">&#128465; Clear</button>
+          <button class="btn warning sm" onclick="copyTemplate()">&#128203; Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content: Preview -->
+    <div id="content">
+      <div id="preview-header">
+        <h2>Live ARM Template Preview</h2>
+        <div class="btn-group">
+          <span id="json-size" style="color:var(--text3);font-size:12px"></span>
+        </div>
+      </div>
+      <div id="code-preview">
+        <pre class="code-content" id="preview-code"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div id="statusbar">
+    <span id="status-msg">Ready</span>
+    <span>ARM Template Creator v1.0</span>
+  </div>
+</div>
+
+<!-- Add Resource Modal -->
+<div id="add-resource-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>Add Azure Resource</h2>
+      <button onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Filter</label>
+        <input id="res-filter" placeholder="Search resources..." oninput="filterResources()" autofocus />
+      </div>
+      <div class="cat-grid" id="cat-grid"></div>
+      <div class="res-grid" id="res-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Resource Config Modal -->
+<div id="config-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)closeConfigModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="config-title">Configure Resource</h2>
+      <button onclick="closeConfigModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="config-body"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// AZURE RESOURCE CATALOG
+// ═══════════════════════════════════════════════════════════════════
+const CATALOG = {
+  // ── Compute ──
+  'Virtual Machine':            { type:'Microsoft.Compute/virtualMachines',           api:'2024-03-01', cat:'Compute' },
+  'VM Scale Set':               { type:'Microsoft.Compute/virtualMachineScaleSets',   api:'2024-03-01', cat:'Compute' },
+  'Availability Set':           { type:'Microsoft.Compute/availabilitySets',          api:'2024-03-01', cat:'Compute' },
+  'Managed Disk':               { type:'Microsoft.Compute/disks',                    api:'2024-03-01', cat:'Compute' },
+  'Proximity Placement Group':  { type:'Microsoft.Compute/proximityPlacementGroups', api:'2024-03-01', cat:'Compute' },
+  // ── Networking ──
+  'Virtual Network':            { type:'Microsoft.Network/virtualNetworks',           api:'2023-11-01', cat:'Networking' },
+  'Network Security Group':     { type:'Microsoft.Network/networkSecurityGroups',    api:'2023-11-01', cat:'Networking' },
+  'Public IP Address':          { type:'Microsoft.Network/publicIPAddresses',        api:'2023-11-01', cat:'Networking' },
+  'Load Balancer':              { type:'Microsoft.Network/loadBalancers',            api:'2023-11-01', cat:'Networking' },
+  'Application Gateway':        { type:'Microsoft.Network/applicationGateways',     api:'2023-11-01', cat:'Networking' },
+  'VPN Gateway':                { type:'Microsoft.Network/vpnGateways',              api:'2023-11-01', cat:'Networking' },
+  'ExpressRoute Circuit':       { type:'Microsoft.Network/expressRouteCircuits',     api:'2023-11-01', cat:'Networking' },
+  'Azure Firewall':             { type:'Microsoft.Network/azureFirewalls',           api:'2023-11-01', cat:'Networking' },
+  'Front Door':                 { type:'Microsoft.Network/frontDoors',               api:'2021-06-01', cat:'Networking' },
+  'Traffic Manager':            { type:'Microsoft.Network/trafficManagerProfiles',   api:'2022-04-01', cat:'Networking' },
+  'Private Endpoint':           { type:'Microsoft.Network/privateEndpoints',         api:'2023-11-01', cat:'Networking' },
+  'Private DNS Zone':           { type:'Microsoft.Network/privateDnsZones',          api:'2020-06-01', cat:'Networking' },
+  'DNS Zone':                   { type:'Microsoft.Network/dnsZones',                 api:'2023-07-01-preview', cat:'Networking' },
+  'NAT Gateway':                { type:'Microsoft.Network/natGateways',              api:'2023-11-01', cat:'Networking' },
+  'Network Interface':          { type:'Microsoft.Network/networkInterfaces',        api:'2023-11-01', cat:'Networking' },
+  'Route Table':                { type:'Microsoft.Network/routeTables',              api:'2023-11-01', cat:'Networking' },
+  'Bastion Host':               { type:'Microsoft.Network/bastionHosts',             api:'2023-11-01', cat:'Networking' },
+  'DDoS Protection Plan':       { type:'Microsoft.Network/ddosProtectionPlans',      api:'2023-11-01', cat:'Networking' },
+  'Virtual WAN':                { type:'Microsoft.Network/virtualWans',              api:'2023-11-01', cat:'Networking' },
+  'WAF Policy':                 { type:'Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies', api:'2023-11-01', cat:'Networking' },
+  // ── Storage ──
+  'Storage Account':            { type:'Microsoft.Storage/storageAccounts',           api:'2023-05-01', cat:'Storage' },
+  'Blob Container':             { type:'Microsoft.Storage/storageAccounts/blobServices/containers', api:'2023-05-01', cat:'Storage' },
+  'File Share':                 { type:'Microsoft.Storage/storageAccounts/fileServices/shares', api:'2023-05-01', cat:'Storage' },
+  'NetApp Account':             { type:'Microsoft.NetApp/netAppAccounts',             api:'2023-11-01', cat:'Storage' },
+  'Data Lake Store':            { type:'Microsoft.DataLakeStore/accounts',            api:'2016-11-01', cat:'Storage' },
+  // ── Databases ──
+  'SQL Server':                 { type:'Microsoft.Sql/servers',                       api:'2023-08-01-preview', cat:'Databases' },
+  'SQL Database':               { type:'Microsoft.Sql/servers/databases',             api:'2023-08-01-preview', cat:'Databases' },
+  'SQL Elastic Pool':           { type:'Microsoft.Sql/servers/elasticPools',          api:'2023-08-01-preview', cat:'Databases' },
+  'Cosmos DB Account':          { type:'Microsoft.DocumentDB/databaseAccounts',       api:'2024-02-15-preview', cat:'Databases' },
+  'MySQL Flexible Server':      { type:'Microsoft.DBforMySQL/flexibleServers',        api:'2023-12-30', cat:'Databases' },
+  'PostgreSQL Flexible Server': { type:'Microsoft.DBforPostgreSQL/flexibleServers',   api:'2023-12-01-preview', cat:'Databases' },
+  'Redis Cache':                { type:'Microsoft.Cache/redis',                       api:'2024-03-01', cat:'Databases' },
+  // ── Web & App Services ──
+  'App Service Plan':           { type:'Microsoft.Web/serverfarms',                   api:'2023-12-01', cat:'Web' },
+  'Web App':                    { type:'Microsoft.Web/sites',                         api:'2023-12-01', cat:'Web' },
+  'Function App':               { type:'Microsoft.Web/sites',                         api:'2023-12-01', cat:'Web' },
+  'Static Web App':             { type:'Microsoft.Web/staticSites',                   api:'2023-12-01', cat:'Web' },
+  'API Management':             { type:'Microsoft.ApiManagement/service',             api:'2023-09-01-preview', cat:'Web' },
+  // ── Containers ──
+  'AKS Cluster':                { type:'Microsoft.ContainerService/managedClusters',  api:'2024-02-01', cat:'Containers' },
+  'Container Registry':         { type:'Microsoft.ContainerRegistry/registries',      api:'2023-11-01-preview', cat:'Containers' },
+  'Container Instance':         { type:'Microsoft.ContainerInstance/containerGroups', api:'2023-05-01', cat:'Containers' },
+  'Container App':              { type:'Microsoft.App/containerApps',                 api:'2024-03-01', cat:'Containers' },
+  'Container App Environment':  { type:'Microsoft.App/managedEnvironments',           api:'2024-03-01', cat:'Containers' },
+  // ── Security & Identity ──
+  'Key Vault':                  { type:'Microsoft.KeyVault/vaults',                   api:'2023-07-01', cat:'Security' },
+  'Managed Identity':           { type:'Microsoft.ManagedIdentity/userAssignedIdentities', api:'2023-01-31', cat:'Security' },
+  'Role Assignment':            { type:'Microsoft.Authorization/roleAssignments',     api:'2022-04-01', cat:'Security' },
+  'Policy Assignment':          { type:'Microsoft.Authorization/policyAssignments',   api:'2023-04-01', cat:'Security' },
+  // ── Monitoring ──
+  'Log Analytics Workspace':    { type:'Microsoft.OperationalInsights/workspaces',    api:'2023-09-01', cat:'Monitoring' },
+  'Application Insights':       { type:'Microsoft.Insights/components',               api:'2020-02-02', cat:'Monitoring' },
+  'Action Group':               { type:'Microsoft.Insights/actionGroups',             api:'2023-09-01-preview', cat:'Monitoring' },
+  'Metric Alert':               { type:'Microsoft.Insights/metricAlerts',             api:'2018-03-01', cat:'Monitoring' },
+  'Automation Account':         { type:'Microsoft.Automation/automationAccounts',     api:'2023-11-01', cat:'Monitoring' },
+  // ── Analytics ──
+  'Synapse Workspace':          { type:'Microsoft.Synapse/workspaces',                api:'2021-06-01', cat:'Analytics' },
+  'Data Factory':               { type:'Microsoft.DataFactory/factories',             api:'2018-06-01', cat:'Analytics' },
+  'Databricks Workspace':       { type:'Microsoft.Databricks/workspaces',             api:'2024-05-01', cat:'Analytics' },
+  'Event Hub Namespace':        { type:'Microsoft.EventHub/namespaces',               api:'2024-01-01', cat:'Analytics' },
+  'Stream Analytics Job':       { type:'Microsoft.StreamAnalytics/streamingJobs',     api:'2021-10-01-preview', cat:'Analytics' },
+  // ── AI & ML ──
+  'Cognitive Services':         { type:'Microsoft.CognitiveServices/accounts',        api:'2024-04-01-preview', cat:'AI' },
+  'ML Workspace':               { type:'Microsoft.MachineLearningServices/workspaces',api:'2024-04-01', cat:'AI' },
+  'Search Service':             { type:'Microsoft.Search/searchServices',             api:'2024-03-01-preview', cat:'AI' },
+  'OpenAI Service':             { type:'Microsoft.CognitiveServices/accounts',        api:'2024-04-01-preview', cat:'AI' },
+  'Bot Service':                { type:'Microsoft.BotService/botServices',            api:'2022-09-15', cat:'AI' },
+  // ── Integration ──
+  'Service Bus Namespace':      { type:'Microsoft.ServiceBus/namespaces',             api:'2022-10-01-preview', cat:'Integration' },
+  'Logic App':                  { type:'Microsoft.Logic/workflows',                   api:'2019-05-01', cat:'Integration' },
+  'Event Grid Topic':           { type:'Microsoft.EventGrid/topics',                  api:'2024-06-01-preview', cat:'Integration' },
+  'SignalR Service':            { type:'Microsoft.SignalRService/signalR',             api:'2024-03-01', cat:'Integration' },
+  'Notification Hub':           { type:'Microsoft.NotificationHubs/namespaces/notificationHubs', api:'2023-10-01-preview', cat:'Integration' },
+  // ── IoT ──
+  'IoT Hub':                    { type:'Microsoft.Devices/IotHubs',                   api:'2023-06-30', cat:'IoT' },
+  'IoT Central App':            { type:'Microsoft.IoTCentral/IoTApps',                api:'2021-06-01', cat:'IoT' },
+  'Digital Twins':              { type:'Microsoft.DigitalTwins/digitalTwinsInstances', api:'2023-01-31', cat:'IoT' },
+  // ── Governance ──
+  'Management Group':           { type:'Microsoft.Management/managementGroups',       api:'2023-04-01', cat:'Governance' },
+  'Lock':                       { type:'Microsoft.Authorization/locks',               api:'2020-05-01', cat:'Governance' },
+  'Budget':                     { type:'Microsoft.Consumption/budgets',               api:'2023-11-01', cat:'Governance' },
+  'Deployment Script':          { type:'Microsoft.Resources/deploymentScripts',       api:'2023-08-01', cat:'Governance' }
+};
+
+const LOCATIONS = ['eastus','eastus2','westus','westus2','westus3','centralus','northcentralus','southcentralus','northeurope','westeurope','uksouth','ukwest','francecentral','germanywestcentral','switzerlandnorth','norwayeast','swedencentral','southeastasia','eastasia','japaneast','japanwest','koreacentral','australiaeast','australiasoutheast','canadacentral','canadaeast','brazilsouth','southafricanorth','uaenorth','centralindia','qatarcentral'];
+const VM_SIZES = ['Standard_B1s','Standard_B2s','Standard_B2ms','Standard_B4ms','Standard_D2s_v5','Standard_D4s_v5','Standard_D8s_v5','Standard_E2s_v5','Standard_E4s_v5','Standard_F2s_v2','Standard_F4s_v2','Standard_DS1_v2','Standard_DS2_v2'];
+const STORAGE_SKUS = ['Standard_LRS','Standard_GRS','Standard_ZRS','Standard_RAGRS','Premium_LRS','Premium_ZRS'];
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+let armTemplate = {
+  '$schema': 'https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#',
+  contentVersion: '1.0.0.0',
+  parameters: {},
+  variables: {},
+  resources: [],
+  outputs: {}
+};
+let activeCat = 'All';
+let resIdCounter = 0;
+
+// ═══════════════════════════════════════════════════════════════════
+// SIDEBAR TOGGLE
+// ═══════════════════════════════════════════════════════════════════
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+
+// ═══════════════════════════════════════════════════════════════════
+// ADD RESOURCE MODAL
+// ═══════════════════════════════════════════════════════════════════
+function openAddResourceModal(){
+  document.getElementById('add-resource-modal').style.display='flex';
+  document.getElementById('res-filter').value='';
+  activeCat='All';
+  buildCategoryGrid();
+  filterResources();
+  setTimeout(()=>document.getElementById('res-filter').focus(),100);
+}
+function closeModal(){ document.getElementById('add-resource-modal').style.display='none'; }
+
+function buildCategoryGrid(){
+  const cats = ['All',...[...new Set(Object.values(CATALOG).map(c=>c.cat))].sort()];
+  const g = document.getElementById('cat-grid');
+  g.innerHTML = cats.map(c=>`<div class="cat-pill${c===activeCat?' active':''}" onclick="activeCat='${c}';buildCategoryGrid();filterResources()">${c}</div>`).join('');
+}
+
+function filterResources(){
+  const q = document.getElementById('res-filter').value.toLowerCase();
+  const g = document.getElementById('res-grid');
+  let html='';
+  Object.entries(CATALOG).forEach(([name,info])=>{
+    if(activeCat!=='All' && info.cat!==activeCat) return;
+    if(q && !name.toLowerCase().includes(q) && !info.type.toLowerCase().includes(q)) return;
+    html+=`<div class="res-option" onclick="selectResource('${name.replace(/'/g,"\\'")}')">
+      <div>${name}</div><div class="ro-type">${info.type}</div></div>`;
+  });
+  g.innerHTML = html || '<div style="color:var(--text3);padding:20px">No matching resources</div>';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RESOURCE CONFIG MODAL
+// ═══════════════════════════════════════════════════════════════════
+function selectResource(name){
+  closeModal();
+  const info = CATALOG[name];
+  document.getElementById('config-title').textContent = `Configure: ${name}`;
+  const body = document.getElementById('config-body');
+
+  // Build config form based on resource type
+  let html = `<input type="hidden" id="cfg-res-name" value="${name}" />`;
+  html += formRow('cfg-name','Resource Name', 'text', defaultName(name));
+  html += formSelect('cfg-location','Location', LOCATIONS, 'eastus');
+
+  // Type-specific fields
+  const fields = getResourceFields(name, info);
+  html += fields;
+
+  html += `<div style="margin-top:16px"><button class="btn" onclick="commitResource()">&#10004; Add to Template</button></div>`;
+  body.innerHTML = html;
+  document.getElementById('config-modal').style.display = 'flex';
+}
+function closeConfigModal(){ document.getElementById('config-modal').style.display='none'; }
+
+function defaultName(n){ return n.replace(/[^a-zA-Z]/g,'').substring(0,12).toLowerCase(); }
+
+function formRow(id, label, type, val, extra=''){
+  return `<div class="form-row"><label>${label}</label><input id="${id}" type="${type||'text'}" value="${val||''}" />${extra?'<small>'+extra+'</small>':''}</div>`;
+}
+function formSelect(id, label, opts, def, extra=''){
+  const options = opts.map(o=>`<option value="${o}"${o===def?' selected':''}>${o}</option>`).join('');
+  return `<div class="form-row"><label>${label}</label><select id="${id}">${options}</select>${extra?'<small>'+extra+'</small>':''}</div>`;
+}
+function formCheck(id, label, checked=false){
+  return `<div style="margin-bottom:8px"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px"><input type="checkbox" id="${id}" ${checked?'checked':''} style="width:auto;accent-color:var(--accent)" />${label}</label></div>`;
+}
+
+function getResourceFields(name, info){
+  let h='';
+  switch(name){
+    case 'Virtual Machine':
+      h+=formSelect('cfg-vmsize','VM Size', VM_SIZES, 'Standard_D2s_v5');
+      h+=formSelect('cfg-os','OS Type', ['Windows','Linux'], 'Linux');
+      h+=formRow('cfg-admin','Admin Username','text','azureadmin');
+      h+=formCheck('cfg-mi','Enable Managed Identity',true);
+      h+=formCheck('cfg-bd','Enable Boot Diagnostics',true);
+      break;
+    case 'Virtual Network':
+      h+=formRow('cfg-cidr','Address Space','text','10.0.0.0/16');
+      h+=formRow('cfg-subnet','Default Subnet CIDR','text','10.0.0.0/24');
+      h+=formCheck('cfg-ddos','Enable DDoS Protection');
+      break;
+    case 'Network Security Group':
+      h+=formCheck('cfg-ssh','Add SSH rule (22)',false);
+      h+=formCheck('cfg-https','Add HTTPS rule (443)',true);
+      h+=formCheck('cfg-rdp','Add RDP rule (3389)',false);
+      break;
+    case 'Storage Account':
+      h+=formSelect('cfg-sku','SKU', STORAGE_SKUS, 'Standard_LRS');
+      h+=formSelect('cfg-kind','Kind', ['StorageV2','BlobStorage','BlockBlobStorage','FileStorage'], 'StorageV2');
+      h+=formCheck('cfg-https','Require HTTPS',true);
+      h+=formCheck('cfg-hns','Hierarchical Namespace (Data Lake)');
+      break;
+    case 'Key Vault':
+      h+=formSelect('cfg-kvsku','SKU', ['standard','premium'], 'standard');
+      h+=formCheck('cfg-rbac','Enable RBAC Authorization',true);
+      h+=formCheck('cfg-purge','Enable Purge Protection',true);
+      h+=formRow('cfg-softdel','Soft Delete Days','number','90');
+      break;
+    case 'AKS Cluster':
+      h+=formRow('cfg-k8s','Kubernetes Version','text','1.29');
+      h+=formRow('cfg-nodes','Node Count','number','3');
+      h+=formSelect('cfg-nodesize','Node VM Size', VM_SIZES, 'Standard_D4s_v5');
+      h+=formSelect('cfg-netplugin','Network Plugin', ['azure','kubenet','none'], 'azure');
+      h+=formCheck('cfg-aksrbac','Enable RBAC',true);
+      h+=formCheck('cfg-aksaad','Azure AD Integration');
+      break;
+    case 'App Service Plan':
+      h+=formSelect('cfg-plansku','SKU', ['F1','B1','B2','B3','S1','S2','S3','P1v3','P2v3','P3v3'], 'S1');
+      h+=formSelect('cfg-planos','OS', ['Linux','Windows'], 'Linux');
+      break;
+    case 'Web App': case 'Function App':
+      h+=formRow('cfg-planref','App Service Plan Name','text','myAppPlan','Will create dependsOn');
+      h+=formSelect('cfg-runtime','Runtime', ['DOTNETCORE|8.0','NODE|20-lts','PYTHON|3.12','JAVA|17-java17','PHP|8.3'], 'NODE|20-lts');
+      h+=formCheck('cfg-alwayson','Always On',true);
+      h+=formCheck('cfg-httpsonly','HTTPS Only',true);
+      break;
+    case 'SQL Server':
+      h+=formRow('cfg-sqladmin','Admin Login','text','sqladmin');
+      h+=formCheck('cfg-publicnet','Allow Public Network Access');
+      break;
+    case 'SQL Database':
+      h+=formRow('cfg-sqlserver','Server Name','text','mysqlserver','Must match SQL Server resource name');
+      h+=formSelect('cfg-sqltier','Service Tier', ['Basic','Standard','Premium','GeneralPurpose','Hyperscale','BusinessCritical'], 'GeneralPurpose');
+      break;
+    case 'Cosmos DB Account':
+      h+=formSelect('cfg-cosmosapi','API', ['SQL','MongoDB','Cassandra','Gremlin','Table'], 'SQL');
+      h+=formSelect('cfg-cosmoscap','Capacity Mode', ['Provisioned','Serverless'], 'Provisioned');
+      h+=formCheck('cfg-cosmosfreetier','Free Tier');
+      h+=formCheck('cfg-cosmosmulti','Multi-Region Writes');
+      break;
+    case 'Log Analytics Workspace':
+      h+=formSelect('cfg-lasku','SKU', ['PerGB2018','Free','Standalone','PerNode'], 'PerGB2018');
+      h+=formRow('cfg-laretention','Retention Days','number','30');
+      break;
+    case 'Container Registry':
+      h+=formSelect('cfg-acrsku','SKU', ['Basic','Standard','Premium'], 'Standard');
+      h+=formCheck('cfg-acradmin','Enable Admin User');
+      break;
+    default:
+      h+=`<div class="form-row"><label>Custom Properties (JSON)</label><textarea id="cfg-customjson" rows="6" placeholder='{"key":"value"}'>{}</textarea></div>`;
+  }
+  // Tags for all
+  h+=`<div class="form-row"><label>Tags (JSON)</label><textarea id="cfg-tags" rows="2" placeholder='{"env":"dev","project":"myproject"}'>{}</textarea></div>`;
+  return h;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// COMMIT RESOURCE → ARM JSON
+// ═══════════════════════════════════════════════════════════════════
+function commitResource(){
+  const resName = V('cfg-res-name');
+  const info = CATALOG[resName];
+  const name = V('cfg-name');
+  const location = V('cfg-location');
+  let tags = {}; try{ tags=JSON.parse(V('cfg-tags')||'{}'); }catch{}
+
+  const res = { type:info.type, apiVersion:info.api, name:name, location:location, properties:{} };
+  if (Object.keys(tags).length) res.tags = tags;
+
+  // Type-specific properties
+  switch(resName){
+    case 'Virtual Machine': {
+      const os = V('cfg-os');
+      const imgRef = os==='Windows'
+        ? {publisher:'MicrosoftWindowsServer',offer:'WindowsServer',sku:'2022-datacenter-g2',version:'latest'}
+        : {publisher:'Canonical',offer:'0001-com-ubuntu-server-jammy',sku:'22_04-lts-gen2',version:'latest'};
+      res.properties = {
+        hardwareProfile: {vmSize:V('cfg-vmsize')},
+        storageProfile: { imageReference:imgRef, osDisk:{createOption:'FromImage',managedDisk:{storageAccountType:'Premium_LRS'}} },
+        osProfile: {computerName:name,adminUsername:V('cfg-admin'),adminPassword:"[parameters('adminPassword')]"},
+        networkProfile: {networkInterfaces:[{id:`[resourceId('Microsoft.Network/networkInterfaces','${name}-nic')]`}]}
+      };
+      if(C('cfg-mi')) res.identity={type:'SystemAssigned'};
+      if(C('cfg-bd')) res.properties.diagnosticsProfile={bootDiagnostics:{enabled:true}};
+      ensureParam('adminPassword','securestring','Admin password for '+name);
+      break;
+    }
+    case 'Virtual Network':
+      res.properties = { addressSpace:{addressPrefixes:[V('cfg-cidr')]}, subnets:[{name:'default',properties:{addressPrefix:V('cfg-subnet')}}], enableDdosProtection:C('cfg-ddos') };
+      break;
+    case 'Network Security Group': {
+      const rules=[]; let pri=100;
+      if(C('cfg-ssh'))  { rules.push(nsgRule('AllowSSH',pri,'Inbound','Allow','Tcp','*','22','*','*')); pri+=10; }
+      if(C('cfg-https')){ rules.push(nsgRule('AllowHTTPS',pri,'Inbound','Allow','Tcp','*','443','*','*')); pri+=10; }
+      if(C('cfg-rdp'))  { rules.push(nsgRule('AllowRDP',pri,'Inbound','Allow','Tcp','*','3389','*','*')); pri+=10; }
+      res.properties = { securityRules:rules };
+      break;
+    }
+    case 'Storage Account':
+      res.sku = {name:V('cfg-sku')};
+      res.kind = V('cfg-kind');
+      res.properties = { supportsHttpsTrafficOnly:C('cfg-https'), minimumTlsVersion:'TLS1_2', isHnsEnabled:C('cfg-hns'), allowBlobPublicAccess:false };
+      break;
+    case 'Key Vault':
+      res.properties = { tenantId:"[subscription().tenantId]", sku:{family:'A',name:V('cfg-kvsku')}, enableRbacAuthorization:C('cfg-rbac'), enablePurgeProtection:C('cfg-purge'), softDeleteRetentionInDays:parseInt(V('cfg-softdel'))||90 };
+      break;
+    case 'AKS Cluster':
+      res.identity = {type:'SystemAssigned'};
+      res.properties = { kubernetesVersion:V('cfg-k8s'), dnsPrefix:name, enableRBAC:C('cfg-aksrbac'),
+        agentPoolProfiles:[{name:'nodepool1',count:parseInt(V('cfg-nodes'))||3,vmSize:V('cfg-nodesize'),maxPods:110,mode:'System',osType:'Linux',type:'VirtualMachineScaleSets'}],
+        networkProfile:{networkPlugin:V('cfg-netplugin'),loadBalancerSku:'standard'}
+      };
+      if(C('cfg-aksaad')) res.properties.aadProfile={managed:true,enableAzureRBAC:true};
+      break;
+    case 'App Service Plan':
+      res.kind = V('cfg-planos')==='Linux'?'linux':'app';
+      res.sku = {name:V('cfg-plansku')};
+      res.properties = {reserved:V('cfg-planos')==='Linux'};
+      break;
+    case 'Web App': case 'Function App': {
+      const plan = V('cfg-planref');
+      res.dependsOn = [`[resourceId('Microsoft.Web/serverfarms','${plan}')]`];
+      res.identity = {type:'SystemAssigned'};
+      const rt = V('cfg-runtime');
+      res.properties = { serverFarmId:`[resourceId('Microsoft.Web/serverfarms','${plan}')]`, httpsOnly:C('cfg-httpsonly'),
+        siteConfig:{ alwaysOn:C('cfg-alwayson'), linuxFxVersion:rt, minTlsVersion:'1.2', ftpsState:'Disabled', http20Enabled:true }
+      };
+      break;
+    }
+    case 'SQL Server':
+      res.properties = { administratorLogin:V('cfg-sqladmin'), administratorLoginPassword:"[parameters('sqlAdminPassword')]", publicNetworkAccess:C('cfg-publicnet')?'Enabled':'Disabled', minimalTlsVersion:'1.2' };
+      ensureParam('sqlAdminPassword','securestring','SQL admin password');
+      break;
+    case 'SQL Database': {
+      const srv = V('cfg-sqlserver');
+      res.name = `${srv}/${name}`;
+      res.dependsOn = [`[resourceId('Microsoft.Sql/servers','${srv}')]`];
+      res.sku = {name:V('cfg-sqltier'),tier:V('cfg-sqltier')};
+      break;
+    }
+    case 'Cosmos DB Account': {
+      const apiType = V('cfg-cosmosapi');
+      const caps=[];
+      if(apiType==='Cassandra') caps.push({name:'EnableCassandra'});
+      if(apiType==='Gremlin') caps.push({name:'EnableGremlin'});
+      if(apiType==='Table') caps.push({name:'EnableTable'});
+      if(V('cfg-cosmoscap')==='Serverless') caps.push({name:'EnableServerless'});
+      res.kind = apiType==='MongoDB'?'MongoDB':'GlobalDocumentDB';
+      res.properties = { databaseAccountOfferType:'Standard', enableFreeTier:C('cfg-cosmosfreetier'), enableMultipleWriteLocations:C('cfg-cosmosmulti'),
+        capabilities:caps, locations:[{locationName:location,failoverPriority:0}], consistencyPolicy:{defaultConsistencyLevel:'Session'}
+      };
+      break;
+    }
+    case 'Log Analytics Workspace':
+      res.properties = { sku:{name:V('cfg-lasku')}, retentionInDays:parseInt(V('cfg-laretention'))||30 };
+      break;
+    case 'Container Registry':
+      res.sku = {name:V('cfg-acrsku')};
+      res.properties = { adminUserEnabled:C('cfg-acradmin'), publicNetworkAccess:'Enabled' };
+      break;
+    default:
+      try{ res.properties=JSON.parse(V('cfg-customjson')||'{}'); }catch{ res.properties={}; }
+  }
+
+  res._id = ++resIdCounter;
+  res._display = resName;
+  armTemplate.resources.push(res);
+  closeConfigModal();
+  refreshAll();
+  setStatus(`Added ${resName}: ${name}`,false);
+}
+
+function nsgRule(n,p,d,a,pr,sp,dp,sa,da){ return {name:n,properties:{priority:p,direction:d,access:a,protocol:pr,sourcePortRange:sp,destinationPortRange:dp,sourceAddressPrefix:sa,destinationAddressPrefix:da}}; }
+function V(id){ const e=document.getElementById(id); return e?e.value:''; }
+function C(id){ const e=document.getElementById(id); return e?e.checked:false; }
+function ensureParam(n,t,d){ if(!armTemplate.parameters[n]) armTemplate.parameters[n]={type:t,metadata:{description:d}}; }
+
+// ═══════════════════════════════════════════════════════════════════
+// PARAMETERS / VARIABLES / OUTPUTS
+// ═══════════════════════════════════════════════════════════════════
+function addParam(){
+  const n=prompt('Parameter name:'); if(!n) return;
+  const t=prompt('Type (string/securestring/int/bool/object/array):','string');
+  const d=prompt('Description:','');
+  const def=prompt('Default value (blank for none):','');
+  armTemplate.parameters[n]={type:t||'string'};
+  if(d) armTemplate.parameters[n].metadata={description:d};
+  if(def!=='' && def!==null){
+    if(t==='int') armTemplate.parameters[n].defaultValue=parseInt(def);
+    else if(t==='bool') armTemplate.parameters[n].defaultValue=def==='true';
+    else armTemplate.parameters[n].defaultValue=def;
+  }
+  refreshAll(); setStatus(`Parameter '${n}' added`,false);
+}
+function addVar(){
+  const n=prompt('Variable name:'); if(!n) return;
+  const v=prompt('Value (expression or literal):',''); if(v===null) return;
+  armTemplate.variables[n]=v;
+  refreshAll(); setStatus(`Variable '${n}' added`,false);
+}
+function addOutput(){
+  const n=prompt('Output name:'); if(!n) return;
+  const t=prompt('Type:','string');
+  const v=prompt('Value (ARM expression):',''); if(v===null) return;
+  armTemplate.outputs[n]={type:t||'string',value:v};
+  refreshAll(); setStatus(`Output '${n}' added`,false);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// REMOVE / REFRESH
+// ═══════════════════════════════════════════════════════════════════
+function removeResource(id){ armTemplate.resources=armTemplate.resources.filter(r=>r._id!==id); refreshAll(); }
+function removeParam(n){ delete armTemplate.parameters[n]; refreshAll(); }
+function removeVar(n){ delete armTemplate.variables[n]; refreshAll(); }
+
+function refreshAll(){
+  // Resource cards
+  const rl=document.getElementById('resources-list');
+  rl.innerHTML=armTemplate.resources.map(r=>`<div class="resource-card">
+    <div class="rc-info"><div class="rc-name">${r.name}</div><div class="rc-type">${r._display||r.type}</div></div>
+    <div class="rc-actions"><button class="btn danger sm" onclick="removeResource(${r._id})">&#x2715;</button></div>
+  </div>`).join('');
+  document.getElementById('res-count').textContent=`(${armTemplate.resources.length})`;
+
+  // Params
+  const pl=document.getElementById('params-list');
+  pl.innerHTML=Object.entries(armTemplate.parameters).map(([k,v])=>`<div class="resource-card">
+    <div class="rc-info"><div class="rc-name">${k}</div><div class="rc-type">${v.type}${v.defaultValue!==undefined?' = '+v.defaultValue:''}</div></div>
+    <div class="rc-actions"><button class="btn danger sm" onclick="removeParam('${k}')">&#x2715;</button></div>
+  </div>`).join('');
+  document.getElementById('param-count').textContent=`(${Object.keys(armTemplate.parameters).length})`;
+
+  // Vars
+  const vl=document.getElementById('vars-list');
+  vl.innerHTML=Object.entries(armTemplate.variables).map(([k,v])=>`<div class="resource-card">
+    <div class="rc-info"><div class="rc-name">${k}</div><div class="rc-type">${String(v).substring(0,40)}</div></div>
+    <div class="rc-actions"><button class="btn danger sm" onclick="removeVar('${k}')">&#x2715;</button></div>
+  </div>`).join('');
+  document.getElementById('var-count').textContent=`(${Object.keys(armTemplate.variables).length})`;
+
+  // Outputs
+  const ol=document.getElementById('outputs-list');
+  ol.innerHTML=Object.entries(armTemplate.outputs).map(([k,v])=>`<div class="resource-card">
+    <div class="rc-info"><div class="rc-name">${k}</div><div class="rc-type">${v.type}</div></div>
+  </div>`).join('');
+
+  // Preview
+  renderPreview();
+}
+
+function renderPreview(){
+  const clean = JSON.parse(JSON.stringify(armTemplate));
+  clean.resources.forEach(r=>{ delete r._id; delete r._display; });
+  clean['$schema'] = `https://schema.management.azure.com/schemas/${V('schema-ver')||'2019-04-01'}/deploymentTemplate.json#`;
+  clean.contentVersion = V('content-ver')||'1.0.0.0';
+  const json = JSON.stringify(clean, null, 2);
+  document.getElementById('preview-code').textContent = json;
+  document.getElementById('json-size').textContent = `${json.length} chars | ${armTemplate.resources.length} resources`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════════════════════════
+function downloadTemplate(){
+  const clean = JSON.parse(JSON.stringify(armTemplate));
+  clean.resources.forEach(r=>{ delete r._id; delete r._display; });
+  clean['$schema'] = `https://schema.management.azure.com/schemas/${V('schema-ver')||'2019-04-01'}/deploymentTemplate.json#`;
+  clean.contentVersion = V('content-ver')||'1.0.0.0';
+  const json = JSON.stringify(clean, null, 2);
+  const blob = new Blob([json],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'arm_template.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('Template downloaded!',false);
+}
+
+function copyTemplate(){
+  const clean = JSON.parse(JSON.stringify(armTemplate));
+  clean.resources.forEach(r=>{ delete r._id; delete r._display; });
+  const json = JSON.stringify(clean, null, 2);
+  navigator.clipboard.writeText(json).then(()=>setStatus('Copied to clipboard',false));
+}
+
+function validateTemplate(){
+  const errs=[];
+  if(!armTemplate.resources.length) errs.push('No resources defined');
+  const names = armTemplate.resources.map(r=>r.name);
+  const dupes = names.filter((n,i)=>names.indexOf(n)!==i);
+  if(dupes.length) errs.push('Duplicate names: '+[...new Set(dupes)].join(', '));
+  const json = JSON.stringify(armTemplate);
+  const refs = [...json.matchAll(/parameters\('([^']+)'\)/g)].map(m=>m[1]);
+  refs.forEach(r=>{ if(!armTemplate.parameters[r]) errs.push(`Missing parameter: ${r}`); });
+  if(errs.length){ setStatus('Validation: '+errs.join('; '),true); }
+  else { setStatus(`Valid! ${armTemplate.resources.length} resources, ${Object.keys(armTemplate.parameters).length} parameters`,false); }
+}
+
+function clearTemplate(){
+  if(!confirm('Clear the entire template?')) return;
+  armTemplate = { '$schema':'','contentVersion':'1.0.0.0', parameters:{}, variables:{}, resources:[], outputs:{} };
+  refreshAll(); setStatus('Template cleared',false);
+}
+
+function setStatus(msg, isErr){
+  const el=document.getElementById('status-msg');
+  el.textContent=msg;
+  el.className=isErr?'st-err':'st-ok';
+  if(!isErr) setTimeout(()=>{el.textContent='Ready';el.className='';},5000);
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', refreshAll);
+</script>
+</body>
+</html>

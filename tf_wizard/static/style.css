@@ -1,0 +1,103 @@
+/* ── TF Wizard – CAF-compliant dark theme ────────────────────────── */
+
+/* ── Reset & Base ────────────────────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#1a1a1a; --bg2:#232323; --bg3:#2d2d2d; --bg4:#333;
+  --accent:#4CAF50; --accent2:#8BC34A; --accent-dim:#2e7d32;
+  --text:#e0e0e0; --text2:#aaa; --text3:#888; --border:#3a3a3a;
+  --danger:#f44336; --warn:#ff9800; --info:#2196F3; --purple:#7b42bc;
+  --sidebar-w:340px; --topbar-h:48px; --statusbar-h:28px;
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+a{color:var(--accent);text-decoration:none;}
+a:hover{text-decoration:underline;}
+button{font-family:inherit;font-size:inherit;cursor:pointer;}
+input,textarea,select{font-family:inherit;font-size:inherit;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:8px 10px;outline:none;}
+input:focus,textarea:focus,select:focus{border-color:var(--accent);}
+
+/* scrollbar */
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+/* ── Layout Shell ────────────────────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100vh;}
+
+/* ── Topbar ──────────────────────────────────────────────────────── */
+#topbar{height:var(--topbar-h);background:var(--bg3);display:flex;align-items:center;padding:0 16px;gap:12px;border-bottom:2px solid var(--accent);flex-shrink:0;z-index:100;}
+#topbar .logo{color:var(--accent);font-weight:700;font-size:16px;white-space:nowrap;}
+#topbar .logo span{color:var(--text3);font-weight:400;font-size:13px;margin-left:6px;}
+#topbar nav{display:flex;gap:4px;margin-left:auto;}
+#topbar nav a{padding:6px 14px;border-radius:4px;color:var(--text2);font-size:13px;transition:all .2s;}
+#topbar nav a:hover,#topbar nav a.active{background:var(--accent);color:#fff;text-decoration:none;}
+
+/* ── Main ────────────────────────────────────────────────────────── */
+#main{display:flex;flex:1;overflow:hidden;}
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+#sidebar{width:var(--sidebar-w);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width .25s;}
+#sidebar.collapsed{width:0;border-right:none;}
+.section-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-size:12px;text-transform:uppercase;color:var(--text3);letter-spacing:.5px;border-bottom:1px solid var(--border);background:var(--bg3);}
+.section-head button{background:none;border:none;color:var(--accent);font-size:16px;line-height:1;padding:2px 6px;border-radius:3px;}
+.section-head button:hover{background:var(--bg4);}
+#form-content{flex:1;overflow-y:auto;padding:16px;gap:16px;display:flex;flex-direction:column;}
+
+/* ── Form sections ───────────────────────────────────────────────── */
+.form-section{background:var(--bg3);border-radius:8px;padding:16px;border:1px solid var(--border);}
+.form-section h3{color:var(--accent);font-size:14px;font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;}
+.form-row{margin-bottom:12px;}
+.form-row label{display:block;font-weight:600;color:var(--text);margin-bottom:6px;font-size:13px;}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:10px 12px;border-radius:4px;font-size:14px;}
+.form-row textarea{resize:vertical;}
+
+/* ── Entry rows (providers, vars, resources, outputs) ────────────── */
+.entry-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+.entry-row input,.entry-row select{flex:1;min-width:80px;padding:8px 10px;font-size:13px;}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn{background:var(--accent);color:#fff;border:none;padding:10px 16px;border-radius:4px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s;}
+.btn:hover{background:var(--accent2);transform:translateY(-1px);}
+.btn.secondary{background:var(--bg4);color:var(--text2);border:1px solid var(--border);}
+.btn.secondary:hover{background:var(--bg3);border-color:var(--accent);color:var(--accent);}
+.btn.info{background:var(--info);color:#fff;}
+.btn.info:hover{background:#1565c0;transform:translateY(-1px);}
+.btn.danger{background:var(--danger);color:#fff;padding:6px 10px;font-size:12px;}
+.btn.danger:hover{background:#da190b;}
+.btn.sm{padding:6px 12px;font-size:12px;}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap;}
+.action-bar{padding-top:4px;}
+
+/* ── Schema import details ───────────────────────────────────────── */
+.schema-import{margin-top:12px;}
+.schema-import summary{cursor:pointer;color:var(--text2);font-size:13px;padding:4px 0;}
+.schema-import summary:hover{color:var(--accent);}
+.schema-import textarea{width:100%;margin-top:8px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:12px;height:100px;}
+
+/* ── Content / Preview Area ──────────────────────────────────────── */
+#content{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#preview-area{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#preview-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--bg3);border-bottom:1px solid var(--border);}
+#preview-header h2{font-size:16px;color:var(--accent);margin:0;}
+#code-preview{flex:1;overflow:auto;padding:0;}
+.code-block{height:100%;display:flex;flex-direction:column;}
+.code-content{flex:1;margin:0;padding:16px;background:var(--bg);color:var(--text);font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:13px;line-height:1.6;overflow:auto;white-space:pre-wrap;word-wrap:break-word;}
+
+/* ── File tabs ───────────────────────────────────────────────────── */
+#file-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);}
+.file-tab{background:none;border:none;color:var(--text2);padding:10px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;}
+.file-tab:hover{color:var(--text);}
+.file-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--bg3);}
+
+/* ── Status bar ──────────────────────────────────────────────────── */
+#statusbar{height:var(--statusbar-h);background:var(--bg3);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:12px;color:var(--text3);flex-shrink:0;}
+#statusbar .status-success{color:var(--accent);}
+#statusbar .status-error{color:var(--danger);}
+
+/* ── Status messages (toast-like) ────────────────────────────────── */
+.status-message{margin-top:12px;padding:12px;border-radius:4px;font-size:13px;}
+.status-success{background:rgba(76,175,80,0.1);border:1px solid var(--accent);color:var(--accent2);}
+.status-error{background:rgba(244,67,54,0.1);border:1px solid var(--danger);color:var(--danger);}
+.status-info{background:rgba(33,150,243,0.1);border:1px solid var(--info);color:var(--info);}

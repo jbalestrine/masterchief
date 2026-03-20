@@ -1,0 +1,20 @@
+; Anope services example template
+; Copy to data/anope_conf/services.conf and customize accordingly
+
+[services]
+  name = "Anope"
+  host = "127.0.0.1"
+  port = 6669
+  password = "changeme"
+
+[botserv]
+; add botserv settings here
+
+[chanserv]
+; Channel service settings
+
+[nickserv]
+; Nick service settings
+
+[opers]
+; Define operator accounts for services
