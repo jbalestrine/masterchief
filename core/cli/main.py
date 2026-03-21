@@ -246,30 +246,39 @@ cli.add_command(code)
 def serve(ctx, port, host, debug):
     """Start the MasterChief web dashboard and GUI."""
     import subprocess
-    import shutil
 
-    # Find main.py — check common locations
+    # Find main.py — check several locations in priority order:
+    #   1. Current working directory (dev / repo checkout)
+    #   2. Two levels up from this file (source tree layout)
+    #   3. Installed data_files  ({sys.prefix}/share/masterchief/)
+    #   4. Installed data_files in venv  ({sys.base_prefix}/share/masterchief/)
     candidates = [
         Path.cwd() / "main.py",
-        Path(__file__).parent.parent.parent / "main.py",
+        Path(__file__).resolve().parent.parent.parent / "main.py",
+        Path(sys.prefix) / "share" / "masterchief" / "main.py",
+        Path(sys.base_prefix) / "share" / "masterchief" / "main.py",
     ]
 
     main_py = None
     for candidate in candidates:
         if candidate.exists():
-            main_py = candidate
+            main_py = candidate.resolve()
             break
 
     if not main_py:
-        click.echo("❌  Cannot find main.py")
-        click.echo("   Run this command from the masterchief repo directory,")
-        click.echo("   or clone the repo first:")
-        click.echo("     git clone https://github.com/jbalestrine/masterchief.git")
-        click.echo("     cd masterchief && masterchief serve")
+        click.echo("Error: Cannot find main.py (web GUI)")
+        click.echo("")
+        click.echo("Searched in:")
+        for c in candidates:
+            click.echo(f"  - {c}")
+        click.echo("")
+        click.echo("Options:")
+        click.echo("  1. Run from the repo directory:  cd masterchief && masterchief serve")
+        click.echo("  2. Re-install the package:       pip install --force-reinstall masterchief")
         raise SystemExit(1)
 
     click.echo("=" * 70)
-    click.echo("MasterChief DevOps Platform — Web GUI")
+    click.echo("MasterChief DevOps Platform  -  Web GUI")
     click.echo("=" * 70)
     click.echo(f"  main.py  : {main_py}")
     click.echo(f"  host     : {host}")
@@ -277,17 +286,16 @@ def serve(ctx, port, host, debug):
     click.echo(f"  debug    : {debug}")
     click.echo("=" * 70)
 
-    # Find the Python that is running *this* process
     python_exe = sys.executable
-
     cmd = [python_exe, str(main_py), "--port", str(port)]
     if debug:
         cmd.append("--debug")
 
     try:
+        # cwd must be main.py's directory so relative HTML/static paths resolve
         subprocess.run(cmd, cwd=str(main_py.parent))
     except KeyboardInterrupt:
-        click.echo("\n👋  Server stopped.")
+        click.echo("\nServer stopped.")
 
 
 if __name__ == "__main__":

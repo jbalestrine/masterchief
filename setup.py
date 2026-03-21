@@ -4,10 +4,28 @@ A comprehensive, modular enterprise DevOps automation platform.
 
 v2.1.0 — March 2026
 """
+import glob
 from setuptools import setup, find_packages
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
+
+# ---------------------------------------------------------------------------
+# data_files — ship the web GUI (main.py + HTML/CSS/JS) so that
+# `masterchief serve` works right after `pip install masterchief`.
+# Installed to  {sys.prefix}/share/masterchief/  (pip/wheel standard).
+# ---------------------------------------------------------------------------
+_webapp_files = (
+    ["main.py"]
+    + glob.glob("*.html")
+    + ["config.yml"]
+)
+_static_files = glob.glob("static/*.css") + glob.glob("static/*.js")
+
+data_files = [
+    ("share/masterchief", _webapp_files),
+    ("share/masterchief/static", _static_files),
+]
 
 # ---------------------------------------------------------------------------
 # Package discovery — include every real project package, exclude runtime
@@ -51,7 +69,7 @@ packages = find_packages(
 
 setup(
     name="masterchief",
-    version="2.2.0",
+    version="2.2.1",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,
@@ -161,4 +179,5 @@ setup(
         ],
     },
     include_package_data=True,
+    data_files=data_files,
 )
