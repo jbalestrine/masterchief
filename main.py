@@ -1945,15 +1945,22 @@ def _upsert_session_meta(sid: str, title: str = None):
 ###############################################################################
 
 managers = {}
+_managers_dir = Path(__file__).resolve().parent / 'managers'
 for name, config in ENABLED_MODULES.items():
     print(f"DEBUG: Processing module {name}, enabled={config.get('enabled', False)}")
     if not config.get('enabled', False):
         managers[name] = None
         continue
     try:
-        spec = importlib.util.spec_from_file_location(f"{name}_manager", f"managers/{name}.py")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # Try importlib.import_module first (works when installed as package)
+        try:
+            module = importlib.import_module(f'managers.{name}')
+        except ImportError:
+            # Fallback: load from file path (works in dev when running from repo)
+            _mgr_path = _managers_dir / f'{name}.py'
+            spec = importlib.util.spec_from_file_location(f"{name}_manager", str(_mgr_path))
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
         register_func = getattr(module, f'register_{name}_module')
         # Remove 'enabled' from config for kwargs
         kwargs = {k: v for k, v in config.items() if k != 'enabled'}
@@ -12853,7 +12860,7 @@ def api_resources_convert_to_training():
 
         # Use the helper script to generate a JSONL example
 
-        helper = Path(__file__).parent / 'tools' / 'dataset_helpers.py'
+        helper = Path(__file__).parent / 'tools' / 'dataset_helper.py'
 
         cmd = [sys.executable, str(helper), '--resource', str(p), '--out', str(outpath)]
 

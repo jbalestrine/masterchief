@@ -18,7 +18,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 _webapp_files = (
     ["main.py"]
     + glob.glob("*.html")
-    + ["config.yml"]
+    + ["config.yml", "api_settings.json", "cert_audit.json"]
     # Root-level Python modules imported by main.py
     + ["auth_config.py", "auth_module.py", "azure_integration.py",
        "github_integration.py", "app_management.py", "image_worker.py"]
@@ -75,7 +75,7 @@ packages = find_packages(
 
 setup(
     name="masterchief",
-    version="2.2.2",
+    version="2.2.3",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,
@@ -193,5 +193,10 @@ setup(
         ],
     },
     include_package_data=True,
+    package_data={
+        "features": ["templates/*.html"],
+        "managers": ["data/*.json"],
+        "tf_wizard": ["templates/*.html", "static/*.css", "static/*.js"],
+    },
     data_files=data_files,
 )
