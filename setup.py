@@ -51,7 +51,7 @@ packages = find_packages(
 
 setup(
     name="masterchief",
-    version="2.1.0",
+    version="2.1.1",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,
@@ -130,6 +130,8 @@ setup(
             "paramiko>=3.4.0",
             "python-gitlab>=4.0.0",
             "PyGithub>=2.1.0",
+        ],
+        "ansible": [
             "ansible>=9.0.0",
         ],
         "dev": [
@@ -149,7 +151,7 @@ setup(
             "pre-commit>=3.6.0",
         ],
         "all": [
-            "masterchief[cloud,dev]",
+            "masterchief[cloud,ansible,dev]",
         ],
     },
     entry_points={
