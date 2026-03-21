@@ -75,7 +75,7 @@ packages = find_packages(
 
 setup(
     name="masterchief",
-    version="2.2.3",
+    version="2.2.4",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,

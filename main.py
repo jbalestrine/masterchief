@@ -1981,6 +1981,11 @@ memory_mgr = managers.get('memory')
 marketplace_mgr = managers.get('marketplace')
 script_mgr = managers.get('script')
 
+# Store managers on the Flask app so auth_module (and others) can access
+# them via current_app without the broken `from main import rbac_mgr` pattern.
+app.config['_managers'] = managers
+app.config['_rbac_mgr'] = rbac_mgr
+
 # Register blueprints
 from blueprints import ide, terraform, mock, azure
 from renderers import render_resources_page, render_addons_modules_page, render_module_manager_page, render_addons_module_config_page, render_echo_training_page

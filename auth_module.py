@@ -3,7 +3,7 @@ MasterChief Authentication Module
 Handles user authentication, session management, and OAuth flows
 """
 
-from flask import Flask, request, redirect, url_for, session, jsonify, g, flash
+from flask import Flask, request, redirect, url_for, session, jsonify, g, flash, current_app
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from authlib.integrations.flask_client import OAuth
 from authlib.integrations.base_client import OAuthError
@@ -140,11 +140,9 @@ class AuthModule:
                 username = request.form.get('username')
                 password = request.form.get('password')
                 
-                # Use RBAC manager for authentication
-                try:
-                    from main import rbac_mgr
-                except (ImportError, Exception):
-                    rbac_mgr = None
+                # --- Try RBAC manager first ---
+                rbac_mgr = current_app.config.get('_rbac_mgr')
+                authenticated = False
 
                 if rbac_mgr:
                     session_data = rbac_mgr.authenticate(username, password)
@@ -169,25 +167,25 @@ class AuthModule:
                             login_user(rbac_user)
                             next_page = request.args.get('next')
                             return redirect(next_page or '/')
-                else:
-                    # Fallback: built-in accounts when RBAC manager not loaded
-                    _builtin = {
-                        'admin': {'pw': 'masterchief', 'role': 'admin', 'perms': ['*']},
-                        'public': {'pw': 'public', 'role': 'viewer', 'perms': ['view']},
-                    }
-                    acct = _builtin.get(username)
-                    if acct and password == acct['pw']:
-                        fallback_user = User(
-                            user_id=username,
-                            username=username,
-                            email=f"{username}@localhost",
-                            provider='local',
-                            role=acct['role'],
-                            permissions=acct['perms'],
-                        )
-                        login_user(fallback_user)
-                        next_page = request.args.get('next')
-                        return redirect(next_page or '/')
+
+                # --- Fallback: built-in accounts (always available) ---
+                _builtin = {
+                    'admin': {'pw': 'masterchief', 'role': 'admin', 'perms': ['*']},
+                    'public': {'pw': 'public', 'role': 'viewer', 'perms': ['view']},
+                }
+                acct = _builtin.get(username)
+                if acct and password == acct['pw']:
+                    fallback_user = User(
+                        user_id=username,
+                        username=username,
+                        email=f"{username}@localhost",
+                        provider='local',
+                        role=acct['role'],
+                        permissions=acct['perms'],
+                    )
+                    login_user(fallback_user)
+                    next_page = request.args.get('next')
+                    return redirect(next_page or '/')
                 
                 flash('Invalid credentials')
                 return redirect(url_for('login'))
@@ -384,7 +382,7 @@ class AuthModule:
         @auth_module.login_manager.user_loader
         def load_user(user_id):
             """Load user by ID"""
-            from main import rbac_mgr
+            rbac_mgr = current_app.config.get('_rbac_mgr')
             if rbac_mgr:
                 users = rbac_mgr.get_users()
                 user = next((u for u in users if u['id'] == user_id), None)
@@ -402,6 +400,21 @@ class AuthModule:
                         role=user.get('role'),
                         permissions=permissions
                     )
+            # Fallback: reload built-in accounts from session
+            _builtin = {
+                'admin': {'role': 'admin', 'perms': ['*']},
+                'public': {'role': 'viewer', 'perms': ['view']},
+            }
+            if user_id in _builtin:
+                acct = _builtin[user_id]
+                return User(
+                    user_id=user_id,
+                    username=user_id,
+                    email=f"{user_id}@localhost",
+                    provider='local',
+                    role=acct['role'],
+                    permissions=acct['perms'],
+                )
             return None
 
         return auth_module
