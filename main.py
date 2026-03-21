@@ -17151,7 +17151,7 @@ def art_gallery():
     try:
         p = Path(__file__).resolve().parent / 'gallery.html'
         if p.exists():
-            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store'}
     except Exception:
         app.logger.exception('Failed to serve gallery.html')
     return ('Art Gallery not available', 404)

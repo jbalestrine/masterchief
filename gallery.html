@@ -89,9 +89,9 @@ input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,
 .card .thumb{width:100%;aspect-ratio:4/3;overflow:hidden;position:relative;background:linear-gradient(135deg,var(--bg3),var(--bg4));}
 .card .thumb img{width:100%;height:100%;object-fit:cover;transition:transform .6s cubic-bezier(.4,0,.2,1);}
 .card:hover .thumb img{transform:scale(1.08);}
-.card .thumb .overlay{position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.8) 100%);opacity:0;transition:var(--transition);display:flex;align-items:flex-end;justify-content:center;padding:16px;gap:8px;}
+.card .thumb .overlay{position:absolute;inset:0;background:linear-gradient(180deg,transparent 30%,rgba(0,0,0,.8) 100%);opacity:0;pointer-events:none;transition:var(--transition);display:flex;align-items:flex-end;justify-content:center;padding:16px;gap:8px;}
 .card:hover .thumb .overlay{opacity:1;}
-.card .thumb .overlay button{padding:8px 14px;border-radius:8px;font-size:12px;font-weight:500;backdrop-filter:blur(10px);transition:var(--transition);}
+.card .thumb .overlay button{pointer-events:auto;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:500;backdrop-filter:blur(10px);transition:var(--transition);}
 .card .thumb .overlay .btn-buy{background:rgba(212,168,83,.9);color:#111;}
 .card .thumb .overlay .btn-buy:hover{background:var(--gold);}
 .card .thumb .overlay .btn-fav{background:rgba(255,255,255,.12);color:var(--text);}
@@ -168,7 +168,7 @@ input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(212,
 #lightbox .lb-prev{left:20px;}
 #lightbox .lb-next{right:20px;}
 #lightbox .lb-content{max-width:85vw;max-height:85vh;display:flex;flex-direction:column;align-items:center;}
-#lightbox .lb-content img{max-width:85vw;max-height:65vh;object-fit:contain;border-radius:8px;box-shadow:var(--shadow-lg);}
+#lightbox .lb-content img{max-width:85vw;max-height:65vh;min-height:200px;object-fit:contain;border-radius:8px;box-shadow:var(--shadow-lg);}
 #lightbox .lb-info{margin-top:16px;text-align:center;}
 #lightbox .lb-info h3{font-size:18px;font-weight:400;margin-bottom:4px;color:var(--gold2);}
 #lightbox .lb-info p{font-size:13px;color:var(--text3);}
@@ -445,6 +445,33 @@ async function load(){try{gallery=await api('/api/gallery/list');}catch{gallery=
 // ── Init ─────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async()=>{
   await load(); verifyAdmin(); render(); initDrop(); initTagInput();
+
+  // Event delegation for gallery grid clicks
+  document.getElementById('grid').addEventListener('click', function(e){
+    // Check if an overlay button was clicked
+    const actionBtn = e.target.closest('[data-action]');
+    if(actionBtn){
+      e.stopPropagation();
+      const id = actionBtn.dataset.id;
+      const action = actionBtn.dataset.action;
+      if(action==='cart') addToCart(id);
+      else if(action==='fav') toggleFav(id);
+      else if(action==='edit') openEdit(id);
+      else if(action==='del') quickDelete(id);
+      return;
+    }
+    // Otherwise check if a card was clicked → open lightbox
+    const card = e.target.closest('.card[data-art-id]');
+    if(card){
+      openLightbox(card.dataset.artId);
+    }
+  });
+
+  // Click lightbox background to close
+  document.getElementById('lightbox').addEventListener('click', function(e){
+    if(e.target===this) closeLightbox();
+  });
+
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){closeLightbox();closeUpload();closeEdit();closeCheckout();closeLogin();}
     if(document.getElementById('lightbox').classList.contains('open')){
@@ -586,17 +613,17 @@ function render(){
   else{
     empty.style.display='none';
     grid.innerHTML=filtered.map(art=>{
-      const gIdx=gallery.indexOf(art), isAdmin=!!adminToken;
-      return `<div class="card" onclick="openLightbox(${gIdx})">
+      const isAdmin=!!adminToken;
+      return `<div class="card" data-art-id="${art.id}">
         <div class="thumb">
           <img src="${imgUrl(art)}" alt="${esc(art.title)}" loading="lazy">
           <span class="genre-tag">${esc(art.genre)}</span>
           ${art.sold?'<span class="sold-badge">Sold</span>':''}
           ${art.forSale&&!art.sold?`<span class="price-badge">${fmtPrice(art.price)}</span>`:''}
           <div class="overlay">
-            ${art.forSale&&!art.sold?`<button class="btn-buy" onclick="event.stopPropagation();addToCart('${art.id}')">Add to Cart</button>`:''}
-            <button class="btn-fav" onclick="event.stopPropagation();toggleFav('${art.id}')">${art.fav?'\u2605':'\u2606'}</button>
-            ${isAdmin?`<button class="btn-edit" onclick="event.stopPropagation();openEdit('${art.id}')">Edit</button><button class="btn-del" onclick="event.stopPropagation();quickDelete('${art.id}')">Del</button>`:''}
+            ${art.forSale&&!art.sold?`<button class="btn-buy" data-action="cart" data-id="${art.id}">Add to Cart</button>`:''}
+            <button class="btn-fav" data-action="fav" data-id="${art.id}">${art.fav?'\u2605':'\u2606'}</button>
+            ${isAdmin?`<button class="btn-edit" data-action="edit" data-id="${art.id}">Edit</button><button class="btn-del" data-action="del" data-id="${art.id}">Del</button>`:''}
           </div>
         </div>
         <div class="info">
@@ -743,11 +770,19 @@ async function submitPurchase(){
 }
 
 // ── Lightbox ─────────────────────────────────────────────────────
-function openLightbox(idx){lbIndex=idx;showLbImage();document.getElementById('lightbox').classList.add('open');}
-function closeLightbox(){document.getElementById('lightbox').classList.remove('open');}
+function openLightbox(id){
+  try{
+    lbIndex=gallery.findIndex(a=>a.id===id);
+    if(lbIndex<0)lbIndex=0;
+    showLbImage();
+    document.getElementById('lightbox').classList.add('open');
+    document.body.style.overflow='hidden';
+  }catch(err){console.error('openLightbox error:',err);}
+}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('open');document.body.style.overflow='';}
 function lbNav(dir){lbIndex=(lbIndex+dir+gallery.length)%gallery.length;showLbImage();}
 function showLbImage(){
-  const art=gallery[lbIndex];if(!art)return;
+  const art=gallery[lbIndex];if(!art){document.getElementById('lightbox').classList.remove('open');return;}
   document.getElementById('lbImg').src=imgUrl(art);
   document.getElementById('lbTitle').textContent=art.title;
   document.getElementById('lbMeta').textContent=`${art.artist} \u00b7 ${art.genre}${art.medium?' \u00b7 '+art.medium:''}${art.dimensions?' \u00b7 '+art.dimensions:''} \u00b7 ${formatDate(art.date)}`;
