@@ -238,5 +238,57 @@ cli.add_command(health)
 cli.add_command(code)
 
 
+@cli.command()
+@click.option("--port", "-p", type=int, default=8080, help="Port to run on (default: 8080)")
+@click.option("--host", "-h", type=str, default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
+@click.option("--debug", "-d", is_flag=True, help="Run in debug mode")
+@click.pass_context
+def serve(ctx, port, host, debug):
+    """Start the MasterChief web dashboard and GUI."""
+    import subprocess
+    import shutil
+
+    # Find main.py — check common locations
+    candidates = [
+        Path.cwd() / "main.py",
+        Path(__file__).parent.parent.parent / "main.py",
+    ]
+
+    main_py = None
+    for candidate in candidates:
+        if candidate.exists():
+            main_py = candidate
+            break
+
+    if not main_py:
+        click.echo("❌  Cannot find main.py")
+        click.echo("   Run this command from the masterchief repo directory,")
+        click.echo("   or clone the repo first:")
+        click.echo("     git clone https://github.com/jbalestrine/masterchief.git")
+        click.echo("     cd masterchief && masterchief serve")
+        raise SystemExit(1)
+
+    click.echo("=" * 70)
+    click.echo("MasterChief DevOps Platform — Web GUI")
+    click.echo("=" * 70)
+    click.echo(f"  main.py  : {main_py}")
+    click.echo(f"  host     : {host}")
+    click.echo(f"  port     : {port}")
+    click.echo(f"  debug    : {debug}")
+    click.echo("=" * 70)
+
+    # Find the Python that is running *this* process
+    python_exe = sys.executable
+
+    cmd = [python_exe, str(main_py), "--port", str(port)]
+    if debug:
+        cmd.append("--debug")
+
+    try:
+        subprocess.run(cmd, cwd=str(main_py.parent))
+    except KeyboardInterrupt:
+        click.echo("\n👋  Server stopped.")
+
+
 if __name__ == "__main__":
     cli(obj={})
