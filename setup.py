@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="masterchief",
-    version="1.0.1",
+    version="2.0.0",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,
