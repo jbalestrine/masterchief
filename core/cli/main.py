@@ -23,7 +23,7 @@ except ImportError:
 
 
 @click.group()
-@click.option("--config-dir", type=click.Path(exists=True), default="./config", help="Configuration directory")
+@click.option("--config-dir", type=click.Path(), default="./config", help="Configuration directory")
 @click.option("--environment", "-e", default="dev", help="Environment (dev, staging, prod)")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
 @click.pass_context

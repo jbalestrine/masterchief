@@ -19,6 +19,9 @@ _webapp_files = (
     ["main.py"]
     + glob.glob("*.html")
     + ["config.yml"]
+    # Root-level Python modules imported by main.py
+    + ["auth_config.py", "auth_module.py", "azure_integration.py",
+       "github_integration.py", "app_management.py", "image_worker.py"]
 )
 _static_files = glob.glob("static/*.css") + glob.glob("static/*.js")
 
@@ -59,6 +62,9 @@ packages = find_packages(
         "gui*",
         "renderers*",
         "resilience*",
+        # Web UI templates & static
+        "templates*",
+        "static*",
     ],
     exclude=[
         # Never ship these
@@ -69,13 +75,21 @@ packages = find_packages(
 
 setup(
     name="masterchief",
-    version="2.2.1",
+    version="2.2.2",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jbalestrine/masterchief",
     packages=packages,
+    py_modules=[
+        "auth_config",
+        "auth_module",
+        "azure_integration",
+        "github_integration",
+        "app_management",
+        "image_worker",
+    ],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
