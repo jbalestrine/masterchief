@@ -17145,6 +17145,17 @@ if TF_WIZARD_AVAILABLE:
 
 
 
+@app.route('/gallery')
+def art_gallery():
+    """Serve the Art Gallery web UI."""
+    try:
+        p = Path(__file__).resolve().parent / 'gallery.html'
+        if p.exists():
+            return p.read_text(encoding='utf-8'), 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception:
+        app.logger.exception('Failed to serve gallery.html')
+    return ('Art Gallery not available', 404)
+
 @app.route('/arm_creator')
 def arm_creator():
     """Serve the ARM Template Creator web UI."""
