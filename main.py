@@ -17156,6 +17156,244 @@ def art_gallery():
         app.logger.exception('Failed to serve gallery.html')
     return ('Art Gallery not available', 404)
 
+# ── Art Gallery API ──────────────────────────────────────────────────
+_GALLERY_DIR = Path(__file__).resolve().parent / 'data' / 'gallery'
+_GALLERY_META = Path(__file__).resolve().parent / 'data' / 'gallery_meta.json'
+_GALLERY_ORDERS = Path(__file__).resolve().parent / 'data' / 'gallery_orders.json'
+_GALLERY_ADMIN = Path(__file__).resolve().parent / 'data' / 'gallery_admin.json'
+
+def _ensure_gallery():
+    _GALLERY_DIR.mkdir(parents=True, exist_ok=True)
+
+def _load_gallery_meta():
+    _ensure_gallery()
+    if _GALLERY_META.exists():
+        try:
+            return json.loads(_GALLERY_META.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return []
+
+def _save_gallery_meta(meta):
+    _ensure_gallery()
+    _GALLERY_META.write_text(json.dumps(meta, indent=2), encoding='utf-8')
+
+def _load_orders():
+    if _GALLERY_ORDERS.exists():
+        try:
+            return json.loads(_GALLERY_ORDERS.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    return []
+
+def _save_orders(orders):
+    _GALLERY_ORDERS.write_text(json.dumps(orders, indent=2), encoding='utf-8')
+
+def _load_admin_config():
+    if _GALLERY_ADMIN.exists():
+        try:
+            return json.loads(_GALLERY_ADMIN.read_text(encoding='utf-8'))
+        except Exception:
+            pass
+    # Default admin credentials
+    default = {'username': 'admin', 'password': 'masterchief', 'gallery_name': 'MasterChief Art Gallery', 'contact_email': ''}
+    _GALLERY_ADMIN.parent.mkdir(parents=True, exist_ok=True)
+    _GALLERY_ADMIN.write_text(json.dumps(default, indent=2), encoding='utf-8')
+    return default
+
+_gallery_sessions = {}  # token -> expiry timestamp
+
+@app.route('/api/gallery/list')
+def gallery_list():
+    """Return all gallery metadata."""
+    return jsonify(_load_gallery_meta())
+
+@app.route('/api/gallery/upload', methods=['POST'])
+def gallery_upload():
+    """Upload one or more images to the gallery."""
+    _ensure_gallery()
+    meta = _load_gallery_meta()
+    files = request.files.getlist('files')
+    if not files:
+        return jsonify({'error': 'No files provided'}), 400
+
+    title = request.form.get('title', 'Untitled')
+    artist = request.form.get('artist', 'Unknown')
+    genre = request.form.get('genre', 'portraits')
+    desc = request.form.get('desc', '')
+    tags_raw = request.form.get('tags', '')
+    tags = [t.strip() for t in tags_raw.split(',') if t.strip()]
+    try:
+        price = float(request.form.get('price', '0'))
+    except (ValueError, TypeError):
+        price = 0.0
+    for_sale = request.form.get('forSale', 'false') == 'true'
+    medium = request.form.get('medium', '')
+    dimensions = request.form.get('dimensions', '')
+
+    added = []
+    for i, f in enumerate(files):
+        if not f or not f.filename:
+            continue
+        ext = Path(f.filename).suffix.lower()
+        if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'):
+            continue
+        uid = f"{int(time.time()*1000)}_{os.urandom(4).hex()}"
+        fname = f"{uid}{ext}"
+        dest = _GALLERY_DIR / fname
+        f.save(str(dest))
+        entry = {
+            'id': uid,
+            'filename': fname,
+            'title': f"{title} ({i+1})" if len(files) > 1 else title,
+            'artist': artist,
+            'genre': genre,
+            'desc': desc,
+            'tags': tags,
+            'date': int(time.time() * 1000),
+            'fav': False,
+            'size': dest.stat().st_size,
+            'price': price,
+            'forSale': for_sale,
+            'sold': False,
+            'medium': medium,
+            'dimensions': dimensions,
+        }
+        meta.append(entry)
+        added.append(entry)
+    _save_gallery_meta(meta)
+    return jsonify({'added': len(added), 'items': added})
+
+@app.route('/api/gallery/image/<filename>')
+def gallery_image(filename):
+    """Serve a gallery image file."""
+    _ensure_gallery()
+    p = _GALLERY_DIR / filename
+    if not p.exists() or not p.is_file():
+        return ('Not found', 404)
+    import mimetypes
+    mt = mimetypes.guess_type(str(p))[0] or 'image/png'
+    return p.read_bytes(), 200, {'Content-Type': mt, 'Cache-Control': 'public, max-age=86400'}
+
+@app.route('/api/gallery/update/<art_id>', methods=['POST'])
+def gallery_update(art_id):
+    """Toggle favorite or update metadata for a gallery item."""
+    meta = _load_gallery_meta()
+    item = next((m for m in meta if m['id'] == art_id), None)
+    if not item:
+        return jsonify({'error': 'Not found'}), 404
+    data = request.get_json(silent=True) or {}
+    for key in ('fav', 'title', 'genre', 'tags', 'artist', 'desc', 'price', 'forSale', 'sold', 'medium', 'dimensions'):
+        if key in data:
+            item[key] = data[key]
+    _save_gallery_meta(meta)
+    return jsonify(item)
+
+@app.route('/api/gallery/delete/<art_id>', methods=['DELETE'])
+def gallery_delete(art_id):
+    """Delete a gallery item and its file."""
+    meta = _load_gallery_meta()
+    item = next((m for m in meta if m['id'] == art_id), None)
+    if not item:
+        return jsonify({'error': 'Not found'}), 404
+    fpath = _GALLERY_DIR / item.get('filename', '')
+    if fpath.exists():
+        fpath.unlink()
+    meta = [m for m in meta if m['id'] != art_id]
+    _save_gallery_meta(meta)
+    return jsonify({'deleted': art_id})
+
+# ── Gallery Admin Auth ───────────────────────────────────────────────
+@app.route('/api/gallery/admin/login', methods=['POST'])
+def gallery_admin_login():
+    """Authenticate gallery admin."""
+    data = request.get_json(silent=True) or {}
+    cfg = _load_admin_config()
+    if data.get('username') == cfg['username'] and data.get('password') == cfg['password']:
+        token = os.urandom(24).hex()
+        _gallery_sessions[token] = time.time() + 86400  # 24h
+        return jsonify({'ok': True, 'token': token})
+    return jsonify({'ok': False, 'error': 'Invalid credentials'}), 401
+
+@app.route('/api/gallery/admin/verify', methods=['POST'])
+def gallery_admin_verify():
+    """Check if admin token is still valid."""
+    data = request.get_json(silent=True) or {}
+    token = data.get('token', '')
+    exp = _gallery_sessions.get(token, 0)
+    if exp > time.time():
+        return jsonify({'valid': True})
+    _gallery_sessions.pop(token, None)
+    return jsonify({'valid': False}), 401
+
+@app.route('/api/gallery/admin/logout', methods=['POST'])
+def gallery_admin_logout():
+    """Invalidate admin token."""
+    data = request.get_json(silent=True) or {}
+    _gallery_sessions.pop(data.get('token', ''), None)
+    return jsonify({'ok': True})
+
+@app.route('/api/gallery/admin/settings', methods=['GET', 'POST'])
+def gallery_admin_settings():
+    """Get or update gallery admin settings."""
+    cfg = _load_admin_config()
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        # Verify token
+        token = data.get('token', '')
+        if _gallery_sessions.get(token, 0) <= time.time():
+            return jsonify({'error': 'Unauthorized'}), 401
+        for k in ('username', 'password', 'gallery_name', 'contact_email'):
+            if k in data and data[k]:
+                cfg[k] = data[k]
+        _GALLERY_ADMIN.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
+        return jsonify({'ok': True})
+    return jsonify({'gallery_name': cfg.get('gallery_name', ''), 'contact_email': cfg.get('contact_email', '')})
+
+# ── Gallery Purchase / Orders ────────────────────────────────────────
+@app.route('/api/gallery/purchase', methods=['POST'])
+def gallery_purchase():
+    """Place an order for artwork."""
+    data = request.get_json(silent=True) or {}
+    items = data.get('items', [])
+    buyer = data.get('buyer', {})
+    if not items:
+        return jsonify({'error': 'No items'}), 400
+    if not buyer.get('name') or not buyer.get('email'):
+        return jsonify({'error': 'Buyer name and email required'}), 400
+
+    meta = _load_gallery_meta()
+    orders = _load_orders()
+    order_items = []
+    total = 0.0
+    for art_id in items:
+        item = next((m for m in meta if m['id'] == art_id), None)
+        if item and item.get('forSale') and not item.get('sold'):
+            order_items.append({'id': item['id'], 'title': item['title'], 'price': item.get('price', 0)})
+            total += item.get('price', 0)
+            item['sold'] = True
+
+    if not order_items:
+        return jsonify({'error': 'No available items to purchase'}), 400
+
+    order = {
+        'orderId': f"ORD-{int(time.time()*1000)}",
+        'date': int(time.time() * 1000),
+        'buyer': buyer,
+        'items': order_items,
+        'total': total,
+        'status': 'confirmed'
+    }
+    orders.append(order)
+    _save_orders(orders)
+    _save_gallery_meta(meta)
+    return jsonify(order)
+
+@app.route('/api/gallery/orders')
+def gallery_orders():
+    """List all orders (admin)."""
+    return jsonify(_load_orders())
+
 @app.route('/arm_creator')
 def arm_creator():
     """Serve the ARM Template Creator web UI."""
