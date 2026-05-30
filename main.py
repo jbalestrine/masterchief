@@ -4,7 +4,26 @@
 
 import sys
 print("DEBUG: main.py is starting", file=sys.stderr)
+# --- MASTERCHIEF APPLIANCE PATH LOGIC ---
+import platform as _plt
+import os
 
+# Detect if we are on the Ubuntu Appliance (/opt/) or Windows Laptop
+IS_LINUX = _plt.system() == "Linux"
+BASE_PATH = "/opt/masterchief" if IS_LINUX else os.path.dirname(os.path.abspath(__file__))
+
+# Define universal paths for the model and data
+MODEL_PATH = os.path.join(BASE_PATH, "models", "mistral-7b-instruct-v0.1.Q4_K_M.gguf")
+DATA_DIR = os.path.join(BASE_PATH, "data")
+
+# Ensure subfolders exist so the appliance doesn't crash on first boot
+os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(os.path.join(BASE_PATH, "logs"), exist_ok=True)
+
+# Add base path to sys.path so modules like 'echo' and 'features' are found
+if BASE_PATH not in sys.path:
+    sys.path.insert(0, BASE_PATH)
+# ----------------------------------------
 import sys
 import os
 import random
@@ -131,7 +150,7 @@ from collections import Counter
 
 
 
-from core.echo.identity import Echo
+from echo.identity import Echo
 
 # Remove it again to avoid conflicts
 
@@ -443,211 +462,92 @@ except Exception:
 
 
 
-# Optionally force a default model for debugging via ECHO_FORCE_MODEL.
-
-# If set (or the chosen fallback exists), persist it to data/echo_model.json
-
-# so `/api/echo/preload_model` and the bot prefer this model.
-
+# --- MASTERCHIEF APPLIANCE MODEL LOGIC ---
 try:
-
-    forced_model = os.environ.get('ECHO_FORCE_MODEL') or None
-
-    # sensible fallback for debugging (update if you prefer another model)
-
-    if not forced_model:
-
-        forced_model = str(Path.cwd() / 'models' / 'mistral-7b-instruct-v0.1.Q4_K_M.gguf')
-
-    # resolve to absolute path
-
+    # 1. Determine model path: Prefer Environment Variable, then Universal Fallback
+    forced_model = os.environ.get('ECHO_FORCE_MODEL') or MODEL_PATH
     p = Path(forced_model)
 
+    # 2. Resolve to absolute path using our Appliance Base
     if not p.is_absolute():
+        p = Path(BASE_PATH) / p
 
-        p = Path.cwd() / p
-
+    # 3. Persist chosen model to our data directory
     if p.exists():
-
-        cfg = Path(__file__).parent / 'data' / 'echo_model.json'
-
+        cfg = Path(DATA_DIR) / 'echo_model.json'
         cfg.parent.mkdir(parents=True, exist_ok=True)
-
         cfg.write_text(json.dumps({'model': str(p)}), encoding='utf-8')
-
         app.logger.info(f'Forced default model set to: {p}')
-
     else:
-
         app.logger.info(f'Forced model not found, skipping: {p}')
-
 except Exception:
-
     app.logger.exception('Failed to set forced default model')
 
-# If user explicitly requests an immediate forced GGUF load, do it now.
-
-# This bypasses the test-time guard and will load the model into memory.
-
+# --- IMMEDIATE STARTUP LOAD ---
 try:
-
     if os.environ.get('ECHO_FORCE_LOAD') == '1':
-
-        # determine model path: prefer explicit env, then persisted config
-
         model_path = os.environ.get('ECHO_FORCE_MODEL')
-
         if not model_path:
-
-            cfg = Path(__file__).parent / 'data' / 'echo_model.json'
-
+            cfg = Path(DATA_DIR) / 'echo_model.json'
             if cfg.exists():
-
                 try:
-
                     model_path = json.loads(cfg.read_text(encoding='utf-8')).get('model')
-
                 except Exception:
-
                     model_path = None
-
+        
         if model_path:
-
             try:
-
                 from echo.runtime import model_runtime
-
-                model_runtime.load_model(model_path, force=True)
-
+                model_runtime.load_model(model_path)
                 app.logger.info(f'Force-loaded GGUF model at startup: {model_path}')
-
             except Exception:
-
                 app.logger.exception('Failed to force-load GGUF model')
-
         else:
-
             app.logger.warning('ECHO_FORCE_LOAD=1 but no model path found')
-
 except Exception:
-
     app.logger.exception('Force model load check failed')
 
-# Sessions index file (persistent metadata for chat sessions)
-
-
-
-
-
-# Runtime chat/model initialization
-
+# --- RUNTIME INITIALIZATION HELPERS ---
 chatbot = None
 
-
-
 def get_default_model_path():
-
-    cfg = Path(__file__).parent / 'data' / 'echo_model.json'
-
+    """Retrieve the persisted model path or use the appliance default."""
+    cfg = Path(DATA_DIR) / 'echo_model.json'
     if cfg.exists():
-
         try:
-
             return json.loads(cfg.read_text(encoding='utf-8')).get('model')
-
         except Exception:
-
-            return None
-
-    # sensible fallback (do not force existence here)
-
-    candidate = Path.cwd() / 'models' / 'Phi-3-mini-4k-instruct-q4.gguf'
-
-    return str(candidate) if candidate.exists() else None
-
-
-
-
+            pass
+    # Fallback to the Mistral path defined at the top
+    return MODEL_PATH if Path(MODEL_PATH).exists() else None
 
 def init_chat():
-
-    """Initialize the Echo chat bot and (optionally) load the GGUF at runtime.
-
-
-
-    Loading the heavy GGUF model is performed here so pytest collection
-
-    and import-time operations never import native bindings.
-
-    """
-
+    """Initialize the Echo chat bot for the Appliance."""
     global chatbot
-
     try:
-
         from echo.chat_bot import get_chat_bot
-
         from echo.runtime import model_runtime
-
         from echo.conversation_storage import get_storage as _get_storage
-
+        
         chatbot = get_chat_bot()
-
-        # Pre-warm conversation storage so the first API request isn't slow
-
+        
+        # Pre-warm storage for the USB appliance
         try:
-
             _get_storage()
-
         except Exception:
-
             app.logger.exception('Failed to pre-warm conversation storage')
 
         model_path = get_default_model_path()
-
         if model_path:
-
-            # set the preferred model path on the bot (no load yet)
-
             try:
-
                 chatbot.set_local_model(model_path)
-
-            except Exception:
-
-                pass
-
-            # perform explicit runtime load of the model
-
-            try:
-
                 model_runtime.load_model(model_path)
-
                 app.logger.info(f'Runtime model loaded: {model_path}')
-
             except Exception:
-
                 app.logger.exception('Failed to runtime-load model')
-
     except Exception:
-
         app.logger.exception('Chat initialization failed')
-
-
-
-
-    except Exception:
-
-        return None
-
-
-
-
-
-
-
-
-
+# --- END APPLIANCE LOGIC ---
 
 
 

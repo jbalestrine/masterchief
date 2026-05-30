@@ -19,9 +19,11 @@ _webapp_files = (
     ["main.py"]
     + glob.glob("*.html")
     + ["config.yml", "api_settings.json", "cert_audit.json"]
-    # Root-level Python modules imported by main.py
-    + ["auth_config.py", "auth_module.py", "azure_integration.py",
-       "github_integration.py", "app_management.py", "image_worker.py"]
+    # ALL root-level Python modules (main.py imports sys_diagnostics at
+    # runtime; others are feature scripts / demos users may invoke)
+    + [f for f in glob.glob("*.py")
+       if f not in ("setup.py", "conftest.py", "main.py", "main backup.py")
+       and not f.startswith("_")]
 )
 _static_files = glob.glob("static/*.css") + glob.glob("static/*.js")
 
@@ -36,7 +38,7 @@ data_files = [
 # ---------------------------------------------------------------------------
 packages = find_packages(
     include=[
-        # Core platform
+        # Core platform + all packages
         "core*",
         "echo*",
         "platform*",
@@ -65,17 +67,32 @@ packages = find_packages(
         # Web UI templates & static
         "templates*",
         "static*",
+        # Application packages
+        "masterchief*",
+        "webapp*",
+        "pipelines*",
+        "assets*",
+        "examples*",
+        "roku*",
     ],
     exclude=[
         # Never ship these
         "*.tests*",
         "tests*",
+        "data*",
+        "php*",
+        "node_modules*",
+        "irc_flask_superapp_final*",
+        "generated_code*",
+        "build_backup*",
+        "dist_backup*",
+        "remote_masterchief*",
     ],
 )
 
 setup(
     name="masterchief",
-    version="2.2.4",
+    version="2.2.6",
     author="MasterChief Team",
     description="Enterprise DevOps Automation Platform",
     long_description=long_description,
@@ -83,6 +100,7 @@ setup(
     url="https://github.com/jbalestrine/masterchief",
     packages=packages,
     py_modules=[
+        "masterchief_entry",
         "auth_config",
         "auth_module",
         "azure_integration",
@@ -188,15 +206,19 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "masterchief=core.cli.main:cli",
+            "masterchief=masterchief_entry:main",
             "tf-wizard=tf_wizard.app:main",
         ],
     },
     include_package_data=True,
     package_data={
-        "features": ["templates/*.html"],
-        "managers": ["data/*.json"],
-        "tf_wizard": ["templates/*.html", "static/*.css", "static/*.js"],
+        # Catch-all: ship every non-.py data file found inside any package
+        "": [
+            "*.html", "*.css", "*.js", "*.json", "*.yaml", "*.yml",
+            "*.tf", "*.j2", "*.sh", "*.ps1", "*.brs", "*.xml",
+            "*.md", "*.txt", "*.cfg", "*.conf", "*.template", "*.list",
+            "*.png", "*.jpg", "*.svg", "*.ico",
+        ],
     },
     data_files=data_files,
 )

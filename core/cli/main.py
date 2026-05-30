@@ -22,13 +22,19 @@ except ImportError:
     from core.cli.commands import script, dashboard, health, code
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option("--config-dir", type=click.Path(), default="./config", help="Configuration directory")
 @click.option("--environment", "-e", default="dev", help="Environment (dev, staging, prod)")
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
+@click.option("--port", "-p", type=int, default=None, help="Port for web GUI (default: 8080)")
+@click.option("--host", type=str, default=None, help="Host to bind web GUI to")
 @click.pass_context
-def cli(ctx, config_dir, environment, verbose):
-    """MasterChief - Enterprise DevOps Automation Platform."""
+def cli(ctx, config_dir, environment, verbose, port, host):
+    """MasterChief - Enterprise DevOps Automation Platform.
+
+    Run without a subcommand to launch the web dashboard (GUI).
+    Use 'masterchief --help' to see all CLI subcommands.
+    """
     ctx.ensure_object(dict)
     ctx.obj["config_dir"] = Path(config_dir)
     ctx.obj["environment"] = environment
@@ -37,6 +43,10 @@ def cli(ctx, config_dir, environment, verbose):
     if verbose:
         import logging
         logging.basicConfig(level=logging.DEBUG)
+
+    # Default action: launch the web GUI when no subcommand is given
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(serve, port=port or 8080, host=host or "0.0.0.0", debug=verbose)
 
 
 @cli.command()
