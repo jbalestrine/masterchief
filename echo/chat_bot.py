@@ -336,6 +336,18 @@ class EchoChatBot:
         # Normalize message
         msg_lower = user_message.lower().strip()
 
+        # Lightweight profile memory: remember and recall user name per session.
+        provided_name = self._extract_user_name_preference(user_message)
+        if provided_name:
+            self._set_session_profile_value(session_id, 'name', provided_name)
+            return f"Got it. I will call you {provided_name}."
+
+        if self._is_name_recall_query(msg_lower):
+            remembered = self._get_session_profile_value(session_id, 'name')
+            if remembered:
+                return f"Your name is {remembered}."
+            return "I do not have your name yet. Tell me with 'my name is ...' and I will remember it."
+
         # Always prioritize direct offline definitions for core deployment terms.
         if any(k in msg_lower for k in ['canary', 'blue-green', 'blue green', 'rollback']):
             return self._handle_devops_query(user_message)
@@ -422,6 +434,65 @@ class EchoChatBot:
             return general
 
         return self._random_choice(self.default_responses['unknown'])
+
+    def _extract_user_name_preference(self, message: str) -> Optional[str]:
+        """Extract user-provided preferred name from common phrasing."""
+        msg = (message or '').strip()
+        if not msg:
+            return None
+
+        patterns = [
+            r"\bmy\s+name\s+is\s+([A-Za-z][A-Za-z\-']{0,31})\b",
+            r"\bcall\s+me\s+([A-Za-z][A-Za-z\-']{0,31})\b",
+            r"\bi\s+am\s+([A-Za-z][A-Za-z\-']{0,31})\b",
+            r"\bi'?m\s+([A-Za-z][A-Za-z\-']{0,31})\b",
+        ]
+        for pat in patterns:
+            m = re.search(pat, msg, re.IGNORECASE)
+            if m:
+                raw = (m.group(1) or '').strip(" .,!?:;\"'")
+                if raw:
+                    return raw[:1].upper() + raw[1:]
+        return None
+
+    def _is_name_recall_query(self, msg_lower: str) -> bool:
+        """Check if user is asking Echo to recall their name."""
+        if not msg_lower:
+            return False
+        patterns = [
+            r"\bwhat(?:'s|\s+is)?\s+my\s+name\b",
+            r"\bwhats\s+my\s+name\b",
+            r"\bdo\s+you\s+know\s+my\s+name\b",
+            r"\bwho\s+am\s+i\b",
+        ]
+        return any(re.search(p, msg_lower) for p in patterns)
+
+    def _get_session_profile_value(self, session_id: str, key: str) -> Optional[str]:
+        """Read profile value from persisted session metadata."""
+        try:
+            from echo.conversation_storage import get_storage
+            storage = get_storage()
+            meta = storage.get_session_meta(session_id) or {}
+            profile = meta.get('profile') or {}
+            val = profile.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+        except Exception:
+            logger.exception('Failed to read session profile value')
+        return None
+
+    def _set_session_profile_value(self, session_id: str, key: str, value: str) -> None:
+        """Persist profile value in session metadata."""
+        try:
+            from echo.conversation_storage import get_storage
+            storage = get_storage()
+            meta = storage.get_session_meta(session_id) or {}
+            profile = meta.get('profile') or {}
+            profile[key] = value
+            meta['profile'] = profile
+            storage.set_session_meta(session_id, meta)
+        except Exception:
+            logger.exception('Failed to persist session profile value')
 
     def _contextual_fallback_response(self, user_message: str, session_id: str) -> Optional[str]:
         """Provide a continuity-preserving fallback when LLM generation is unavailable."""
