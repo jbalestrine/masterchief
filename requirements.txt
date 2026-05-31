@@ -5,7 +5,12 @@
 # Optional heavy dependencies (AI/ML, audio, cloud) are in:
 #           requirements-optional.txt
 # =============================================================================
+# --- Core AI dependencies ---
+llama-cpp-python
+huggingface_hub
 
+# --- Data handling ---
+numpy
 # ---------------------------------------------------------------------------
 # Web Framework  (hard required — app will not start without these)
 # ---------------------------------------------------------------------------
