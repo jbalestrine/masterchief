@@ -365,14 +365,9 @@ class EchoChatBot:
         # Build a context-rich prompt for LLM-backed paths to improve continuity.
         context_prompt = self._build_context_prompt(session_id, user_message)
 
-        # Check learned patterns first
-        learned_response = self._check_learned_patterns(msg_lower)
-        if learned_response:
-            return learned_response
-        
         # Pattern matching for common intents - check message start for greetings
         msg_start = msg_lower[:50]  # Check only the first 50 characters
-        if msg_lower in {'hi', 'hello', 'hey'} or any(phrase in msg_start for phrase in ['hello', 'hi there', 'hey there', 'greetings', 'good morning', 'good afternoon', 'good evening']):
+        if msg_lower in {'hi', 'hello', 'hey'} or msg_lower.startswith(('hi ', 'hello ', 'hey ')) or any(phrase in msg_start for phrase in ['hello', 'hi there', 'hey there', 'greetings', 'good morning', 'good afternoon', 'good evening']):
             return self._random_choice(self.default_responses['greeting'])
 
         # Casual small-talk handling should not be forced into workflow continuity.
@@ -393,6 +388,9 @@ class EchoChatBot:
         if any(phrase in msg_start for phrase in ['help', 'what can you do', 'capabilities']):
             return self._random_choice(self.default_responses['help'])
             return self.default_responses['help'][0]
+
+        if msg_lower in {'powershell', 'pwsh'}:
+            return "Great, let us use PowerShell. Tell me the task and I will generate the exact script."
         
         # DevOps related queries
         if self._is_devops_query(msg_lower):
@@ -412,13 +410,13 @@ class EchoChatBot:
                         return remote_out
             except Exception:
                 logger.exception('LLM generation failed, falling back to rule-based')
-
-            # Automatic public web lookup before rule-only fallback.
-            web_out = self._generate_with_public_web_intel(user_message)
-            if web_out:
-                return web_out
-
             return self._handle_devops_query(user_message)
+
+        # Check learned patterns after deterministic intents so training does not
+        # override core chat/devops behavior.
+        learned_response = self._check_learned_patterns(msg_lower)
+        if learned_response:
+            return learned_response
         
         # Default unknown response
         # Try LLM fallback for complex queries when a local model is available
@@ -1091,6 +1089,9 @@ class EchoChatBot:
         if len(q) < 3:
             return None
 
+        if not self._should_auto_web_lookup(q):
+            return None
+
         answer = None
         source_url = None
         related: List[str] = []
@@ -1171,6 +1172,34 @@ class EchoChatBot:
         if source_url:
             text += f"\nSource: {source_url}"
         return text
+
+    def _should_auto_web_lookup(self, query: str) -> bool:
+        """Return True only for prompts that likely need external factual lookup."""
+        q = (query or '').strip().lower()
+        if not q:
+            return False
+
+        # Never web-lookup greetings/small-talk or pure modality switches.
+        blocked_exact = {
+            'hi', 'hello', 'hey', 'hi echo', 'hi echo starlite',
+            'thanks', 'thank you', 'ok', 'okay', 'cool', 'nice',
+            'powershell', 'bash', 'python', 'terraform'
+        }
+        if q in blocked_exact:
+            return False
+
+        if any(p in q for p in ['my name is', 'call me ', 'who am i', 'what is my name', "what's my name", 'whats my name']):
+            return False
+
+        # Positive signals for factual lookup.
+        if q.startswith(('what is ', "what's ", 'whats ', 'who is ', 'when is ', 'where is ', 'why is ', 'how does ')):
+            return True
+        if q.startswith(('search web for ', 'look up ', 'web intel on ', 'tell me about ', 'define ')):
+            return True
+        if q.endswith('?') and any(w in q for w in ['what', 'who', 'when', 'where', 'why', 'how']):
+            return True
+
+        return False
     
     def _pattern_matches(self, pattern: str, message: str) -> bool:
         """
@@ -1199,13 +1228,51 @@ class EchoChatBot:
         devops_keywords = [
             'deploy', 'docker', 'kubernetes', 'k8s', 'terraform',
             'ansible', 'ci/cd', 'pipeline', 'container', 'infrastructure',
-            'script', 'automation', 'monitoring', 'build', 'test'
+            'script', 'automation', 'monitoring', 'build', 'test',
+            'powershell', 'pwsh', 'reboot'
         ]
         return any(keyword in message for keyword in devops_keywords)
     
     def _handle_devops_query(self, message: str) -> str:
         """Handle DevOps specific queries."""
         msg_lower = message.lower()
+
+        if 'powershell' in msg_lower and any(k in msg_lower for k in ['reboot', 'pending']) and 'date' in msg_lower:
+            return (
+                "Here is a PowerShell script to print the current date and determine whether a reboot is pending:\n"
+                "```powershell\n"
+                "$now = Get-Date\n"
+                "$pending = $false\n"
+                "\n"
+                "$paths = @(\n"
+                "  'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending',\n"
+                "  'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'\n"
+                ")\n"
+                "\n"
+                "foreach ($p in $paths) {\n"
+                "  if (Test-Path $p) { $pending = $true }\n"
+                "}\n"
+                "\n"
+                "$sessionMgr = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager'\n"
+                "$pfro = (Get-ItemProperty -Path $sessionMgr -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations\n"
+                "if ($pfro) { $pending = $true }\n"
+                "\n"
+                "Write-Host \"Current Date: $($now.ToString('yyyy-MM-dd HH:mm:ss'))\"\n"
+                "Write-Host \"Pending Reboot: $pending\"\n"
+                "```"
+            )
+
+        if 'check date in powershell' in msg_lower or ('powershell' in msg_lower and 'date' in msg_lower and 'check' in msg_lower):
+            return (
+                "Use this to print current date/time in PowerShell:\n"
+                "```powershell\n"
+                "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\n"
+                "```\n"
+                "If you also want reboot status, say: include pending reboot check."
+            )
+
+        if 'powershell' in msg_lower and 'script' in msg_lower:
+            return "Absolutely. Tell me the exact task and I will generate a ready-to-run PowerShell script."
 
         if ('terraform' in msg_lower or re.search(r'\btf\b', msg_lower)) and 'azure' in msg_lower and 'subscription' in msg_lower:
             return (
