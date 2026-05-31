@@ -13260,6 +13260,7 @@ def api_echo_chat():
 
         max_tokens = int(data.get('max_tokens', 1024))
         debug_mode = _parse_bool_val(data.get('debug'), default=False)
+        guided_mode = _parse_bool_val(data.get('guided_mode'), default=False)
 
         if not message:
 
@@ -13393,7 +13394,7 @@ def api_echo_chat():
 
         # New topic
 
-        if any(p in um_low for p in ['i want ', 'i need ', 'can you help', 'help me', "let's", 'let us', 'task:', 'project:']):
+        if guided_mode and any(p in um_low for p in ['i want ', 'i need ', 'can you help', 'help me', "let's", 'let us', 'task:', 'project:']):
 
             topic = message.strip()[:200]
 
@@ -13419,7 +13420,7 @@ def api_echo_chat():
 
         # Refinement
 
-        if any(p in um_low for p in ['also', 'add', 'update', 'refine', 'change', 'instead', 'correction', 'fix', 'detail', 'more', 'what about', 'and ']):
+        if guided_mode and any(p in um_low for p in ['also', 'add', 'update', 'refine', 'change', 'instead', 'correction', 'fix', 'detail', 'more']):
 
             topic_state = meta.get('topic_state') or {}
 
@@ -13455,7 +13456,7 @@ def api_echo_chat():
 
         # Continuity follow-up: keep short follow-up turns anchored to the active topic.
         topic_state = meta.get('topic_state') or {}
-        if topic_state and topic_state.get('topic'):
+        if guided_mode and topic_state and topic_state.get('topic'):
             followup_markers = ['and ', 'what about', 'also', 'then', 'next', 'continue', 'more', 'rollback']
             is_followup_turn = (len(message.strip().split()) <= 12) or any(m in um_low for m in followup_markers)
             if is_followup_turn:
@@ -13484,7 +13485,7 @@ def api_echo_chat():
 
         # Validation
 
-        if any(p in um_low for p in ['is this okay', 'does this work', 'is this correct', 'confirm', 'validate', 'looks good', 'agree', 'ok to proceed']):
+        if guided_mode and any(p in um_low for p in ['is this okay', 'does this work', 'is this correct', 'confirm', 'validate', 'looks good', 'agree', 'ok to proceed']):
 
             topic_state = meta.get('topic_state') or {}
 
@@ -13518,7 +13519,7 @@ def api_echo_chat():
 
         # Completion
 
-        if any(p in um_low for p in ["done","finished","complete","that's all",'thats all',"that's it","that's it, thanks",'thank you','thanks']):
+        if guided_mode and any(p in um_low for p in ["done","finished","complete","that's all",'thats all',"that's it","that's it, thanks",'thank you','thanks']):
 
             topic_state = meta.get('topic_state') or {}
 
@@ -13555,7 +13556,7 @@ def api_echo_chat():
             recent = storage.get_conversation_history(user='web_user', channel=session_id, limit=4)
         except Exception:
             recent = []
-        if recent:
+        if guided_mode and recent:
             followup_markers = ['and ', 'what about', 'also', 'then', 'next', 'continue', 'more', 'rollback']
             is_short_followup = (len(message.strip().split()) <= 12) or any(m in um_low for m in followup_markers)
             if is_short_followup:
