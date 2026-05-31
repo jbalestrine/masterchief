@@ -350,8 +350,17 @@ class EchoChatBot:
         
         # Pattern matching for common intents - check message start for greetings
         msg_start = msg_lower[:50]  # Check only the first 50 characters
-        if any(phrase in msg_start for phrase in ['hello', 'hi there', 'hey there', 'greetings', 'good morning', 'good afternoon', 'good evening']):
+        if msg_lower in {'hi', 'hello', 'hey'} or any(phrase in msg_start for phrase in ['hello', 'hi there', 'hey there', 'greetings', 'good morning', 'good afternoon', 'good evening']):
             return self._random_choice(self.default_responses['greeting'])
+
+        # Casual small-talk handling should not be forced into workflow continuity.
+        if any(p in msg_lower for p in ['joke', 'funny']):
+            jokes = [
+                'Why do DevOps engineers love shell scripts? Because they always find a way to bash through problems.',
+                'I told the pipeline to relax. It said: "I can\'t, I\'m under continuous pressure."',
+                'Why was the server calm during incident response? It had excellent cache flow.',
+            ]
+            return self._random_choice(jokes)
         
         if any(phrase in msg_start for phrase in ['bye', 'goodbye', 'farewell', 'see you']):
             return self._random_choice(self.default_responses['farewell'])
@@ -406,6 +415,12 @@ class EchoChatBot:
         if contextual:
             return contextual
 
+        # Final non-LLM fallback for general conversation should stay fluid and
+        # avoid dead-end responses.
+        general = self._general_conversation_fallback(user_message)
+        if general:
+            return general
+
         return self._random_choice(self.default_responses['unknown'])
 
     def _contextual_fallback_response(self, user_message: str, session_id: str) -> Optional[str]:
@@ -417,11 +432,23 @@ class EchoChatBot:
         low = msg.lower()
         follow_up_markers = (
             'and ', 'also', 'what about', 'can you expand', 'expand on',
-            'more detail', 'continue', 'go on', 'why', 'how', 'then what',
+            'more detail', 'continue', 'go on', 'then what',
             'next', 'ok and', 'okay and'
         )
-        is_follow_up = len(msg.split()) <= 8 or any(m in low for m in follow_up_markers)
+
+        # Treat as follow-up only when the text clearly signals continuation.
+        # Short standalone requests like "tell me a joke" must remain normal chat.
+        is_follow_up = any(m in low for m in follow_up_markers)
         if not is_follow_up:
+            return None
+
+        # Allow easy topic pivots instead of forcing continuity.
+        new_topic_markers = (
+            'tell me', 'what is', 'who is', 'where is', 'when is', 'why is',
+            'explain', 'joke', 'story', 'poem', 'recipe', 'music', 'movie',
+            'search web for', 'look up', 'web intel on'
+        )
+        if any(m in low for m in new_topic_markers):
             return None
 
         turns = self.conversation_history.get(session_id, [])
@@ -455,10 +482,39 @@ class EchoChatBot:
             last_user_topic = last_user_topic[:140].rstrip() + '...'
 
         return (
-            f"Staying with our current thread about \"{last_user_topic}\": "
-            "could you share one specific direction you want next "
-            "(architecture, implementation steps, troubleshooting, or validation)?"
+            f"We can keep going on \"{last_user_topic}\". "
+            "Want a quick summary, deeper detail, or a concrete next step?"
         )
+
+    def _general_conversation_fallback(self, user_message: str) -> Optional[str]:
+        """Keep conversation flowing for non-DevOps and non-LLM turns."""
+        low = (user_message or '').strip().lower()
+        if not low:
+            return None
+
+        if any(x in low for x in ['how are you', 'how are u', 'how you doing']):
+            return "I'm doing well and ready to help. Want to keep chatting or start a task?"
+
+        if any(x in low for x in ['tell me something', 'random', 'surprise me']):
+            facts = [
+                'Quick fact: Canary releases reduce blast radius by limiting exposure before full rollout.',
+                'Quick fact: In incident response, clear rollback criteria often matters more than raw speed.',
+                'Quick fact: Small, frequent deployments usually lower risk versus large infrequent releases.',
+            ]
+            return self._random_choice(facts)
+
+        if low in {'validation', 'validate', 'check'}:
+            return (
+                "Happy to validate. Share the specific statement, config, or plan and I will review it step by step."
+            )
+
+        if low.endswith('?'):
+            return "Good question. I can answer directly if you add a bit more detail about what you want to know."
+
+        if len(low.split()) <= 3:
+            return "I can roll with that. Want to continue this topic or pivot to something new?"
+
+        return "I'm with you. Keep going, and I will adapt as the topic shifts."
 
     def _hydrate_session_history(self, session_id: str, limit: int = 24) -> None:
         """Populate in-memory session history from SQLite once per session."""
