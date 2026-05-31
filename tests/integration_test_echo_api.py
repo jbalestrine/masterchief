@@ -43,6 +43,34 @@ class TestEchoAPI(unittest.TestCase):
         self.assertIn('timestamp', data)
         self.assertIn('message_id', data)
         self.assertEqual(data['session_id'], 'test')
+
+    def test_echo_chat_followup_stays_on_topic(self):
+        """Short follow-up should remain anchored to active session topic."""
+        sid = 'followup_topic_test'
+        r1 = self.client.post('/api/echo/chat',
+                              json={'message': 'I need help designing a deployment pipeline', 'session_id': sid})
+        self.assertEqual(r1.status_code, 200)
+
+        r2 = self.client.post('/api/echo/chat',
+                              json={'message': 'and what about rollback?', 'session_id': sid, 'debug': True})
+        self.assertEqual(r2.status_code, 200)
+        d2 = json.loads(r2.data)
+        self.assertIn('response', d2)
+        # Ensure this is not a generic unknown fallback.
+        self.assertNotIn("I'm still learning", d2['response'])
+        self.assertNotIn("That's new to me", d2['response'])
+        # Debug contract helps IDE/coding-check integrations understand the route taken.
+        self.assertIn('_path', d2)
+
+    def test_echo_chat_debug_contract(self):
+        """Debug mode returns stable trace metadata for integration diagnostics."""
+        response = self.client.post('/api/echo/chat',
+                                    json={'message': 'hello', 'session_id': 'debug_contract', 'debug': True})
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertIn('response', data)
+        self.assertIn('_path', data)
+        self.assertIn('_session_has_topic', data)
     
     def test_echo_chat_api_no_message(self):
         """Test Echo chat API with no message."""

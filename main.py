@@ -13179,6 +13179,7 @@ def api_echo_chat():
         temperature = float(data.get('temperature', 0.7))
 
         max_tokens = int(data.get('max_tokens', 1024))
+        debug_mode = _parse_bool_val(data.get('debug'), default=False)
 
         if not message:
 
@@ -13284,6 +13285,20 @@ def api_echo_chat():
 
             app.logger.exception('Auto-apply persona step failed')
 
+        def _echo_payload(text: str, path: str, **extra):
+            payload = {
+                'response': text,
+                'session_id': session_id,
+                'timestamp': time.time(),
+                'message_id': f"bot_{int(time.time()*1000)}",
+            }
+            if extra:
+                payload.update(extra)
+            if debug_mode:
+                payload['_path'] = path
+                payload['_session_has_topic'] = bool((meta or {}).get('topic_state'))
+            return payload
+
 
 
         um_low = message.lower()
@@ -13318,7 +13333,7 @@ def api_echo_chat():
 
             _upsert_session_meta(session_id, title=topic)
 
-            return jsonify({'response': f"Got it — I'll explore that: {topic}. Can you provide any important details or constraints?", 'session_id': session_id, 'timestamp': time.time(), 'message_id': f"bot_{int(time.time()*1000)}"})
+            return jsonify(_echo_payload(f"Got it — I'll explore that: {topic}. Can you provide any important details or constraints?", 'topic_start'))
 
 
 
@@ -13354,7 +13369,7 @@ def api_echo_chat():
 
                 _upsert_session_meta(session_id)
 
-                return jsonify({'response': "Thanks — I've updated the plan with that detail. Anything else to refine?", 'session_id': session_id, 'timestamp': time.time(), 'message_id': f"bot_{int(time.time()*1000)}"})
+                return jsonify(_echo_payload("Thanks — I've updated the plan with that detail. Anything else to refine?", 'topic_refine'))
 
 
 
@@ -13383,7 +13398,7 @@ def api_echo_chat():
                 )
                 storage.store_message(user='web_user', message=message, echo_response=follow_resp, channel=session_id)
                 _upsert_session_meta(session_id)
-                return jsonify({'response': follow_resp, 'session_id': session_id, 'timestamp': time.time(), 'message_id': f"bot_{int(time.time()*1000)}"})
+                return jsonify(_echo_payload(follow_resp, 'topic_followup'))
 
 
 
@@ -13417,7 +13432,7 @@ def api_echo_chat():
 
                 _upsert_session_meta(session_id)
 
-                return jsonify({'response': resp_text, 'session_id': session_id, 'timestamp': time.time(), 'message_id': f"bot_{int(time.time()*1000)}"})
+                return jsonify(_echo_payload(resp_text, 'topic_validate'))
 
 
 
@@ -13451,11 +13466,40 @@ def api_echo_chat():
 
                 _upsert_session_meta(session_id)
 
-                return jsonify({'response': resp_text, 'session_id': session_id, 'timestamp': time.time(), 'message_id': f"bot_{int(time.time()*1000)}"})
+                return jsonify(_echo_payload(resp_text, 'topic_complete'))
+
+        # Metadata-independent continuity fallback:
+        # if session meta is missing but there is recent persisted chat context,
+        # keep short follow-up prompts anchored to the latest prior user topic.
+        try:
+            recent = storage.get_conversation_history(user='web_user', channel=session_id, limit=4)
+        except Exception:
+            recent = []
+        if recent:
+            followup_markers = ['and ', 'what about', 'also', 'then', 'next', 'continue', 'more', 'rollback']
+            is_short_followup = (len(message.strip().split()) <= 12) or any(m in um_low for m in followup_markers)
+            if is_short_followup:
+                prior_user = None
+                for row in recent:
+                    cand = (row.get('message') or '').strip()
+                    if cand and cand.lower() != message.strip().lower():
+                        prior_user = cand
+                        break
+                if prior_user:
+                    follow_resp = (
+                        f"Staying on \"{prior_user}\": for \"{message.strip()}\", "
+                        "do you want architecture guidance, implementation steps, "
+                        "or a validation checklist first?"
+                    )
+                    storage.store_message(user='web_user', message=message, echo_response=follow_resp, channel=session_id)
+                    _upsert_session_meta(session_id)
+                    return jsonify(_echo_payload(follow_resp, 'history_followup'))
 
 
 
         # Fallback to bot
+
+        response_path = 'bot'
 
         bot = get_chat_bot()
 
@@ -13464,6 +13508,37 @@ def api_echo_chat():
         message_for_bot = message
 
         response = bot.chat(message_for_bot, session_id=session_id, temperature=temperature, max_tokens=max_tokens)
+
+        # Robust continuity rescue:
+        # If we have an active topic_state but the model returns a generic unknown,
+        # rewrite to a topic-anchored follow-up so IDE-assisted workflows and
+        # training loops remain coherent.
+        try:
+            topic_state = (meta or {}).get('topic_state') or {}
+            topic = str(topic_state.get('topic') or '').strip()
+            text_now = response.get('response') if isinstance(response, dict) else str(response)
+            if topic and isinstance(text_now, str):
+                low_now = text_now.lower().strip()
+                unknown_markers = (
+                    "i'm still learning",
+                    "i am still learning",
+                    "that's new to me",
+                    "hmm... i'm not sure",
+                    "help me understand"
+                )
+                if any(m in low_now for m in unknown_markers):
+                    rescue_text = (
+                        f"Staying on \"{topic}\": for \"{message.strip()}\", "
+                        "do you want architecture guidance, implementation steps, "
+                        "or a validation checklist first?"
+                    )
+                    if isinstance(response, dict):
+                        response['response'] = rescue_text
+                    else:
+                        response = {'response': rescue_text}
+                    response_path = 'continuity_rescue'
+        except Exception:
+            app.logger.exception('Continuity rescue failed')
 
         # Sanitize obviously-garbled responses (long repeated characters, repeated "A: A: A:" patterns, etc.)
 
@@ -13615,17 +13690,19 @@ def api_echo_chat():
 
         try:
 
-            if data.get('debug'):
+            if debug_mode:
 
                 debug_info = getattr(bot, '_last_llm_debug', None)
 
                 if isinstance(response, dict):
 
                     response['_llm_debug'] = debug_info
+                    response['_path'] = response_path
+                    response['_session_has_topic'] = bool((meta or {}).get('topic_state'))
 
                 else:
 
-                    response = {'response': str(response), '_llm_debug': debug_info}
+                    response = {'response': str(response), '_llm_debug': debug_info, '_path': response_path, '_session_has_topic': bool((meta or {}).get('topic_state'))}
 
         except Exception:
 
@@ -13832,6 +13909,14 @@ def api_echo_chat():
 
         storage.store_message(user='web_user', message=message, echo_response=full_text, channel=session_id)
 
+        if not isinstance(response, dict):
+            response = {'response': str(response)}
+        response.setdefault('session_id', session_id)
+        response.setdefault('timestamp', time.time())
+        response.setdefault('message_id', f"bot_{int(time.time()*1000)}")
+        if debug_mode:
+            response.setdefault('_path', 'bot')
+            response.setdefault('_session_has_topic', bool((meta or {}).get('topic_state')))
         return jsonify(response)
 
     except Exception as e:
