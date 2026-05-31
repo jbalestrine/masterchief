@@ -108,6 +108,36 @@ def api_terraform_run():
     _start_job_thread(exec_id, cmd, cwd=str(target))
     return jsonify({'ok': True, 'exec_id': exec_id})
 
+@terraform_bp.route('/api/terraform/ci-validate', methods=['POST'])
+def api_terraform_ci_validate():
+    """Trigger the terraform-validation GitHub Actions workflow for a specific module.
+
+    JSON: { module: 'modules/terraform/azure-aks' }  — module is optional; omit to validate all.
+    Requires GITHUB_TOKEN and GITHUB_REPO env vars to be set.
+    """
+    import os, requests as _requests
+    token = os.environ.get('GITHUB_TOKEN')
+    repo = os.environ.get('GITHUB_REPO')  # e.g. 'owner/repo'
+    if not token or not repo:
+        return jsonify({'ok': False, 'error': 'GITHUB_TOKEN and GITHUB_REPO env vars required'}), 500
+
+    data = request.get_json(silent=True) or {}
+    module = data.get('module', '')
+
+    resp = _requests.post(
+        f'https://api.github.com/repos/{repo}/actions/workflows/terraform-validation.yml/dispatches',
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+        },
+        json={'ref': 'main', 'inputs': {'module': module}},
+        timeout=15,
+    )
+    if resp.status_code == 204:
+        return jsonify({'ok': True, 'message': f'Workflow dispatched for module: {module or "all"}'})
+    return jsonify({'ok': False, 'error': resp.text}), resp.status_code
+
 @terraform_bp.route('/api/tf/validate', methods=['POST'])
 def api_tf_validate():
     return jsonify({'ok': True, 'output': 'TF validate endpoint working'})

@@ -2,8 +2,12 @@ name: Terraform Module Validation
 
 on:
   workflow_dispatch:
-  # Terraform modules are generator wizard templates used to produce ARM/SVG diagrams.
-  # They are not deployable configs and should not be auto-validated on push.
+    inputs:
+      module:
+        description: 'Relative path to the module to validate (e.g. modules/terraform/azure-aks). Leave blank to validate all modules.'
+        required: false
+        default: ''
+  # Triggered from the wizard UI via /api/terraform/ci-validate — not on push.
 
 jobs:
   discover-modules:
@@ -18,8 +22,11 @@ jobs:
       - name: Discover modules
         id: set-modules
         run: |
-          # Find all directories containing main.tf
-          modules=$(find modules/terraform -type f -name "main.tf" -exec dirname {} \; | jq -R -s -c 'split("\n")[:-1]')
+          if [ -n "${{ github.event.inputs.module }}" ]; then
+            modules=$(echo "${{ github.event.inputs.module }}" | jq -R -c '[.]')
+          else
+            modules=$(find modules/terraform -type f -name "main.tf" -exec dirname {} \; | jq -R -s -c 'split("\n")[:-1]')
+          fi
           echo "modules=$modules" >> $GITHUB_OUTPUT
           echo "Discovered modules:"
           echo "$modules" | jq -r '.[]'
