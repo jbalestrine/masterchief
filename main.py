@@ -500,6 +500,11 @@ try:
                 from echo.runtime import model_runtime
                 model_runtime.load_model(model_path)
                 app.logger.info(f'Force-loaded GGUF model at startup: {model_path}')
+            except ModuleNotFoundError as e:
+                if getattr(e, 'name', None) == 'llama_cpp':
+                    app.logger.warning('Optional dependency missing: llama_cpp. Install optional AI dependencies to enable local GGUF runtime model loading.')
+                else:
+                    app.logger.exception('Failed to force-load GGUF model')
             except Exception:
                 app.logger.exception('Failed to force-load GGUF model')
         else:
@@ -543,6 +548,11 @@ def init_chat():
                 chatbot.set_local_model(model_path)
                 model_runtime.load_model(model_path)
                 app.logger.info(f'Runtime model loaded: {model_path}')
+            except ModuleNotFoundError as e:
+                if getattr(e, 'name', None) == 'llama_cpp':
+                    app.logger.warning('Optional dependency missing: llama_cpp. Install optional AI dependencies to enable local GGUF runtime model loading.')
+                else:
+                    app.logger.exception('Failed to runtime-load model')
             except Exception:
                 app.logger.exception('Failed to runtime-load model')
     except Exception:
@@ -4117,8 +4127,8 @@ function _dispatchVoiceInput(text){
             if(score > bestScore){ bestScore = score; matched = cmd; }
         } else {
             // word overlap score
-            const pw = new Set(phrase.split(/\s+/));
-            const tw = new Set(tl.split(/\s+/));
+            const pw = new Set(phrase.split(/\\s+/));
+            const tw = new Set(tl.split(/\\s+/));
             let overlap = 0;
             pw.forEach(w=>{ if(tw.has(w)) overlap++; });
             const score = overlap / Math.max(pw.size, 1);
@@ -4183,7 +4193,7 @@ function voiceTTSSpeak(text){
     if(!_voiceTTSEnabled || !_voiceSynth) return;
     _voiceSynth.cancel();
     // strip markdown-ish syntax for cleaner speech
-    const clean = text.replace(/```[\s\S]*?```/g,' code block ').replace(/`[^`]+`/g,'').replace(/[*_#]/g,'').replace(/https?:\/\/\S+/g,'link').slice(0,600);
+    const clean = text.replace(/```[\\s\\S]*?```/g,' code block ').replace(/`[^`]+`/g,'').replace(/[*_#]/g,'').replace(/https?:\\/\\/\\S+/g,'link').slice(0,600);
     const utt = new SpeechSynthesisUtterance(clean);
     utt.rate   = 1.0;
     utt.pitch  = 1.1;

@@ -5,6 +5,7 @@
 # Install only the groups you actually use.
 #
 # Usage:  pip install -r requirements-optional.txt
+# Full platform: pip install -r requirements.txt -r requirements-optional.txt
 #   or install individual sections as needed.
 # =============================================================================
 
@@ -25,7 +26,9 @@ sentence-transformers>=2.2.0
 faiss-cpu>=1.7.4
 huggingface-hub>=0.19.0
 tokenizers>=0.15.0
-llama_cpp_python>=0.2.0
+# Local GGUF runtime dependency (module import: llama_cpp).
+# Python 3.14 wheels may lag upstream, so this is limited to <3.14 for now.
+llama-cpp-python>=0.2.0; python_version < "3.14"
 gguf>=0.1.0
 numpy>=1.24.0
 scipy>=1.10.0

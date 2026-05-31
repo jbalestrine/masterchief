@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.6] - 2026-05-30
+
+### Added
+- GitHub Actions workflow directory restored (`ci.yml`, `chocolatey.yml`, `ansible-validation.yml`, `dsc-validation.yml`, `module-loader-tests.yml`, `terraform-validation.yml`).
+- New `pypi-publish.yml` workflow: publishes to PyPI automatically on GitHub release or version tag push using OIDC trusted publishing.
+- `ai` extras group in `setup.py` for optional local GGUF/ML dependencies.
+- `all` extras group flattened to an explicit list to avoid self-referential packaging issues.
+
+### Changed
+- `requirements-optional.txt`: `llama-cpp-python` install now gated to `python_version < "3.14"` to prevent broken wheel installs on Python 3.14.
+- `requirements.txt`: full-platform install command added to header comments.
+- `setup.py` docstring version updated to 2.2.6 / May 2026.
+- `echo/runtime/model_runtime.py`: rebuilt as plain module-level functions; eliminates `TypeError: 'classmethod' object is not callable` at startup.
+- `main.py`: missing `llama_cpp` on startup now logs a warning instead of a traceback. Fixed two embedded-JS regex escape sequences that triggered Python `SyntaxWarning`.
+
+### Fixed
+- `data/echo_training/learned_patterns.json`: cleared git conflict markers and rewritten as valid UTF-8 JSON to stop parse errors at startup.
+- `README.md`: replaced duplicated/concatenated historical content with a single current source of truth.
+
+## [1.2.1] - 2026-02-06
+
 ### Added
 - Training orchestration and UI (versioned release 1.2.1)
   - `/echo-train` web UI to start, monitor, and cancel training jobs.
