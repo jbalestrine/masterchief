@@ -1,13 +1,9 @@
 name: Terraform Module Validation
 
 on:
-  push:
-    paths:
-      - 'modules/terraform/**'
-      - '.github/workflows/terraform-validation.yml'
-  pull_request:
-    paths:
-      - 'modules/terraform/**'
+  workflow_dispatch:
+  # Terraform modules are generator wizard templates used to produce ARM/SVG diagrams.
+  # They are not deployable configs and should not be auto-validated on push.
 
 jobs:
   discover-modules:
