@@ -137,6 +137,32 @@ class TestEchoAPI(unittest.TestCase):
         data = json.loads(response.data)
         self.assertIn('error', data)
 
+    def test_echo_integrations_defaults(self):
+        """Echo integrations should expose stable default policy shape."""
+        response = self.client.get('/api/echo/integrations')
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data.get('ok'))
+        self.assertIn('config', data)
+        self.assertIn('effective', data)
+        self.assertIn('chat', data['effective'])
+        self.assertIn('web_ide', data['effective'])
+        self.assertIn('training', data['effective'])
+        self.assertIn('modules', data['effective'])
+
+    def test_echo_integrations_module_toggle(self):
+        """Per-module toggle should be writable and reflected in effective projection."""
+        set_resp = self.client.post('/api/echo/integrations',
+                                    json={'module': 'rbac', 'enabled': True})
+        self.assertEqual(set_resp.status_code, 200)
+        set_data = json.loads(set_resp.data)
+        self.assertTrue(set_data.get('ok'))
+
+        get_resp = self.client.get('/api/echo/integrations')
+        self.assertEqual(get_resp.status_code, 200)
+        get_data = json.loads(get_resp.data)
+        self.assertTrue(get_data.get('effective', {}).get('modules', {}).get('rbac', False))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

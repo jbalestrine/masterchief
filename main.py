@@ -274,6 +274,77 @@ IMAGE_JOBS  = {}   # job_id   -> {'status', 'progress', 'path', 'error'}
 
 ENABLED_MODULES = load_enabled_modules()
 
+# Echo integration controls:
+# - chat/web_ide/training are automatic by default
+# - all other module integrations are opt-in via per-module toggles
+ECHO_INTEGRATIONS_FILE = _data_dir / 'echo_integrations.json'
+ECHO_INTEGRATION_DEFAULTS = {
+    'enabled': True,
+    'auto': {
+        'chat': True,
+        'web_ide': True,
+        'training': True,
+    },
+    'modules': {}
+}
+
+
+def _load_echo_integrations() -> dict:
+    try:
+        if ECHO_INTEGRATIONS_FILE.exists():
+            try:
+                data = json.loads(ECHO_INTEGRATIONS_FILE.read_text(encoding='utf-8'))
+            except Exception:
+                data = {}
+        else:
+            data = {}
+
+        merged = {
+            'enabled': bool(data.get('enabled', ECHO_INTEGRATION_DEFAULTS['enabled'])),
+            'auto': {
+                'chat': bool((data.get('auto') or {}).get('chat', ECHO_INTEGRATION_DEFAULTS['auto']['chat'])),
+                'web_ide': bool((data.get('auto') or {}).get('web_ide', ECHO_INTEGRATION_DEFAULTS['auto']['web_ide'])),
+                'training': bool((data.get('auto') or {}).get('training', ECHO_INTEGRATION_DEFAULTS['auto']['training'])),
+            },
+            'modules': dict(data.get('modules') or {}),
+        }
+        return merged
+    except Exception:
+        app.logger.exception('Failed to load echo integrations config')
+        return dict(ECHO_INTEGRATION_DEFAULTS)
+
+
+def _save_echo_integrations(cfg: dict):
+    try:
+        ECHO_INTEGRATIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        ECHO_INTEGRATIONS_FILE.write_text(json.dumps(cfg, indent=2), encoding='utf-8')
+    except Exception:
+        app.logger.exception('Failed to save echo integrations config')
+
+
+def _echo_integration_enabled(scope: str, module_name: str = None, default_for_module: bool = False) -> bool:
+    """Central toggle check used by routes/modules.
+
+    - Global kill switch: enabled=false disables all Echo integrations.
+    - Known automatic scopes: chat/web_ide/training use `auto` map.
+    - Module-specific scope: uses modules[<name>] and defaults to opt-in.
+    """
+    cfg = app.config.get('ECHO_INTEGRATIONS') or _load_echo_integrations()
+    if not cfg.get('enabled', True):
+        return False
+
+    auto = cfg.get('auto') or {}
+    if scope in ('chat', 'web_ide', 'training'):
+        return bool(auto.get(scope, True))
+
+    modules = cfg.get('modules') or {}
+    if module_name:
+        return bool(modules.get(module_name, default_for_module))
+    return bool(default_for_module)
+
+
+app.config['ECHO_INTEGRATIONS'] = _load_echo_integrations()
+
 @app.context_processor
 def inject_ui_modules():
     """Inject pinned addon modules into every template so they appear in the nav."""
@@ -13170,6 +13241,9 @@ def api_echo_chat():
 
     try:
 
+        if not _echo_integration_enabled('chat'):
+            return jsonify({'error': 'Echo chat integration is disabled by policy'}), 503
+
         data = request.get_json() or {}
 
         message = data.get('message','')
@@ -14162,6 +14236,63 @@ def api_echo_action_handlers():
     """Return metadata for all registered server-side action handlers."""
     return jsonify({'handlers': _echo_action_registry.list_handlers()})
 
+
+@app.route('/api/echo/integrations', methods=['GET', 'POST'])
+def api_echo_integrations():
+    """Manage Echo integration toggles.
+
+    GET:
+      Returns the persisted config plus effective module projection.
+
+    POST JSON examples:
+      {"enabled": true}
+      {"auto": {"chat": true, "web_ide": true, "training": true}}
+      {"module": "rbac", "enabled": true}
+    """
+    try:
+        cfg = app.config.get('ECHO_INTEGRATIONS') or _load_echo_integrations()
+
+        if request.method == 'POST':
+            body = request.get_json(silent=True) or {}
+
+            if 'enabled' in body:
+                cfg['enabled'] = bool(body.get('enabled'))
+
+            auto = body.get('auto')
+            if isinstance(auto, dict):
+                cfg.setdefault('auto', {})
+                for key in ('chat', 'web_ide', 'training'):
+                    if key in auto:
+                        cfg['auto'][key] = bool(auto.get(key))
+
+            mod = body.get('module')
+            if mod is not None:
+                mod_name = str(mod).strip()
+                if mod_name:
+                    cfg.setdefault('modules', {})
+                    cfg['modules'][mod_name] = bool(body.get('enabled', True))
+
+            app.config['ECHO_INTEGRATIONS'] = cfg
+            _save_echo_integrations(cfg)
+
+        effective_modules = {}
+        for mod_name in ENABLED_MODULES.keys():
+            effective_modules[mod_name] = _echo_integration_enabled('module', module_name=mod_name, default_for_module=False)
+
+        return jsonify({
+            'ok': True,
+            'config': cfg,
+            'effective': {
+                'chat': _echo_integration_enabled('chat'),
+                'web_ide': _echo_integration_enabled('web_ide'),
+                'training': _echo_integration_enabled('training'),
+                'modules': effective_modules,
+            }
+        })
+    except Exception as e:
+        app.logger.exception('Echo integrations endpoint failed')
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
 @app.route('/api/echo/session_prefs', methods=['GET','POST'])
 
 def api_echo_session_prefs():
@@ -14229,6 +14360,9 @@ def api_echo_session_prefs():
 def api_echo_train():
 
     try:
+
+        if not _echo_integration_enabled('training'):
+            return jsonify({'error': 'Echo training integration is disabled by policy'}), 503
 
         data=request.get_json()
 
