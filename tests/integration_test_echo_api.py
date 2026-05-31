@@ -163,6 +163,17 @@ class TestEchoAPI(unittest.TestCase):
         get_data = json.loads(get_resp.data)
         self.assertTrue(get_data.get('effective', {}).get('modules', {}).get('rbac', False))
 
+    def test_echo_integrations_core_scopes_protected_by_default(self):
+        """chat/web_ide/training stay enabled by default lock policy."""
+        response = self.client.post('/api/echo/integrations',
+                                    json={'auto': {'chat': False, 'web_ide': False, 'training': False}})
+        self.assertEqual(response.status_code, 200)
+        data = json.loads(response.data)
+        self.assertTrue(data.get('ok'))
+        self.assertTrue(data.get('effective', {}).get('chat'))
+        self.assertTrue(data.get('effective', {}).get('web_ide'))
+        self.assertTrue(data.get('effective', {}).get('training'))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

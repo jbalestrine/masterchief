@@ -280,6 +280,9 @@ ENABLED_MODULES = load_enabled_modules()
 ECHO_INTEGRATIONS_FILE = _data_dir / 'echo_integrations.json'
 ECHO_INTEGRATION_DEFAULTS = {
     'enabled': True,
+    # Keep the echo-chat page and its connected scripts stable by default.
+    # Set ECHO_LOCK_CORE_INTEGRATIONS=0 to allow disabling these via API.
+    'lock_core_scopes': _env_bool('ECHO_LOCK_CORE_INTEGRATIONS', True),
     'auto': {
         'chat': True,
         'web_ide': True,
@@ -301,6 +304,7 @@ def _load_echo_integrations() -> dict:
 
         merged = {
             'enabled': bool(data.get('enabled', ECHO_INTEGRATION_DEFAULTS['enabled'])),
+            'lock_core_scopes': bool(data.get('lock_core_scopes', ECHO_INTEGRATION_DEFAULTS['lock_core_scopes'])),
             'auto': {
                 'chat': bool((data.get('auto') or {}).get('chat', ECHO_INTEGRATION_DEFAULTS['auto']['chat'])),
                 'web_ide': bool((data.get('auto') or {}).get('web_ide', ECHO_INTEGRATION_DEFAULTS['auto']['web_ide'])),
@@ -335,6 +339,8 @@ def _echo_integration_enabled(scope: str, module_name: str = None, default_for_m
 
     auto = cfg.get('auto') or {}
     if scope in ('chat', 'web_ide', 'training'):
+        if cfg.get('lock_core_scopes', True):
+            return True
         return bool(auto.get(scope, True))
 
     modules = cfg.get('modules') or {}
@@ -14251,19 +14257,33 @@ def api_echo_integrations():
     """
     try:
         cfg = app.config.get('ECHO_INTEGRATIONS') or _load_echo_integrations()
+        warnings = []
 
         if request.method == 'POST':
             body = request.get_json(silent=True) or {}
 
             if 'enabled' in body:
-                cfg['enabled'] = bool(body.get('enabled'))
+                requested = bool(body.get('enabled'))
+                # If core scopes are locked, do not allow turning Echo off globally.
+                if cfg.get('lock_core_scopes', True) and not requested:
+                    warnings.append('ignored enabled=false because lock_core_scopes is true')
+                else:
+                    cfg['enabled'] = requested
+
+            if 'lock_core_scopes' in body:
+                cfg['lock_core_scopes'] = bool(body.get('lock_core_scopes'))
 
             auto = body.get('auto')
             if isinstance(auto, dict):
                 cfg.setdefault('auto', {})
                 for key in ('chat', 'web_ide', 'training'):
                     if key in auto:
-                        cfg['auto'][key] = bool(auto.get(key))
+                        requested = bool(auto.get(key))
+                        if cfg.get('lock_core_scopes', True) and not requested:
+                            warnings.append(f'ignored auto.{key}=false because lock_core_scopes is true')
+                            cfg['auto'][key] = True
+                        else:
+                            cfg['auto'][key] = requested
 
             mod = body.get('module')
             if mod is not None:
@@ -14281,6 +14301,7 @@ def api_echo_integrations():
 
         return jsonify({
             'ok': True,
+            'warnings': warnings,
             'config': cfg,
             'effective': {
                 'chat': _echo_integration_enabled('chat'),
