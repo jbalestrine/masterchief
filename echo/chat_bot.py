@@ -342,11 +342,20 @@ class EchoChatBot:
             self._set_session_profile_value(session_id, 'name', provided_name)
             return f"Got it. I will call you {provided_name}."
 
+        preferred_echo_name = self._extract_assistant_name_preference(user_message)
+        if preferred_echo_name:
+            self._set_session_profile_value(session_id, 'assistant_name', preferred_echo_name)
+            return f"Understood. You can call me {preferred_echo_name}."
+
         if self._is_name_recall_query(msg_lower):
             remembered = self._get_session_profile_value(session_id, 'name')
             if remembered:
                 return f"Your name is {remembered}."
             return "I do not have your name yet. Tell me with 'my name is ...' and I will remember it."
+
+        if self._is_assistant_identity_query(msg_lower):
+            assistant_name = self._get_session_profile_value(session_id, 'assistant_name') or 'Echo'
+            return f"I am {assistant_name}."
 
         # Always prioritize direct offline definitions for core deployment terms.
         if any(k in msg_lower for k in ['canary', 'blue-green', 'blue green', 'rollback']):
@@ -402,6 +411,12 @@ class EchoChatBot:
                         return remote_out
             except Exception:
                 logger.exception('LLM generation failed, falling back to rule-based')
+
+            # Automatic public web lookup before rule-only fallback.
+            web_out = self._generate_with_public_web_intel(user_message)
+            if web_out:
+                return web_out
+
             return self._handle_devops_query(user_message)
         
         # Default unknown response
@@ -420,6 +435,11 @@ class EchoChatBot:
                 return remote_out
         except Exception:
             logger.exception('LLM fallback failed')
+
+        # Internet-first general fallback (enabled by default).
+        web_out = self._generate_with_public_web_intel(user_message)
+        if web_out:
+            return web_out
 
         # If no LLM answer is available, still maintain conversational continuity
         # for follow-up turns by anchoring on recent session context.
@@ -462,8 +482,39 @@ class EchoChatBot:
         patterns = [
             r"\bwhat(?:'s|\s+is)?\s+my\s+name\b",
             r"\bwhats\s+my\s+name\b",
+            r"\bwhat\s+would\s+you\s+call\s+me\b",
             r"\bdo\s+you\s+know\s+my\s+name\b",
             r"\bwho\s+am\s+i\b",
+        ]
+        return any(re.search(p, msg_lower) for p in patterns)
+
+    def _extract_assistant_name_preference(self, message: str) -> Optional[str]:
+        """Extract preferred assistant name from common user phrasing."""
+        msg = (message or '').strip()
+        if not msg:
+            return None
+
+        patterns = [
+            r"\b(?:your|youre|you're)\s+name\s+is\s+[\"']?([A-Za-z][A-Za-z\-']{0,31})[\"']?\b",
+            r"\b(?:i\s+would\s+like\s+to|i'?d\s+like\s+to|like\s+to)\s+call\s+you\s+[\"']?([A-Za-z][A-Za-z\-']{0,31})[\"']?\b",
+            r"\bi\s+will\s+call\s+you\s+[\"']?([A-Za-z][A-Za-z\-']{0,31})[\"']?\b",
+        ]
+        for pat in patterns:
+            m = re.search(pat, msg, re.IGNORECASE)
+            if m:
+                raw = (m.group(1) or '').strip(" .,!?:;\"'")
+                if raw:
+                    return raw[:1].upper() + raw[1:]
+        return None
+
+    def _is_assistant_identity_query(self, msg_lower: str) -> bool:
+        """Check if user asks Echo's identity/name."""
+        if not msg_lower:
+            return False
+        patterns = [
+            r"\bwho\s+are\s+you\b",
+            r"\bwhat(?:'s|\s+is)?\s+your\s+name\b",
+            r"\bwhats\s+your\s+name\b",
         ]
         return any(re.search(p, msg_lower) for p in patterns)
 
@@ -1017,6 +1068,99 @@ class EchoChatBot:
         except Exception:
             logger.exception('Remote LLM invocation failed')
             return None
+
+    def _generate_with_public_web_intel(self, query: str) -> Optional[str]:
+        """Get a concise answer from free public web sources (no API key).
+
+        Enabled by default. Set ECHO_AUTO_WEB_INTEL=0 to disable.
+        """
+        if os.environ.get('ECHO_AUTO_WEB_INTEL', '1') != '1':
+            return None
+
+        q = (query or '').strip()
+        if len(q) < 3:
+            return None
+
+        answer = None
+        source_url = None
+        related: List[str] = []
+
+        try:
+            import requests
+
+            # Free instant-answer endpoint
+            resp = requests.get(
+                'https://api.duckduckgo.com/',
+                params={
+                    'q': q,
+                    'format': 'json',
+                    'no_html': 1,
+                    'no_redirect': 1,
+                    'skip_disambig': 1,
+                },
+                headers={'User-Agent': 'MasterChief-Echo/1.0'},
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json() or {}
+                answer = (data.get('AbstractText') or '').strip() or None
+                source_url = (data.get('AbstractURL') or '').strip() or None
+
+                def _walk(items):
+                    out = []
+                    for it in items or []:
+                        if isinstance(it, dict):
+                            txt = (it.get('Text') or '').strip()
+                            if txt:
+                                out.append(txt)
+                            nested = it.get('Topics')
+                            if isinstance(nested, list):
+                                out.extend(_walk(nested))
+                    return out
+
+                related = _walk(data.get('RelatedTopics'))[:2]
+
+            # Secondary free source: Wikipedia summary API
+            if not answer and not related:
+                sresp = requests.get(
+                    'https://en.wikipedia.org/w/api.php',
+                    params={
+                        'action': 'opensearch',
+                        'search': q,
+                        'limit': 1,
+                        'namespace': 0,
+                        'format': 'json',
+                    },
+                    headers={'User-Agent': 'MasterChief-Echo/1.0'},
+                    timeout=10,
+                )
+                if sresp.status_code == 200:
+                    sdata = sresp.json() or []
+                    title = None
+                    if isinstance(sdata, list) and len(sdata) >= 2 and isinstance(sdata[1], list) and sdata[1]:
+                        title = str(sdata[1][0]).strip()
+                    if title:
+                        summary = requests.get(
+                            f'https://en.wikipedia.org/api/rest_v1/page/summary/{requests.utils.quote(title, safe="")}',
+                            headers={'User-Agent': 'MasterChief-Echo/1.0'},
+                            timeout=10,
+                        )
+                        if summary.status_code == 200:
+                            pdata = summary.json() or {}
+                            answer = (pdata.get('extract') or '').strip() or answer
+                            source_url = (pdata.get('content_urls') or {}).get('desktop', {}).get('page') or source_url
+        except Exception:
+            return None
+
+        if not answer and not related:
+            return None
+
+        text = answer or ' | '.join(related)
+        if related and answer:
+            text += "\nAlso: " + ' | '.join(related)
+        if source_url:
+            text += f"\nSource: {source_url}"
+        return text
     
     def _pattern_matches(self, pattern: str, message: str) -> bool:
         """
@@ -1052,6 +1196,29 @@ class EchoChatBot:
     def _handle_devops_query(self, message: str) -> str:
         """Handle DevOps specific queries."""
         msg_lower = message.lower()
+
+        if ('terraform' in msg_lower or re.search(r'\btf\b', msg_lower)) and 'azure' in msg_lower and 'subscription' in msg_lower:
+            return (
+                "Here is a Terraform starter using Azure subscription alias creation:\n"
+                "resource \"azapi_resource\" \"sub_alias\" {\n"
+                "  type      = \"Microsoft.Subscription/aliases@2020-09-01\"\n"
+                "  name      = var.subscription_alias\n"
+                "  parent_id = \"/\"\n"
+                "  body = jsonencode({\n"
+                "    properties = {\n"
+                "      displayName = var.subscription_name\n"
+                "      billingScope = var.billing_scope\n"
+                "      workload = \"Production\"\n"
+                "    }\n"
+                "  })\n"
+                "}\n"
+                "If you want, I can generate a complete `main.tf`, `variables.tf`, and `outputs.tf`."
+            )
+
+        if 'terraform' in msg_lower or re.search(r'\btf\b', msg_lower):
+            return (
+                "I can help with Terraform. Tell me target cloud (Azure/AWS/GCP), resource type, and whether you want a full module or a single file."
+            )
 
         if 'canary' in msg_lower:
             return (
@@ -1090,7 +1257,7 @@ class EchoChatBot:
         if 'script' in msg_lower:
             return "I can generate scripts for you! Bash, Python, Terraform, and more. What kind of script do you need?"
         
-        return "That sounds like a DevOps question! I'm still learning about that specific topic. Can you be more specific?"
+        return "That sounds like a DevOps question. Share the target stack and outcome, and I will map it into concrete steps or code."
     
     def _random_choice(self, options: List[str]) -> str:
         """Select a random option from list."""

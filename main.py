@@ -13522,6 +13522,24 @@ def api_echo_chat():
             return _action_resp
         # ---- End action registry dispatch ----
 
+        # Internet-first default for questions: run web intel automatically
+        # unless the user is asking personal identity/memory prompts.
+        _identity_q = (
+            'who am i' in um_low
+            or 'what is my name' in um_low
+            or "what's my name" in um_low
+            or 'whats my name' in um_low
+            or 'what would you call me' in um_low
+            or 'who are you' in um_low
+            or 'what is your name' in um_low
+            or "what's your name" in um_low
+            or 'whats your name' in um_low
+        )
+        if ('?' in message or um_low.startswith(('what ', 'who ', 'when ', 'where ', 'why ', 'how '))) and not _identity_q:
+            _web_auto = _ach_handle_web_intel({'query': message.strip().rstrip('?').strip()}, message, um_low, storage, session_id, _upsert_session_meta)
+            if _web_auto is not None:
+                return _web_auto
+
 
         # New topic
 
