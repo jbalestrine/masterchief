@@ -24,7 +24,7 @@ jobs:
 
       - name: Install Ansible
         run: |
-          pip install ansible==2.14.0
+          pip install ansible-core>=2.15
           pip install ansible-lint
           pip install yamllint
 
