@@ -29,6 +29,8 @@ tokenizers>=0.15.0
 # Local GGUF runtime dependency (module import: llama_cpp).
 # Python 3.14 wheels may lag upstream, so this is limited to <3.14 for now.
 llama-cpp-python>=0.2.0; python_version < "3.14"
+# Remote LLM fallback uses requests from requirements.txt and does not require
+# additional SDK packages unless your provider needs them.
 gguf>=0.1.0
 numpy>=1.24.0
 scipy>=1.10.0

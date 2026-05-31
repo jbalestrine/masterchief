@@ -335,6 +335,10 @@ class EchoChatBot:
         """
         # Normalize message
         msg_lower = user_message.lower().strip()
+
+        # Always prioritize direct offline definitions for core deployment terms.
+        if any(k in msg_lower for k in ['canary', 'blue-green', 'blue green', 'rollback']):
+            return self._handle_devops_query(user_message)
         
         # Build a context-rich prompt for LLM-backed paths to improve continuity.
         context_prompt = self._build_context_prompt(session_id, user_message)
@@ -367,7 +371,11 @@ class EchoChatBot:
                     llm_out = self._generate_with_local_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
                     if llm_out:
                         return llm_out
-                    # try remote fallback if configured
+                    # Try local Ollama model next (mistral/vicuna/etc.)
+                    ollama_out = self._generate_with_ollama(context_prompt, max_tokens=max_tokens, temperature=temperature)
+                    if ollama_out:
+                        return ollama_out
+                    # Finally, try optional remote fallback if explicitly configured.
                     remote_out = self._generate_with_remote_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
                     if remote_out:
                         return remote_out
@@ -383,6 +391,9 @@ class EchoChatBot:
                 out = self._generate_with_local_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
                 if out:
                     return out
+            ollama_out = self._generate_with_ollama(context_prompt, max_tokens=max_tokens, temperature=temperature)
+            if ollama_out:
+                return ollama_out
             remote_out = self._generate_with_remote_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
             if remote_out:
                 return remote_out
@@ -811,18 +822,57 @@ class EchoChatBot:
         
         return None
 
-    def _generate_with_remote_llm(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> Optional[str]:
-        """Optional remote HTTP LLM fallback.
+    def _generate_with_ollama(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> Optional[str]:
+        """Local Ollama fallback (no login/subscription required).
 
-        Use environment variable `ECHO_REMOTE_API_URL` to point to a JSON API that
-        accepts {prompt,max_tokens,temperature} and returns JSON with `text` or
-        `response` fields. `ECHO_REMOTE_API_KEY` may be used for Bearer auth.
+        Enabled by default when Ollama is reachable on localhost.
+        Env overrides:
+          ECHO_OLLAMA_URL   (default: http://127.0.0.1:11434/api/generate)
+          ECHO_OLLAMA_MODEL (default: mistral)
         """
+        url = os.environ.get('ECHO_OLLAMA_URL', 'http://127.0.0.1:11434/api/generate')
+        model = os.environ.get('ECHO_OLLAMA_MODEL', 'mistral')
+        try:
+            import requests
+
+            payload = {
+                'model': model,
+                'prompt': prompt,
+                'stream': False,
+                'options': {
+                    'temperature': float(temperature),
+                    'num_predict': int(max_tokens),
+                },
+            }
+            resp = requests.post(url, json=payload, timeout=30)
+            if resp.status_code != 200:
+                return None
+            data = resp.json() or {}
+            text = (data.get('response') or '').strip()
+            return text or None
+        except Exception:
+            return None
+
+    def _generate_with_remote_llm(self, prompt: str, max_tokens: int = 256, temperature: float = 0.7) -> Optional[str]:
+        """Optional remote HTTP LLM fallback (offline-first).
+
+        Remote calls are disabled by default. To enable them explicitly:
+          ECHO_ALLOW_REMOTE=1
+        Then configure:
+          ECHO_REMOTE_API_URL
+          ECHO_REMOTE_API_KEY (optional bearer token)
+        Endpoint contract: accepts {prompt,max_tokens,temperature} and returns
+        one of text/response/result/choices[].text.
+        """
+        if os.environ.get('ECHO_ALLOW_REMOTE', '0') != '1':
+            return None
+
         url = os.environ.get('ECHO_REMOTE_API_URL')
         if not url:
             return None
         try:
             import requests
+
             headers = {'Content-Type': 'application/json'}
             key = os.environ.get('ECHO_REMOTE_API_KEY')
             if key:
@@ -875,6 +925,31 @@ class EchoChatBot:
     def _handle_devops_query(self, message: str) -> str:
         """Handle DevOps specific queries."""
         msg_lower = message.lower()
+
+        if 'canary' in msg_lower:
+            return (
+                "Canary deployment means releasing a new version to a small subset of users first, "
+                "monitoring errors/latency/business metrics, then gradually increasing traffic if healthy. "
+                "If metrics degrade, route traffic back to the previous stable version immediately."
+            )
+
+        if 'blue green' in msg_lower or 'blue-green' in msg_lower:
+            return (
+                "Blue-green deployment keeps two environments: current live (blue) and new candidate (green). "
+                "You deploy to green, validate, then switch traffic at once. Rollback is fast: switch traffic back to blue."
+            )
+
+        if 'rollback' in msg_lower:
+            return (
+                "A safe rollback plan includes: 1) immutable previous artifact, 2) one-click traffic switch or redeploy, "
+                "3) DB backward-compatibility strategy, 4) post-rollback verification checks, and 5) clear alert thresholds."
+            )
+
+        if 'what is' in msg_lower and 'deployment' in msg_lower:
+            return (
+                "Deployment is the process of releasing tested application changes into a target environment "
+                "(staging or production) using controlled, repeatable automation with health checks and rollback paths."
+            )
         
         if 'docker' in msg_lower:
             return "I can help with Docker! I know about containers, images, and Docker Compose. What would you like to know?"

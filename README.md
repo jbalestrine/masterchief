@@ -63,6 +63,53 @@ Dashboard default URL:
 
 If local GGUF cannot load, the platform still starts and other features continue to work.
 
+## Echo Runtime Modes
+
+Echo now supports layered runtime fallbacks so chat remains available even when one backend is unavailable.
+
+### Fallback Order
+
+1. Local runtime model (`llama_cpp` / GGUF)
+2. Local Ollama model (`mistral`, `vicuna`, etc., no subscription)
+3. Generic remote prompt API (only if explicitly enabled)
+4. Rule-based + training/pattern fallback
+
+By default, Echo is offline-first and does not call remote LLM services.
+
+### Local Ollama (No Login / No Paid API)
+
+If you run Ollama locally, Echo can use it automatically as a model fallback.
+
+```powershell
+$env:ECHO_OLLAMA_MODEL = "mistral"
+# Optional custom endpoint
+# $env:ECHO_OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+```
+
+### Free Web Intel (No Subscription)
+
+Echo can gather public internet intel without paid model APIs via command-style prompts:
+
+- `search web for <topic>`
+- `look up <topic>`
+- `web intel on <topic>`
+
+### Optional Remote Fallback (Explicit Opt-In)
+
+If `llama_cpp` is unavailable and you still want model-generated responses,
+you can opt in to a remote endpoint:
+
+```powershell
+$env:ECHO_ALLOW_REMOTE = "1"
+$env:ECHO_REMOTE_API_URL = "https://<provider>/echo"
+$env:ECHO_REMOTE_API_KEY = "<token>"
+```
+
+### Guided Mode
+
+Echo's guided topic-orchestration flow is opt-in per request (`guided_mode=true`).
+Normal chat questions now default to direct answer behavior.
+
 ## Requirements Files
 
 - requirements.txt: core and integration dependencies expected by default modules

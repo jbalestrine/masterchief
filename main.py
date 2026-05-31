@@ -13206,6 +13206,137 @@ def _ach_handle_echo_image(params, message, um_low, storage, session_id, upsert_
 
 _echo_action_registry.register('echo_image', _ach_detect_echo_image, _ach_handle_echo_image, priority=10)
 
+# ---- Built-in handler: Free web intel (no subscription required) ----
+def _ach_detect_web_intel(message: str, um_low: str):
+    triggers = [
+        'search web for ',
+        'search the web for ',
+        'search internet for ',
+        'look up ',
+        'lookup ',
+        'web intel on ',
+        'intel on ',
+        'find on the web ',
+        'latest on ',
+    ]
+    for t in triggers:
+        if um_low.startswith(t):
+            q = message[len(t):].strip().rstrip('.!?')
+            if q:
+                return {'query': q}
+    return None
+
+def _ach_handle_web_intel(params, message, um_low, storage, session_id, upsert_fn):
+    q = (params or {}).get('query', '').strip()
+    if not q:
+        return None
+
+    answer = None
+    source_url = None
+    related = []
+    err = None
+
+    try:
+        # DuckDuckGo Instant Answer API is free and does not require API keys.
+        r = requests.get(
+            'https://api.duckduckgo.com/',
+            params={
+                'q': q,
+                'format': 'json',
+                'no_html': 1,
+                'no_redirect': 1,
+                'skip_disambig': 1,
+            },
+            headers={'User-Agent': 'MasterChief-Echo/1.0'},
+            timeout=10,
+        )
+        r.raise_for_status()
+        data = r.json() or {}
+
+        answer = (data.get('AbstractText') or '').strip() or None
+        source_url = (data.get('AbstractURL') or '').strip() or None
+
+        def _walk_related(items):
+            out = []
+            for it in items or []:
+                if isinstance(it, dict):
+                    txt = (it.get('Text') or '').strip()
+                    if txt:
+                        out.append(txt)
+                    nested = it.get('Topics')
+                    if isinstance(nested, list):
+                        out.extend(_walk_related(nested))
+            return out
+
+        related = _walk_related(data.get('RelatedTopics'))[:3]
+    except Exception as e:
+        err = str(e)
+
+    # Secondary free source: Wikipedia public API.
+    if not answer and not related:
+        try:
+            search_resp = requests.get(
+                'https://en.wikipedia.org/w/api.php',
+                params={
+                    'action': 'opensearch',
+                    'search': q,
+                    'limit': 1,
+                    'namespace': 0,
+                    'format': 'json',
+                },
+                headers={'User-Agent': 'MasterChief-Echo/1.0'},
+                timeout=10,
+            )
+            search_resp.raise_for_status()
+            sdata = search_resp.json() or []
+            title = None
+            if isinstance(sdata, list) and len(sdata) >= 2 and isinstance(sdata[1], list) and sdata[1]:
+                title = str(sdata[1][0]).strip()
+
+            if title:
+                sum_resp = requests.get(
+                    f'https://en.wikipedia.org/api/rest_v1/page/summary/{requests.utils.quote(title, safe="")}',
+                    headers={'User-Agent': 'MasterChief-Echo/1.0'},
+                    timeout=10,
+                )
+                if sum_resp.status_code == 200:
+                    pdata = sum_resp.json() or {}
+                    answer = (pdata.get('extract') or '').strip() or answer
+                    source_url = (pdata.get('content_urls') or {}).get('desktop', {}).get('page') or source_url
+        except Exception:
+            pass
+
+    if answer:
+        reply = f"Web intel for '{q}': {answer}"
+        if related:
+            reply += "\nAlso found: " + " | ".join(related)
+        if source_url:
+            reply += f"\nSource: {source_url}"
+    elif related:
+        reply = f"Web intel for '{q}': " + " | ".join(related)
+    else:
+        reply = (
+            f"I couldn't get a strong public result for '{q}' right now. "
+            "Try a more specific query with 'search web for ...'."
+        )
+        if err:
+            app.logger.warning('Web intel query failed: %s', err)
+
+    storage.store_message(user='web_user', message=message, echo_response=reply, channel=session_id)
+    upsert_fn(session_id)
+    return jsonify({
+        'response': reply,
+        'session_id': session_id,
+        'timestamp': time.time(),
+        'message_id': f"bot_{int(time.time()*1000)}",
+        '_handler': 'web_intel',
+        'intel_query': q,
+        'intel_provider': 'duckduckgo_instant_answer',
+        'internet_enabled': True,
+    })
+
+_echo_action_registry.register('web_intel', _ach_detect_web_intel, _ach_handle_web_intel, priority=15)
+
 # ---- Built-in handler: YouTube play ----
 def _ach_detect_youtube(message: str, um_low: str):
     _pats = [
