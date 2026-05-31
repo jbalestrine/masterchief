@@ -268,6 +268,7 @@ class EchoChatBot:
         # The model path may be set later; loading must occur at runtime
         # via the dedicated runtime loader in `echo.runtime.model_runtime`.
         self._local_model_path = None
+        self._local_worker_skip_until = 0.0
     
     def chat(self, user_message: str, session_id: str = "default", temperature: float = 0.7, max_tokens: int = 256) -> Dict[str, Any]:
         """
@@ -743,6 +744,10 @@ class EchoChatBot:
         This avoids importing native bindings into the web process and keeps
         the model runtime isolated. Returns generated text or None on failure.
         """
+        # Avoid repeated slow attempts when local worker was recently unavailable.
+        if time.time() < float(getattr(self, '_local_worker_skip_until', 0.0) or 0.0):
+            return None
+
         # Ensure we have a current model path set. If not, try persisted config
         if not self._local_model_path:
             try:
@@ -810,8 +815,8 @@ class EchoChatBot:
         if not os.path.exists(worker):
             return None
 
-        # Allow configurable timeout via env var, default to 600s to accommodate slow cold starts
-        timeout = int(os.environ.get('ECHO_LLM_TIMEOUT', '600'))
+        # Allow configurable timeout via env var, default to 45s to avoid long UI stalls.
+        timeout = int(os.environ.get('ECHO_LLM_TIMEOUT', '45'))
         try:
             cmd = [sys.executable, worker, '--model', self._local_model_path, '--max_tokens', str(int(max_tokens)), '--temperature', str(float(temperature))]
 
@@ -847,6 +852,8 @@ class EchoChatBot:
                 except Exception:
                     out, err = '', ''
                 logger.warning(f'LLM worker timed out after {timeout}s')
+                # Back off local worker attempts for a minute to keep chat responsive.
+                self._local_worker_skip_until = time.time() + 60
                 try:
                     self._last_llm_debug = {'cmd': cmd, 'timeout': timeout, 'stdout_partial': out, 'stderr_partial': err}
                 except Exception:
@@ -874,6 +881,9 @@ class EchoChatBot:
                 # Worker may return structured error (e.g., {'error':'No model available'})
                 if isinstance(data, dict) and data.get('error'):
                     err = data.get('error')
+                    if isinstance(err, str) and 'llama_cpp import failed' in err.lower():
+                        # Skip local worker retries for a few minutes when runtime dependency is missing.
+                        self._local_worker_skip_until = time.time() + 300
                     # If in-process model is available, try that as a fallback
                     try:
                         from echo.runtime import model_runtime
