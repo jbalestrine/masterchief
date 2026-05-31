@@ -21,6 +21,7 @@ import subprocess
 import sys
 import glob
 from pathlib import Path
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -281,13 +282,16 @@ class EchoChatBot:
         Returns:
             Dictionary with response and metadata
         """
+        # Load persisted history once per session so ongoing conversations survive restarts.
+        self._hydrate_session_history(session_id)
+
         # Store user message
         user_msg = ChatMessage(
             role="user",
             content=user_message,
             timestamp=time.time(),
             session_id=session_id,
-            message_id=f"user_{int(time.time() * 1000)}"
+            message_id=f"user_{uuid.uuid4().hex}"
         )
         
         if session_id not in self.conversation_history:
@@ -304,7 +308,7 @@ class EchoChatBot:
             content=response_text,
             timestamp=time.time(),
             session_id=session_id,
-            message_id=f"bot_{int(time.time() * 1000)}"
+            message_id=f"bot_{uuid.uuid4().hex}"
         )
         
         self.conversation_history[session_id].append(bot_msg)
@@ -332,6 +336,9 @@ class EchoChatBot:
         # Normalize message
         msg_lower = user_message.lower().strip()
         
+        # Build a context-rich prompt for LLM-backed paths to improve continuity.
+        context_prompt = self._build_context_prompt(session_id, user_message)
+
         # Check learned patterns first
         learned_response = self._check_learned_patterns(msg_lower)
         if learned_response:
@@ -357,11 +364,11 @@ class EchoChatBot:
             # Prefer LLM-generated response for DevOps queries when available
             try:
                 if self._local_model_path:
-                    llm_out = self._generate_with_local_llm(user_message, max_tokens=max_tokens, temperature=temperature)
+                    llm_out = self._generate_with_local_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
                     if llm_out:
                         return llm_out
                     # try remote fallback if configured
-                    remote_out = self._generate_with_remote_llm(user_message, max_tokens=max_tokens, temperature=temperature)
+                    remote_out = self._generate_with_remote_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
                     if remote_out:
                         return remote_out
             except Exception:
@@ -373,16 +380,141 @@ class EchoChatBot:
         # Try local then remote LLM fallbacks before returning unknown response
         try:
             if self._local_model_path:
-                out = self._generate_with_local_llm(user_message, max_tokens=max_tokens, temperature=temperature)
+                out = self._generate_with_local_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
                 if out:
                     return out
-            remote_out = self._generate_with_remote_llm(user_message, max_tokens=max_tokens, temperature=temperature)
+            remote_out = self._generate_with_remote_llm(context_prompt, max_tokens=max_tokens, temperature=temperature)
             if remote_out:
                 return remote_out
         except Exception:
             logger.exception('LLM fallback failed')
 
+        # If no LLM answer is available, still maintain conversational continuity
+        # for follow-up turns by anchoring on recent session context.
+        contextual = self._contextual_fallback_response(user_message, session_id)
+        if contextual:
+            return contextual
+
         return self._random_choice(self.default_responses['unknown'])
+
+    def _contextual_fallback_response(self, user_message: str, session_id: str) -> Optional[str]:
+        """Provide a continuity-preserving fallback when LLM generation is unavailable."""
+        msg = (user_message or '').strip()
+        if not msg:
+            return None
+
+        low = msg.lower()
+        follow_up_markers = (
+            'and ', 'also', 'what about', 'can you expand', 'expand on',
+            'more detail', 'continue', 'go on', 'why', 'how', 'then what',
+            'next', 'ok and', 'okay and'
+        )
+        is_follow_up = len(msg.split()) <= 8 or any(m in low for m in follow_up_markers)
+        if not is_follow_up:
+            return None
+
+        turns = self.conversation_history.get(session_id, [])
+        last_user_topic = None
+
+        if turns:
+            for t in reversed(turns[:-1]):
+                if t.role == 'user' and (t.content or '').strip():
+                    last_user_topic = t.content.strip()
+                    break
+
+        # If in-memory history did not provide a prior turn, look up the persisted
+        # session transcript directly.
+        if not last_user_topic:
+            try:
+                from echo.conversation_storage import get_storage
+                storage = get_storage()
+                rows = storage.get_conversation_history(user='web_user', channel=session_id, limit=6)
+                for row in rows:
+                    candidate = (row.get('message') or '').strip()
+                    if candidate and candidate.lower() != low:
+                        last_user_topic = candidate
+                        break
+            except Exception:
+                logger.exception('Failed to read persisted session context for fallback')
+
+        if not last_user_topic:
+            return None
+
+        if len(last_user_topic) > 140:
+            last_user_topic = last_user_topic[:140].rstrip() + '...'
+
+        return (
+            f"Staying with our current thread about \"{last_user_topic}\": "
+            "could you share one specific direction you want next "
+            "(architecture, implementation steps, troubleshooting, or validation)?"
+        )
+
+    def _hydrate_session_history(self, session_id: str, limit: int = 24) -> None:
+        """Populate in-memory session history from SQLite once per session."""
+        if session_id in self.conversation_history and self.conversation_history[session_id]:
+            return
+        try:
+            from echo.conversation_storage import get_storage
+            storage = get_storage()
+            rows = storage.get_conversation_history(user='web_user', channel=session_id, limit=limit)
+            if not rows:
+                self.conversation_history.setdefault(session_id, [])
+                return
+
+            hydrated: List[ChatMessage] = []
+            # Storage returns newest-first; reverse to chronological order.
+            for row in reversed(rows):
+                ts = 0.0
+                try:
+                    ts = datetime.fromisoformat(str(row.get('timestamp'))).timestamp()
+                except Exception:
+                    ts = time.time()
+
+                umsg = (row.get('message') or '').strip()
+                if umsg:
+                    hydrated.append(ChatMessage(
+                        role='user',
+                        content=umsg,
+                        timestamp=ts,
+                        session_id=session_id,
+                        message_id=f"persist_user_{row.get('id')}"
+                    ))
+
+                bmsg = (row.get('echo_response') or '').strip()
+                if bmsg:
+                    hydrated.append(ChatMessage(
+                        role='assistant',
+                        content=bmsg,
+                        timestamp=ts,
+                        session_id=session_id,
+                        message_id=f"persist_bot_{row.get('id')}"
+                    ))
+
+            self.conversation_history[session_id] = hydrated[-(limit * 2):]
+        except Exception:
+            logger.exception('Failed to hydrate conversation history for session %s', session_id)
+            self.conversation_history.setdefault(session_id, [])
+
+    def _build_context_prompt(self, session_id: str, user_message: str, max_turns: int = 8) -> str:
+        """Construct a lightweight conversation window for coherent ongoing replies."""
+        turns = self.conversation_history.get(session_id, [])
+        if not turns:
+            return user_message
+
+        recent = turns[-max(0, int(max_turns) * 2):]
+        lines = [
+            "You are Echo, a persistent assistant in an ongoing conversation.",
+            "Maintain continuity with prior context, avoid contradictions, and answer directly.",
+            "Conversation so far:"
+        ]
+        for msg in recent:
+            role = 'User' if msg.role == 'user' else 'Echo'
+            text = (msg.content or '').strip()
+            if text:
+                lines.append(f"{role}: {text}")
+        lines.append(f"User: {user_message}")
+        lines.append("Echo:")
+        return "\n".join(lines)
 
     def _find_local_model(self) -> Optional[str]:
         """Attempt to locate a local GGUF model file.

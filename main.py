@@ -13324,7 +13324,7 @@ def api_echo_chat():
 
         # Refinement
 
-        if any(p in um_low for p in ['also', 'add', 'update', 'refine', 'change', 'instead', 'correction', 'fix', 'detail', 'more']):
+        if any(p in um_low for p in ['also', 'add', 'update', 'refine', 'change', 'instead', 'correction', 'fix', 'detail', 'more', 'what about', 'and ']):
 
             topic_state = meta.get('topic_state') or {}
 
@@ -13355,6 +13355,35 @@ def api_echo_chat():
                 _upsert_session_meta(session_id)
 
                 return jsonify({'response': "Thanks — I've updated the plan with that detail. Anything else to refine?", 'session_id': session_id, 'timestamp': time.time(), 'message_id': f"bot_{int(time.time()*1000)}"})
+
+
+
+        # Continuity follow-up: keep short follow-up turns anchored to the active topic.
+        topic_state = meta.get('topic_state') or {}
+        if topic_state and topic_state.get('topic'):
+            followup_markers = ['and ', 'what about', 'also', 'then', 'next', 'continue', 'more', 'rollback']
+            is_followup_turn = (len(message.strip().split()) <= 12) or any(m in um_low for m in followup_markers)
+            if is_followup_turn:
+                kp = topic_state.get('key_points', [])
+                kp.append(message.strip())
+                topic_state['key_points'] = kp
+                topic_state['stage'] = 'refinement'
+                topic_state['turns'] = topic_state.get('turns', 0) + 1
+                topic_state['last_alignment'] = time.time()
+                try:
+                    meta['topic_state'] = topic_state
+                    storage.set_session_meta(session_id, meta)
+                except Exception:
+                    pass
+
+                topic = str(topic_state.get('topic', '')).strip()
+                follow_resp = (
+                    f"Great follow-up. Staying on \"{topic}\": "
+                    f"for \"{message.strip()}\", do you want high-level strategy, concrete implementation steps, or a runnable example first?"
+                )
+                storage.store_message(user='web_user', message=message, echo_response=follow_resp, channel=session_id)
+                _upsert_session_meta(session_id)
+                return jsonify({'response': follow_resp, 'session_id': session_id, 'timestamp': time.time(), 'message_id': f"bot_{int(time.time()*1000)}"})
 
 
 
@@ -13608,11 +13637,15 @@ def api_echo_chat():
 
         full_text = response.get('response') if isinstance(response, dict) else str(response)
 
-        # Request flags: save_to_file (bool) and auto_continue (bool). If auto_continue is omitted, fall back to app config.
+        # Request flags: save_to_file (bool) and auto_continue (bool).
+        # Priority: explicit request value -> persisted session preference -> app default.
+        prefs = (meta or {}).get('echo_prefs') or {}
+        save_default = bool(prefs.get('save_to_file', False))
+        auto_default = bool(prefs.get('auto_continue', app.config.get('ECHO_AUTO_CONTINUE', False)))
 
-        save_to_file = _parse_bool_val(data.get('save_to_file'), default=False)
+        save_to_file = _parse_bool_val(data.get('save_to_file'), default=save_default)
 
-        auto_continue = _parse_bool_val(data.get('auto_continue'), default=bool(app.config.get('ECHO_AUTO_CONTINUE', False)))
+        auto_continue = _parse_bool_val(data.get('auto_continue'), default=auto_default)
 
 
 
@@ -13636,125 +13669,120 @@ def api_echo_chat():
 
             return False
 
+        # If requested (or configured) attempt to auto-continue when the reply looks cut off,
+        # but guard against off-topic or rambling continuations by checking similarity
+        # between the continuation and the user's original message.
+        if auto_continue:
 
+            max_retries = int(app.config.get('ECHO_CONTINUE_MAX_RETRIES', 1))
 
-            # If requested (or configured) attempt to auto-continue when the reply looks cut off,
+            min_sim = float(app.config.get('ECHO_CONTINUE_MIN_SIMILARITY', 0.12))
 
-            # but guard against off-topic or rambling continuations by checking similarity
+            retries = 0
 
-            # between the continuation and the user's original message.
+            def _should_accept_continuation(prev_text: str, cont_text: str, user_msg: str) -> bool:
 
-            if auto_continue:
+                try:
 
-                max_retries = int(app.config.get('ECHO_CONTINUE_MAX_RETRIES', 1))
-
-                min_sim = float(app.config.get('ECHO_CONTINUE_MIN_SIMILARITY', 0.12))
-
-                retries = 0
-
-                def _should_accept_continuation(prev_text: str, cont_text: str, user_msg: str) -> bool:
-
-                    try:
-
-                        if not cont_text or not isinstance(cont_text, str):
-
-                            return False
-
-                        # very short continuations are not useful
-
-                        if len(cont_text.strip()) < 30:
-
-                            return False
-
-                        # similarity between user message and continuation (simple heuristic)
-
-                        sim = difflib.SequenceMatcher(None, (user_msg or '').lower(), cont_text.lower()).ratio()
-
-                        # token overlap on longer words
-
-                        import re
-
-                        user_words = set(w for w in re.findall(r"\w{4,}", (user_msg or '').lower()))
-
-                        cont_words = set(w for w in re.findall(r"\w{4,}", cont_text.lower()))
-
-                        overlap = 0.0
-
-                        if user_words:
-
-                            overlap = len(user_words & cont_words) / max(1, len(user_words))
-
-                        # reject if continuation appears extremely similar to previous text (repeat) or clearly off-topic
-
-                        if cont_text.strip() in (prev_text or ''):
-
-                            return False
-
-                        # accept only when similarity or overlap meets thresholds
-
-                        if sim >= min_sim or overlap >= 0.05:
-
-                            return True
+                    if not cont_text or not isinstance(cont_text, str):
 
                         return False
 
-                    except Exception:
+                    # very short continuations are not useful
+
+                    if len(cont_text.strip()) < 30:
 
                         return False
 
+                    # similarity between user message and continuation (simple heuristic)
+
+                    sim = difflib.SequenceMatcher(None, (user_msg or '').lower(), cont_text.lower()).ratio()
+
+                    # token overlap on longer words
+
+                    import re
+
+                    user_words = set(w for w in re.findall(r"\w{4,}", (user_msg or '').lower()))
+
+                    cont_words = set(w for w in re.findall(r"\w{4,}", cont_text.lower()))
+
+                    overlap = 0.0
+
+                    if user_words:
+
+                        overlap = len(user_words & cont_words) / max(1, len(user_words))
+
+                    # reject if continuation appears extremely similar to previous text (repeat) or clearly off-topic
+
+                    if cont_text.strip() in (prev_text or ''):
+
+                        return False
+
+                    # accept only when similarity or overlap meets thresholds
+
+                    if sim >= min_sim or overlap >= 0.05:
+
+                        return True
+
+                    return False
+
+                except Exception:
+
+                    return False
 
 
-                while retries < max_retries and _looks_truncated(full_text):
 
-                    try:
+            while retries < max_retries and _looks_truncated(full_text):
 
-                        cont_prompt = app.config.get('ECHO_CONTINUE_PROMPT', 'Please continue the previous response.')
+                try:
 
-                        cont_resp = bot.chat(cont_prompt, session_id=session_id)
+                    cont_prompt = app.config.get('ECHO_CONTINUE_PROMPT', 'Please continue the previous response.')
 
-                        cont_text = cont_resp.get('response') if isinstance(cont_resp, dict) else str(cont_resp)
+                    cont_resp = bot.chat(cont_prompt, session_id=session_id)
 
-                        if not cont_text:
+                    cont_text = cont_resp.get('response') if isinstance(cont_resp, dict) else str(cont_resp)
 
-                            break
-
-                        # decide whether to accept this continuation
-
-                        if not _should_accept_continuation(full_text, cont_text, message):
-
-                            # mark on the response that continuation was halted due to divergence
-
-                            if isinstance(response, dict):
-
-                                response['continued_halted_due_to_divergence'] = True
-
-                            else:
-
-                                response = {'response': full_text, 'continued_halted_due_to_divergence': True}
-
-                            break
-
-                        # append accepted continuation
-
-                        full_text = full_text + "\n" + cont_text
-
-                        if isinstance(response, dict):
-
-                            response['response'] = full_text
-
-                            response['continued_count'] = response.get('continued_count', 0) + 1
-
-                        else:
-
-                            response = {'response': full_text, 'continued_count': 1}
-
-                    except Exception:
-
-                        app.logger.exception('Auto-continue failed')
+                    if not cont_text:
 
                         break
 
-                    retries += 1
+                    # decide whether to accept this continuation
+
+                    if not _should_accept_continuation(full_text, cont_text, message):
+
+                        # mark on the response that continuation was halted due to divergence
+
+                        if isinstance(response, dict):
+
+                            response['continued_halted_due_to_divergence'] = True
+
+                        else:
+
+                            response = {'response': full_text, 'continued_halted_due_to_divergence': True}
+
+                        break
+
+                    # append accepted continuation
+
+                    full_text = full_text + "\n" + cont_text
+
+                    if isinstance(response, dict):
+
+                        response['response'] = full_text
+
+                        response['continued_count'] = response.get('continued_count', 0) + 1
+
+                    else:
+
+                        response = {'response': full_text, 'continued_count': 1}
+
+                except Exception:
+
+                    app.logger.exception('Auto-continue failed')
+
+                    break
+
+                retries += 1
 
 
 
