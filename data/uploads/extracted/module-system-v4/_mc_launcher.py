@@ -12,5 +12,5 @@ except ImportError:
     pass
 # Run the actual entry point
 import runpy
-sys.argv[0] = r'C:\\Users\\Echo\\Documents\\masterchiefapp\\masterchief\\data\\uploads\\extracted\\module-system-v4\\app.py'
-runpy.run_path(r'C:\\Users\\Echo\\Documents\\masterchiefapp\\masterchief\\data\\uploads\\extracted\\module-system-v4\\app.py', run_name='__main__')
+sys.argv[0] = r'C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v4\\app.py'
+runpy.run_path(r'C:\\Users\\Echo\\masterchief\\data\\uploads\\extracted\\module-system-v4\\app.py', run_name='__main__')
