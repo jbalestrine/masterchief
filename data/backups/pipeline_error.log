@@ -111,3 +111,15 @@ Traceback (most recent call last):
 RuntimeError: Failed to import diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion because of the following error (look up to see its traceback):
 name 'platform' is not defined
 
+--- Sat May 30 06:59:00 2026 ---
+Traceback (most recent call last):
+  File "C:\Users\Echo\masterchief\image_worker.py", line 59, in load_pipeline
+    import torch
+ModuleNotFoundError: No module named 'torch'
+
+--- Sat May 30 07:01:46 2026 ---
+Traceback (most recent call last):
+  File "C:\users\Echo\masterchief\image_worker.py", line 59, in load_pipeline
+    import torch
+ModuleNotFoundError: No module named 'torch'
+
