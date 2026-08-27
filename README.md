@@ -1,6 +1,6 @@
 # MasterChief Enterprise DevOps Platform
-
-MasterChief is a modular DevOps automation platform with a web dashboard, CLI tools, dynamic modules, and Echo chat capabilities.
+#Joseph Balestrine : Josephbalestrine@yahoo.com: Balestrine.com : 
+MasterChief is a modular DevOps automation platform with a web dashboard, CLI tools, dynamic modules, and Echo chat AI capabilities.
 
 ## What This Repo Includes
 
@@ -60,6 +60,7 @@ Dashboard default URL:
 - Core platform: Python 3.10+
 - Full AI local GGUF runtime (llama-cpp-python): currently most reliable on Python 3.10-3.13
 - Python 3.14: core works, but local GGUF loading may be unavailable until upstream wheels are available
+- pip install masterchief (available now) new GUI.
 
 If local GGUF cannot load, the platform still starts and other features continue to work.
 
@@ -93,6 +94,7 @@ Echo can gather public internet intel without paid model APIs via command-style 
 - `search web for <topic>`
 - `look up <topic>`
 - `web intel on <topic>`
+- 'play Soundgarden'
 
 ### Optional Remote Fallback (Explicit Opt-In)
 
