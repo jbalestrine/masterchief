@@ -10,7 +10,8 @@ import os
 
 # Detect if we are on the Ubuntu Appliance (/opt/) or Windows Laptop
 IS_LINUX = _plt.system() == "Linux"
-BASE_PATH = "/opt/masterchief" if IS_LINUX else os.path.dirname(os.path.abspath(__file__))
+#opt change to tmp
+BASE_PATH = "/tmp/masterchief" if IS_LINUX else os.path.dirname(os.path.abspath(__file__))
 
 # Define universal paths for the model and data
 MODEL_PATH = os.path.join(BASE_PATH, "models", "mistral-7b-instruct-v0.1.Q4_K_M.gguf")
